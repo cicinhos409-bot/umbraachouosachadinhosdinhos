@@ -22,7 +22,9 @@ from aiogram import Router, Bot, types, F
 from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
-from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
+from aiogram.types import KeyboardButton
+from teclados import (montar_teclado, teclado_com_cancelar, teclado_cancelar,
+                      teclado_aprovar_cancelar, teclado_janela_dia_todo)
 
 import assistente_shopee_video as assistente
 import db
@@ -144,28 +146,12 @@ def videos_hoje(config, agora=None):
 
 def teclado_painel(config):
     pausa = "Retomar Robô ▶️" if config["pausado"] else "Pausar Robô ⏸️"
-    return ReplyKeyboardMarkup(
-        keyboard=[
-            [KeyboardButton(text="Vídeos por Dia 📦"), KeyboardButton(text="Horário de Postagem ⏰")],
-            [KeyboardButton(text="Fonte dos Vídeos 🎞️")],
-            [KeyboardButton(text=pausa), KeyboardButton(text="Enviar 1 Agora 📤")],
-            [KeyboardButton(text="Voltar aos Canais 🔙")],
-        ],
-        resize_keyboard=True,
-        is_persistent=True,
-    )
-
-
-teclado_cancelar = ReplyKeyboardMarkup(
-    keyboard=[[KeyboardButton(text="Cancelar ❌")]], resize_keyboard=True, is_persistent=True)
-
-teclado_janela = ReplyKeyboardMarkup(
-    keyboard=[[KeyboardButton(text="Dia Todo (24h) 🕛")], [KeyboardButton(text="Cancelar ❌")]],
-    resize_keyboard=True, is_persistent=True)
-
-teclado_aprovar = ReplyKeyboardMarkup(
-    keyboard=[[KeyboardButton(text="Aprovar ✅"), KeyboardButton(text="Cancelar ❌")]],
-    resize_keyboard=True, is_persistent=True)
+    return montar_teclado([
+        [KeyboardButton(text="Vídeos por Dia 📦"), KeyboardButton(text="Horário de Postagem ⏰")],
+        [KeyboardButton(text="Fonte dos Vídeos 🎞️")],
+        [KeyboardButton(text=pausa), KeyboardButton(text="Enviar 1 Agora 📤")],
+        [KeyboardButton(text="Voltar aos Canais 🔙")],
+    ])
 
 
 def texto_painel(config, agora=None):
@@ -228,7 +214,7 @@ async def pedir_janela(message: types.Message, state: FSMContext):
         "Em que horário as postagens podem chegar? Elas se espalham dentro dessa faixa.\n\n"
         "Envie <code>início-fim</code> (ex.: <code>13-22</code>) ou toque em Dia Todo.\n"
         f"<i>Hoje está {rotulo_janela(config['inicio'], config['fim'])}.</i>",
-        parse_mode="HTML", reply_markup=teclado_janela)
+        parse_mode="HTML", reply_markup=teclado_janela_dia_todo)
     await state.set_state(ShopeeVideoFluxo.aguardando_janela)
 
 
@@ -245,9 +231,7 @@ async def pedir_pausa(message: types.Message, state: FSMContext):
                 "▶️ <b>Retomar</b> o robô da Shopee Vídeo? Ele volta a mandar as postagens aqui no seu "
                 "privado, dentro do horário e da quantidade do painel.")
     botao = "Confirmar Pausa ✅" if pausar else "Confirmar Retomada ✅"
-    teclado = ReplyKeyboardMarkup(
-        keyboard=[[KeyboardButton(text=botao), KeyboardButton(text="Cancelar ❌")]],
-        resize_keyboard=True, is_persistent=True)
+    teclado = teclado_com_cancelar(botao)
     await message.answer(pergunta, parse_mode="HTML", reply_markup=teclado)
     await state.set_state(ShopeeVideoFluxo.aguardando_confirmacao_pausa)
 
@@ -286,8 +270,7 @@ EXPLICACAO_FONTES = (
 def teclado_fontes():
     nomes = list(assistente.FONTES.values())
     linhas = [[KeyboardButton(text=nome) for nome in nomes[i:i + 2]] for i in range(0, len(nomes), 2)]
-    return ReplyKeyboardMarkup(keyboard=linhas + [[KeyboardButton(text="Cancelar ❌")]],
-                               resize_keyboard=True, is_persistent=True)
+    return montar_teclado(linhas + [[KeyboardButton(text="Cancelar ❌")]])
 
 
 @router.message(F.text == "Fonte dos Vídeos 🎞️", StateFilter("*"))
@@ -314,7 +297,7 @@ async def confirmar_faixa(message: types.Message, state: FSMContext):
     piso, topo = faixa
     await state.update_data(faixa=[piso, topo])
     await message.answer(f"Definir <b>{rotulo_faixa(piso, topo)}</b> vídeos por dia?",
-                         parse_mode="HTML", reply_markup=teclado_aprovar)
+                         parse_mode="HTML", reply_markup=teclado_aprovar_cancelar)
     await state.set_state(ShopeeVideoFluxo.aguardando_confirmacao_faixa)
 
 
@@ -333,11 +316,11 @@ async def confirmar_janela(message: types.Message, state: FSMContext):
     if not janela:
         await message.answer(
             "⚠️ Use o formato <code>13-22</code>, com o início menor que o fim (de 0 a 24).",
-            parse_mode="HTML", reply_markup=teclado_janela)
+            parse_mode="HTML", reply_markup=teclado_janela_dia_todo)
         return
     inicio, fim = janela
     await state.update_data(janela=[inicio, fim])
-    await message.answer(f"Postar <b>{rotulo_janela(inicio, fim)}</b>?", parse_mode="HTML", reply_markup=teclado_aprovar)
+    await message.answer(f"Postar <b>{rotulo_janela(inicio, fim)}</b>?", parse_mode="HTML", reply_markup=teclado_aprovar_cancelar)
     await state.set_state(ShopeeVideoFluxo.aguardando_confirmacao_janela)
 
 

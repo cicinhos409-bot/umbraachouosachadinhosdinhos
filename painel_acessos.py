@@ -21,7 +21,8 @@ from aiogram import Router, Bot, types, F
 from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
-from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
+from aiogram.types import KeyboardButton
+from teclados import montar_teclado
 
 import db
 
@@ -80,25 +81,16 @@ def parece_email(texto):
 # --- Painel ---
 
 def teclado_painel():
-    return ReplyKeyboardMarkup(
-        keyboard=[
-            [KeyboardButton(text="Editar Tailscale ✏️"), KeyboardButton(text="Editar Oracle ✏️")],
-            [KeyboardButton(text=VOLTAR)],
-        ],
-        resize_keyboard=True,
-        is_persistent=True,
-    )
-
-
-teclado_cancelar = ReplyKeyboardMarkup(
-    keyboard=[[KeyboardButton(text="Cancelar ❌")]], resize_keyboard=True, is_persistent=True)
+    return montar_teclado([
+        [KeyboardButton(text="Editar Tailscale ✏️"), KeyboardButton(text="Editar Oracle ✏️")],
+        [KeyboardButton(text=VOLTAR)],
+    ])
 
 
 def teclado_pergunta(tem_valor):
     """Cancelar e, quando já há um valor guardado, o botão para mantê-lo."""
     linhas = [[KeyboardButton(text=MANTER)]] if tem_valor else []
-    return ReplyKeyboardMarkup(keyboard=linhas + [[KeyboardButton(text="Cancelar ❌")]],
-                               resize_keyboard=True, is_persistent=True)
+    return montar_teclado(linhas + [[KeyboardButton(text="Cancelar ❌")]])
 
 
 def _copiavel(valor, botao):

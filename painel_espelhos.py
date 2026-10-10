@@ -24,7 +24,8 @@ from aiogram import Router, Bot, types, F
 from aiogram.fsm.context import FSMContext
 import fila_espelhador
 from aiogram.fsm.state import StatesGroup, State
-from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types import KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
+from teclados import montar_teclado
 from aiogram.filters import StateFilter
 from utils import ler_cache_nomes_grupos, salvar_nome_grupo, validar_e_formatar_alvo, id_da_origem, normalizar_origens_rotas, salvar_json_atomico
 from motor_filas import ler_faixa_limite, sortear_teto_do_dia
@@ -82,56 +83,38 @@ class EspelhadorFluxo(StatesGroup):
     aguardando_confirmacao_edicao_dias = State()
     aguardando_confirmacao_edicao_modo = State()
 
-teclado_espelhador_menu = ReplyKeyboardMarkup(
-    keyboard=[
-        [KeyboardButton(text="Adicionar Espelho ➕"), KeyboardButton(text="Remover Espelho 🗑️")],
-        [KeyboardButton(text="Editar Espelho ✏️")],
-        [KeyboardButton(text="Forçar Espelhos 🚀")],
-        [KeyboardButton(text="Voltar aos Canais 🔙")]
-    ],
-    resize_keyboard=True,
-    is_persistent=True
-)
+teclado_espelhador_menu = montar_teclado([
+    [KeyboardButton(text="Adicionar Espelho ➕"), KeyboardButton(text="Remover Espelho 🗑️")],
+    [KeyboardButton(text="Editar Espelho ✏️")],
+    [KeyboardButton(text="Forçar Espelhos 🚀")],
+    [KeyboardButton(text="Voltar aos Canais 🔙")]
+])
 
-teclado_espelhador_cancelar = ReplyKeyboardMarkup(
-    keyboard=[[KeyboardButton(text="Cancelar Operação ❌")]],
-    resize_keyboard=True,
-    is_persistent=True
-)
+teclado_espelhador_cancelar = montar_teclado([[KeyboardButton(text="Cancelar Operação ❌")]])
 
 # Nas telas de escolher rota o botão é "voltar", não "cancelar".
-teclado_espelhador_voltar = ReplyKeyboardMarkup(
-    keyboard=[[KeyboardButton(text="Voltar ao Menu Espelho 🔙")]],
-    resize_keyboard=True,
-    is_persistent=True
-)
+teclado_espelhador_voltar = montar_teclado([[KeyboardButton(text="Voltar ao Menu Espelho 🔙")]])
 
 # Janela de horário: o usuário digita "10-22" ou usa o botão de 24h.
-teclado_espelhador_janela = ReplyKeyboardMarkup(
-    keyboard=[
-        [KeyboardButton(text="Dia Todo (24h) 🕛")],
-        [KeyboardButton(text="Cancelar Operação ❌")]
-    ],
-    resize_keyboard=True,
-    is_persistent=True
-)
+teclado_espelhador_janela = montar_teclado([
+    [KeyboardButton(text="Dia Todo (24h) 🕛")],
+    [KeyboardButton(text="Cancelar Operação ❌")]
+])
 
-teclado_espelhador_confirmacao = ReplyKeyboardMarkup(
-    keyboard=[[KeyboardButton(text="Aprovar ✅"), KeyboardButton(text="Cancelar Operação ❌")]],
-    resize_keyboard=True,
-    is_persistent=True
-)
+teclado_espelhador_confirmacao = montar_teclado([[KeyboardButton(text="Aprovar ✅"), KeyboardButton(text="Cancelar Operação ❌")]])
+
+# Ações da lista negra de canais.
+teclado_espelhador_lista_negra = montar_teclado([
+    [KeyboardButton(text="➕ Add à Blacklist"), KeyboardButton(text="🗑️ Rem. da Blacklist")],
+    [KeyboardButton(text="Cancelar Operação ❌")]
+])
 
 # Com mais de uma rota: as origens novas entram só nesta rota ou em todas.
-teclado_espelhador_abrangencia = ReplyKeyboardMarkup(
-    keyboard=[
-        [KeyboardButton(text="Apenas nesta Rota 🎯")],
-        [KeyboardButton(text="Em TODAS as Rotas 🌍")],
-        [KeyboardButton(text="Cancelar Operação ❌")]
-    ],
-    resize_keyboard=True,
-    is_persistent=True
-)
+teclado_espelhador_abrangencia = montar_teclado([
+    [KeyboardButton(text="Apenas nesta Rota 🎯")],
+    [KeyboardButton(text="Em TODAS as Rotas 🌍")],
+    [KeyboardButton(text="Cancelar Operação ❌")]
+])
 
 # --- Arquivos do Espelhador ---
 def ler_espelhos():
@@ -171,7 +154,7 @@ def _renomear_rota_na_fila(nome_antigo, novo_nome):
         logger.error(f"❌ Erro ao sincronizar a fila de espelhamento após mudança de nome: {e}")
 
 def obter_teclado_importacao_espelhador():
-    return ReplyKeyboardMarkup(keyboard=[[KeyboardButton(text="Importar Banco Global 🌍")], [KeyboardButton(text="Cancelar Operação ❌")]], resize_keyboard=True, is_persistent=True)
+    return montar_teclado([[KeyboardButton(text="Importar Banco Global 🌍")], [KeyboardButton(text="Cancelar Operação ❌")]])
 
 @router.message(F.text.in_(["Cancelar Operação ❌", "Voltar ao Menu Espelho 🔙", "🔙 Voltar ao Menu de Edição"]), StateFilter("*"))
 async def cancelar_espelhador(message: types.Message, state: FSMContext):
@@ -204,14 +187,10 @@ async def cancelar_espelhador(message: types.Message, state: FSMContext):
     ]
     if estado_atual in estados_origem:
         logger.info("🔙 Cancelamento: Voltando ao submenu de Origens.")
-        teclado_origens = ReplyKeyboardMarkup(
-            keyboard=[
-                [KeyboardButton(text="➕ Adicionar Canal"), KeyboardButton(text="🗑️ Remover Canal")],
-                [KeyboardButton(text="🔙 Voltar ao Menu de Edição")]
-            ],
-            resize_keyboard=True,
-            is_persistent=True
-        )
+        teclado_origens = montar_teclado([
+            [KeyboardButton(text="➕ Adicionar Canal"), KeyboardButton(text="🗑️ Remover Canal")],
+            [KeyboardButton(text="🔙 Voltar ao Menu de Edição")]
+        ])
         await message.answer("Ação cancelada. O que você deseja fazer com os canais vigiados desta rota?", reply_markup=teclado_origens)
         await state.set_state(EspelhadorFluxo.aguardando_acao_origem)
         return
@@ -633,16 +612,12 @@ async def receber_janela_rota(message: types.Message, state: FSMContext):
     await state.update_data(inicio=inicio, fim=fim)
     logger.info(f"✅ Janela da rota configurada com sucesso: {inicio}h as {fim}h.")
     
-    teclado_dias = ReplyKeyboardMarkup(
-        keyboard=[
-            [KeyboardButton(text="Mesmo Dia (D+0) 🟢")],
-            [KeyboardButton(text="Dia Seguinte (D+1) 🟡")],
-            [KeyboardButton(text="Dois Dias (D+2) 🔵")],
-            [KeyboardButton(text="Cancelar Operação ❌")]
-        ],
-        resize_keyboard=True,
-        is_persistent=True
-    )
+    teclado_dias = montar_teclado([
+        [KeyboardButton(text="Mesmo Dia (D+0) 🟢")],
+        [KeyboardButton(text="Dia Seguinte (D+1) 🟡")],
+        [KeyboardButton(text="Dois Dias (D+2) 🔵")],
+        [KeyboardButton(text="Cancelar Operação ❌")]
+    ])
     await message.answer("Excelente! Agora escolha o intervalo de dias de maturação para a postagem (D+0 significa publicar no próprio dia em que o vídeo foi capturado):", reply_markup=teclado_dias)
     await state.set_state(EspelhadorFluxo.aguardando_intervalo_dias)
 
@@ -665,14 +640,10 @@ async def receber_intervalo_dias_rota(message: types.Message, state: FSMContext)
         await receber_modo_rota(msg_simulada, state)
         return
         
-    teclado_modo = ReplyKeyboardMarkup(
-        keyboard=[
-            [KeyboardButton(text="Aleatório 🔀"), KeyboardButton(text="Ordem de Chegada ⬇️")],
-            [KeyboardButton(text="Cancelar Operação ❌")]
-        ],
-        resize_keyboard=True,
-        is_persistent=True
-    )
+    teclado_modo = montar_teclado([
+        [KeyboardButton(text="Aleatório 🔀"), KeyboardButton(text="Ordem de Chegada ⬇️")],
+        [KeyboardButton(text="Cancelar Operação ❌")]
+    ])
     await message.answer("Como deseja distribuir os vídeos retidos dentro dessa janela de horário?", reply_markup=teclado_modo)
     await state.set_state(EspelhadorFluxo.aguardando_modo)
 
@@ -978,18 +949,14 @@ async def selecionar_acao_edicao(message: types.Message, state: FSMContext):
         
         texto += "\nEscolha a ação que deseja realizar:"
         
-        teclado_submenu = ReplyKeyboardMarkup(
-            keyboard=[
-                [KeyboardButton(text="📝 Editar Nome"), KeyboardButton(text="🔀 Modificar Modo")],
-                [KeyboardButton(text="🎯 Editar Destino"), KeyboardButton(text="📥 Editar Canais")],
-                [KeyboardButton(text="🕒 Modificar Janela"), KeyboardButton(text="📅 Modificar Dias")],
-                [KeyboardButton(text="📊 Limite Diário")],
-                [KeyboardButton(text="Analisar Canais Vigiados 🔎")],
-                [KeyboardButton(text="Voltar ao Menu Espelho 🔙")]
-            ],
-            resize_keyboard=True,
-            is_persistent=True
-        )
+        teclado_submenu = montar_teclado([
+            [KeyboardButton(text="📝 Editar Nome"), KeyboardButton(text="🔀 Modificar Modo")],
+            [KeyboardButton(text="🎯 Editar Destino"), KeyboardButton(text="📥 Editar Canais")],
+            [KeyboardButton(text="🕒 Modificar Janela"), KeyboardButton(text="📅 Modificar Dias")],
+            [KeyboardButton(text="📊 Limite Diário")],
+            [KeyboardButton(text="Analisar Canais Vigiados 🔎")],
+            [KeyboardButton(text="Voltar ao Menu Espelho 🔙")]
+        ])
             
         mensagens_para_enviar = []
         while len(texto) > 3800:
@@ -1033,14 +1000,10 @@ async def processar_acao_edicao(message: types.Message, state: FSMContext):
         )
         await state.set_state(EspelhadorFluxo.aguardando_edicao_nova_janela)
     elif texto == "📊 Limite Diário":
-        teclado_teto = ReplyKeyboardMarkup(
-            keyboard=[
-                [KeyboardButton(text="Todos os Vídeos ♾️")],
-                [KeyboardButton(text="Cancelar Operação ❌")]
-            ],
-            resize_keyboard=True,
-            is_persistent=True
-        )
+        teclado_teto = montar_teclado([
+            [KeyboardButton(text="Todos os Vídeos ♾️")],
+            [KeyboardButton(text="Cancelar Operação ❌")]
+        ])
         await message.answer(
             "Quantos vídeos esta rota pode publicar <b>por dia</b>?\n\n"
             "• Faixa: <code>6-10</code> — cada dia sorteia um número entre 6 e 10\n"
@@ -1052,50 +1015,34 @@ async def processar_acao_edicao(message: types.Message, state: FSMContext):
         )
         await state.set_state(EspelhadorFluxo.aguardando_edicao_limite_diario)
     elif texto == "📅 Modificar Dias":
-        teclado_dias = ReplyKeyboardMarkup(
-            keyboard=[
-                [KeyboardButton(text="Mesmo Dia (D+0) 🟢")],
-                [KeyboardButton(text="Dia Seguinte (D+1) 🟡")],
-                [KeyboardButton(text="Dois Dias (D+2) 🔵")],
-                [KeyboardButton(text="Cancelar Operação ❌")]
-            ],
-            resize_keyboard=True,
-            is_persistent=True
-        )
+        teclado_dias = montar_teclado([
+            [KeyboardButton(text="Mesmo Dia (D+0) 🟢")],
+            [KeyboardButton(text="Dia Seguinte (D+1) 🟡")],
+            [KeyboardButton(text="Dois Dias (D+2) 🔵")],
+            [KeyboardButton(text="Cancelar Operação ❌")]
+        ])
         await message.answer("Escolha o novo intervalo temporal de atraso para o espelhamento:", reply_markup=teclado_dias)
         await state.set_state(EspelhadorFluxo.aguardando_edicao_intervalo_dias)
     elif texto == "🔀 Modificar Modo":
-        teclado_modo = ReplyKeyboardMarkup(
-            keyboard=[
-                [KeyboardButton(text="Aleatório 🔀"), KeyboardButton(text="Ordem de Chegada ⬇️")],
-                [KeyboardButton(text="Cancelar Operação ❌")]
-            ],
-            resize_keyboard=True,
-            is_persistent=True
-        )
+        teclado_modo = montar_teclado([
+            [KeyboardButton(text="Aleatório 🔀"), KeyboardButton(text="Ordem de Chegada ⬇️")],
+            [KeyboardButton(text="Cancelar Operação ❌")]
+        ])
         await message.answer("Escolha o novo modo de distribuição:", reply_markup=teclado_modo)
         await state.set_state(EspelhadorFluxo.aguardando_edicao_novo_modo)
     elif texto == "Analisar Canais Vigiados 🔎":
-        teclado_analise = ReplyKeyboardMarkup(
-            keyboard=[
-                [KeyboardButton(text="📜 Listar Todos"), KeyboardButton(text="❌ Erros")],
-                [KeyboardButton(text="⚠️ Duplicados")],
-                [KeyboardButton(text="🔙 Voltar ao Menu de Edição")]
-            ],
-            resize_keyboard=True,
-            is_persistent=True
-        )
+        teclado_analise = montar_teclado([
+            [KeyboardButton(text="📜 Listar Todos"), KeyboardButton(text="❌ Erros")],
+            [KeyboardButton(text="⚠️ Duplicados")],
+            [KeyboardButton(text="🔙 Voltar ao Menu de Edição")]
+        ])
         await message.answer("🔎 <b>Análise de Canais Vigiados</b>\nEscolha a ferramenta que deseja utilizar:", reply_markup=teclado_analise, parse_mode="HTML")
         await state.set_state(EspelhadorFluxo.aguardando_acao_analise)
     elif texto == "📥 Editar Canais":
-        teclado_origens = ReplyKeyboardMarkup(
-            keyboard=[
-                [KeyboardButton(text="➕ Adicionar Canal"), KeyboardButton(text="🗑️ Remover Canal")],
-                [KeyboardButton(text="🔙 Voltar ao Menu de Edição")]
-            ],
-            resize_keyboard=True,
-            is_persistent=True
-        )
+        teclado_origens = montar_teclado([
+            [KeyboardButton(text="➕ Adicionar Canal"), KeyboardButton(text="🗑️ Remover Canal")],
+            [KeyboardButton(text="🔙 Voltar ao Menu de Edição")]
+        ])
         await message.answer("O que você deseja fazer com os canais monitorados desta rota?", reply_markup=teclado_origens)
         await state.set_state(EspelhadorFluxo.aguardando_acao_origem)
     else:
@@ -1105,15 +1052,11 @@ async def processar_acao_edicao(message: types.Message, state: FSMContext):
 async def processar_acao_origem(message: types.Message, state: FSMContext):
     texto = message.text
     if texto == "➕ Adicionar Canal":
-        teclado_dinamico = ReplyKeyboardMarkup(
-            keyboard=[
-                [KeyboardButton(text="Importar Banco Global 🌍")], 
-                [KeyboardButton(text="Lista Negra (Blacklist) ⛔")],
-                [KeyboardButton(text="Cancelar Operação ❌")]
-            ], 
-            resize_keyboard=True, 
-            is_persistent=True
-        )
+        teclado_dinamico = montar_teclado([
+            [KeyboardButton(text="Importar Banco Global 🌍")], 
+            [KeyboardButton(text="Lista Negra (Blacklist) ⛔")],
+            [KeyboardButton(text="Cancelar Operação ❌")]
+        ])
         await message.answer(
             "Envie os @usernames, links ou IDs dos grupos que deseja monitorar como ORIGEM.\n\n"
             "OBS: Você pode enviar vários separando por vírgula (Ex: @grupo1, -100123, https://t.me/grupo2, https://web.telegram.org/a/#-1002856422690):\n\n"
@@ -1140,9 +1083,7 @@ async def processar_acao_origem(message: types.Message, state: FSMContext):
                 txt += f"{i}. {nome} (<code>{b}</code>)\n"
         else: 
             txt += "<i>Nenhuma restrição cadastrada.</i>\n"
-        
-        tcl = ReplyKeyboardMarkup(keyboard=[[KeyboardButton(text="➕ Add à Blacklist"), KeyboardButton(text="🗑️ Rem. da Blacklist")], [KeyboardButton(text="Cancelar Operação ❌")]], resize_keyboard=True)
-        await message.answer(txt, reply_markup=tcl, parse_mode="HTML")
+        await message.answer(txt, reply_markup=teclado_espelhador_lista_negra, parse_mode="HTML")
         await state.set_state(EspelhadorFluxo.aguardando_acao_blacklist)
         
     elif texto == "🗑️ Remover Canal":
@@ -1421,8 +1362,7 @@ async def salvar_edicao_janela(message: types.Message, state: FSMContext):
             
     await state.update_data(inicio=inicio, fim=fim)
     texto_exibicao = "24 horas por dia" if inicio == 0 and fim == 24 else f"entre as {inicio}h e as {fim}h"
-    teclado_conf = ReplyKeyboardMarkup(keyboard=[[KeyboardButton(text="Aprovar ✅"), KeyboardButton(text="Cancelar Operação ❌")]], resize_keyboard=True, is_persistent=True)
-    await message.answer(f"Deseja confirmar a janela de postagem <b>{texto_exibicao}</b>?", parse_mode="HTML", reply_markup=teclado_conf)
+    await message.answer(f"Deseja confirmar a janela de postagem <b>{texto_exibicao}</b>?", parse_mode="HTML", reply_markup=teclado_espelhador_confirmacao)
     await state.set_state(EspelhadorFluxo.aguardando_confirmacao_edicao_janela)
 
 @router.message(EspelhadorFluxo.aguardando_edicao_limite_diario)
@@ -1460,8 +1400,7 @@ async def salvar_edicao_limite_diario(message: types.Message, state: FSMContext)
     else:
         texto_exibicao = f"exatamente {piso} vídeo(s) por dia"
     aviso = "" if piso == 0 else "\n\n⚠️ O excedente do dia é <b>descartado</b>, não transborda para amanhã."
-    teclado_conf = ReplyKeyboardMarkup(keyboard=[[KeyboardButton(text="Aprovar ✅"), KeyboardButton(text="Cancelar Operação ❌")]], resize_keyboard=True, is_persistent=True)
-    await message.answer(f"Deseja confirmar a publicação de <b>{texto_exibicao}</b>?{aviso}", parse_mode="HTML", reply_markup=teclado_conf)
+    await message.answer(f"Deseja confirmar a publicação de <b>{texto_exibicao}</b>?{aviso}", parse_mode="HTML", reply_markup=teclado_espelhador_confirmacao)
     await state.set_state(EspelhadorFluxo.aguardando_confirmacao_edicao_limite)
 
 @router.message(EspelhadorFluxo.aguardando_confirmacao_edicao_limite)
@@ -1502,9 +1441,8 @@ async def salvar_edicao_intervalo_dias(message: types.Message, state: FSMContext
     await state.update_data(intervalo_dias=intervalo)
     
     aviso_extra = "\n⚠️ <b>Nota:</b> O modo será alterado para <i>Ordem de Chegada</i>." if intervalo == 0 else ""
-    teclado_conf = ReplyKeyboardMarkup(keyboard=[[KeyboardButton(text="Aprovar ✅"), KeyboardButton(text="Cancelar Operação ❌")]], resize_keyboard=True, is_persistent=True)
     
-    await message.answer(f"Deseja confirmar o intervalo temporal D+{intervalo}?{aviso_extra}", parse_mode="HTML", reply_markup=teclado_conf)
+    await message.answer(f"Deseja confirmar o intervalo temporal D+{intervalo}?{aviso_extra}", parse_mode="HTML", reply_markup=teclado_espelhador_confirmacao)
     await state.set_state(EspelhadorFluxo.aguardando_confirmacao_edicao_dias)
 
 @router.message(EspelhadorFluxo.aguardando_confirmacao_edicao_janela)
@@ -1578,9 +1516,7 @@ async def salvar_edicao_modo(message: types.Message, state: FSMContext):
     if message.text not in ["Aleatório 🔀", "Ordem de Chegada ⬇️"]: return await message.answer("Use os botões.", reply_markup=teclado_espelhador_cancelar)
     modo = "aleatorio" if message.text == "Aleatório 🔀" else "ordem"
     await state.update_data(modo=modo)
-    
-    teclado_conf = ReplyKeyboardMarkup(keyboard=[[KeyboardButton(text="Aprovar ✅"), KeyboardButton(text="Cancelar Operação ❌")]], resize_keyboard=True, is_persistent=True)
-    await message.answer(f"Deseja confirmar o modo de distribuição {message.text}?", parse_mode="HTML", reply_markup=teclado_conf)
+    await message.answer(f"Deseja confirmar o modo de distribuição {message.text}?", parse_mode="HTML", reply_markup=teclado_espelhador_confirmacao)
     await state.set_state(EspelhadorFluxo.aguardando_confirmacao_edicao_modo)
 
 @router.message(EspelhadorFluxo.aguardando_confirmacao_edicao_modo)
@@ -1997,9 +1933,7 @@ async def salvar_bl_add_espelhador(message: types.Message, state: FSMContext):
              texto_aviso += f"🗑️ {nome_conflito} (<code>{c}</code>)\n"
 
         texto_aviso += "\nDeseja aprovar a adição à Lista Negra e a exclusão destes canais da escuta da rota?"
-
-        teclado_conf = ReplyKeyboardMarkup(keyboard=[[KeyboardButton(text="Aprovar ✅"), KeyboardButton(text="Cancelar Operação ❌")]], resize_keyboard=True, is_persistent=True)
-        await message.answer(texto_aviso, reply_markup=teclado_conf, parse_mode="HTML")
+        await message.answer(texto_aviso, reply_markup=teclado_espelhador_confirmacao, parse_mode="HTML")
         await state.set_state(EspelhadorFluxo.aguardando_confirmacao_blacklist_conflito)
     else:
         for n in novos_blacklist:
@@ -2015,15 +1949,7 @@ async def salvar_bl_add_espelhador(message: types.Message, state: FSMContext):
             txt_lista += f"{i}. {nome} (<code>{b}</code>)\n"
             
         texto_final = f"✅ <b>{len(novos_blacklist)} canal(is) bloqueado(s) com sucesso!</b>\n\n{txt_lista}"
-        
-        tcl_bl = ReplyKeyboardMarkup(
-            keyboard=[
-                [KeyboardButton(text="➕ Add à Blacklist"), KeyboardButton(text="🗑️ Rem. da Blacklist")], 
-                [KeyboardButton(text="Cancelar Operação ❌")]
-            ], 
-            resize_keyboard=True
-        )
-        await message.answer(texto_final, parse_mode="HTML", reply_markup=tcl_bl)
+        await message.answer(texto_final, parse_mode="HTML", reply_markup=teclado_espelhador_lista_negra)
         await state.set_state(EspelhadorFluxo.aguardando_acao_blacklist)
 
 @router.message(EspelhadorFluxo.aguardando_confirmacao_blacklist_conflito)
@@ -2067,15 +1993,7 @@ async def confirmar_blacklist_conflito_espelhador(message: types.Message, state:
         txt_lista += f"{i}. {nome} (<code>{b}</code>)\n"
 
     texto_final = f"✅ <b>Sucesso!</b>\n⛔ {len(novos_blacklist)} adicionado(s).\n🗑️ {len(alvos_para_remover)} removido(s) da escuta.\n{txt_lista}"
-
-    tcl_bl = ReplyKeyboardMarkup(
-        keyboard=[
-            [KeyboardButton(text="➕ Add à Blacklist"), KeyboardButton(text="🗑️ Rem. da Blacklist")], 
-            [KeyboardButton(text="Cancelar Operação ❌")]
-        ], 
-        resize_keyboard=True
-    )
-    await message.answer(texto_final, parse_mode="HTML", reply_markup=tcl_bl)
+    await message.answer(texto_final, parse_mode="HTML", reply_markup=teclado_espelhador_lista_negra)
     await state.set_state(EspelhadorFluxo.aguardando_acao_blacklist)
 
 @router.message(EspelhadorFluxo.aguardando_blacklist_remove)
@@ -2107,13 +2025,5 @@ async def salvar_bl_rem_espelhador(message: types.Message, state: FSMContext):
         txt_lista += "<i>Nenhuma restrição cadastrada.</i>\n"
 
     texto_final = f"✅ <b>Blacklist atualizada com sucesso!</b>\n\n{txt_lista}"
-    
-    tcl_bl = ReplyKeyboardMarkup(
-        keyboard=[
-            [KeyboardButton(text="➕ Add à Blacklist"), KeyboardButton(text="🗑️ Rem. da Blacklist")], 
-            [KeyboardButton(text="Cancelar Operação ❌")]
-        ], 
-        resize_keyboard=True
-    )
-    await message.answer(texto_final, parse_mode="HTML", reply_markup=tcl_bl)
+    await message.answer(texto_final, parse_mode="HTML", reply_markup=teclado_espelhador_lista_negra)
     await state.set_state(EspelhadorFluxo.aguardando_acao_blacklist)

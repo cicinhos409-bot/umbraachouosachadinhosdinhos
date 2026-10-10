@@ -37,6 +37,7 @@ Módulos de apoio (não são serviços):
 - `links_shopee.py`: acha link da Shopee em texto e mensagem (`primeiro_link`, `extrair_link_shopee`, `codigo_do_link_curto`), igual em todos os robôs. Nunca escrever outra receita de link: o `tests/test_links_shopee.py` barra cópia. O que se repete entre robôs vai para um módulo assim (DECISOES.md, Código e manutenção).
 - `legendas.py`: a legenda dos posts de vídeo (`legenda_da_ia`, `legenda_so_link`, `legenda_sem_nome`, com o nome escapado no HTML), o pedido de nome e hashtags à IA (`PROMPT_NOME_E_HASHTAGS`, com o emoji no fim do nome em todos os robôs) e a leitura do nome de volta (`nome_da_legenda`, usada pelo assistente da Shopee Vídeo). O `tests/test_legendas.py` barra cópia da lista de hashtags ou do prompt.
 - `videos.py`: arquivo de vídeo tratado igual em todos os robôs: `dimensoes` (ffprobe), `verificar_e_otimizar_video` (vídeo abaixo de 720 px re-renderizado em 720x1280 no mesmo caminho) e `calcular_hash_video` (SHA-256 que reconhece o mesmo vídeo). O `tests/test_videos.py` barra cópia.
+- `teclados.py`: o teclado fixo embaixo da conversa (`montar_teclado`) e os teclados que vários painéis usam iguais, para o bot_mestre e os painéis em arquivo próprio. O `tests/test_teclados.py` barra teclado montado à mão e cópia dos repetidos.
 - `repetidos_publico.py`: vídeos que já foram ao Grupo Público (tabela `videos_no_publico`, pelo arquivo do Telegram e pelo SHA-256), para o mesmo vídeo não ir de novo quando a origem dos Autorais o posta outra vez. Usado pelo sorteio do Público (espelhador dos Autorais) e pelo botão Disparar Repost Autoral (bot_mestre).
 - `fila_espelhador.py`: a fila do Espelhador no banco, gravada sem um robô apagar o que o outro gravou (detalhes em "Dados"). O `motor_userbot` passa o antigo `fila_espelhador.json` para o banco ao ligar; o `tests/test_fila_espelhador.py` barra quem voltar a usar o arquivo.
 - `backup_dados.py`: backup diário (03:40, pelo bot_mestre) do banco, das sessões, dos JSON e do `.env` em `~/backups`, ficam 7. O `/status` mostra a idade do último.
@@ -51,7 +52,7 @@ São 17 mil linhas. Navegue pelos marcadores de seção, que não mudam quando o
 arquivo cresce: `grep -n "^# --- " bot_mestre.py`. Os blocos grandes usam
 `# ===` com o título na linha seguinte. Exemplos:
 
-- `--- Estados (FSM) ---` e `--- Teclados ---`: estados e teclados de todos os fluxos. Teclado novo sai do `montar_teclado(linhas)` (ou `teclado_com_cancelar`); o `tests/test_teclados.py` barra o `ReplyKeyboardMarkup` do padrão escrito à mão.
+- `--- Estados (FSM) ---` e `--- Teclados ---`: estados e teclados de todos os fluxos. Teclado novo sai do `teclados.py` (`montar_teclado(linhas)`, `teclado_com_cancelar`, e os repetidos `teclado_cancelar`, `teclado_aprovar_cancelar` e `teclado_janela_dia_todo`), no `bot_mestre` e nos painéis em arquivo próprio: todos ficam fixos embaixo da conversa. O `tests/test_teclados.py` barra `ReplyKeyboardMarkup` escrito à mão.
 - `--- Fila do canal principal ---`, `--- Pausa programada ---` e `--- Gerenciar Fila de Postagens ---`.
 - `--- Painel do Espião ---` e `--- Motor do Espião (fila de clonagem) ---`.
 - Painéis de SPAM:

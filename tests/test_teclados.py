@@ -1,5 +1,6 @@
-"""Teclados do bot_mestre: um jeito só de montar, e um teclado só para cada um repetido."""
+"""Teclados do bot_mestre e dos painéis: um jeito só de montar (teclados.py), e um teclado só para cada um repetido."""
 import ast
+import glob
 import os
 
 PASTA = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -17,16 +18,30 @@ def test_montar_teclado_fixa_embaixo_e_ajusta_o_tamanho(bm):
     assert _botoes(bm.teclado_janela_dia_todo) == [["Dia Todo (24h) 🕛"], ["Cancelar ❌"]]
 
 
-def test_ninguem_monta_teclado_do_padrao_a_mao():
-    # O padrão (fixo e ajustado) sai só do montar_teclado: assim um ajuste vale para todos.
-    arvore = ast.parse(open(os.path.join(PASTA, "bot_mestre.py"), encoding="utf-8").read())
+def test_ninguem_monta_teclado_a_mao():
+    # Todo teclado sai do teclados.montar_teclado, fixo embaixo da conversa, no bot_mestre
+    # e nos painéis em arquivo próprio: assim um ajuste vale para todos.
+    # Decisão do Rafael: DECISOES.md, Código e manutenção.
     fora = []
-    for funcao in ast.walk(arvore):
-        if isinstance(funcao, ast.FunctionDef) and funcao.name == "montar_teclado":
-            dentro = {id(n) for n in ast.walk(funcao)}
-    for no in ast.walk(arvore):
-        if isinstance(no, ast.Call) and getattr(no.func, "id", None) == "ReplyKeyboardMarkup" and id(no) not in dentro:
-            nomes = sorted(k.arg for k in no.keywords)
-            if nomes == ["is_persistent", "keyboard", "resize_keyboard"]:
-                fora.append(no.lineno)
-    assert fora == []
+    for caminho in sorted(glob.glob(os.path.join(PASTA, "*.py"))):
+        if os.path.basename(caminho) == "teclados.py":
+            continue
+        arvore = ast.parse(open(caminho, encoding="utf-8").read())
+        for no in ast.walk(arvore):
+            if isinstance(no, ast.Call) and getattr(no.func, "id", getattr(no.func, "attr", None)) == "ReplyKeyboardMarkup":
+                fora.append(f"{os.path.basename(caminho)}:{no.lineno}")
+    assert fora == [], "use teclados.montar_teclado: " + ", ".join(fora)
+
+
+def test_paineis_usam_os_teclados_repetidos_do_mesmo_lugar(bm):
+    import painel_shopee_video as sv
+    import teclados
+    assert bm.teclado_cancelar is teclados.teclado_cancelar is sv.teclado_cancelar
+    assert bm.teclado_aprovar_cancelar is sv.teclado_aprovar_cancelar
+    assert bm.teclado_janela_dia_todo is sv.teclado_janela_dia_todo
+    for definicao in ("def montar_teclado(", "def teclado_com_cancelar(", "teclado_cancelar = ",
+                      "teclado_aprovar_cancelar = ", "teclado_janela_dia_todo = "):
+        for arquivo in ("bot_mestre.py", "painel_shopee_video.py", "painel_acessos.py",
+                        "painel_notas.py", "painel_espelhos.py"):
+            fonte = open(os.path.join(PASTA, arquivo), encoding="utf-8").read()
+            assert "\n" + definicao not in fonte, f"{arquivo} tem a própria cópia de {definicao}"
