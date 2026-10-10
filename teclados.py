@@ -2,7 +2,7 @@
 Teclados fixos embaixo da conversa, no padrão de todos os painéis do bot principal:
 o bot_mestre e os painéis em arquivo próprio (Espelhador, Notas, Shopee Vídeo e
 Acessos do Servidor). Um ajuste aqui vale para todos. O tests/test_teclados.py
-barra teclado do padrão montado à mão.
+barra teclado montado à mão.
 
 - montar_teclado(linhas): o teclado fixo e ajustado ao tamanho dos botões.
 - teclado_com_cancelar(texto): um botão de confirmar ao lado do Cancelar ❌.

@@ -24,7 +24,7 @@ from aiogram import Router, Bot, types, F
 from aiogram.fsm.context import FSMContext
 import fila_espelhador
 from aiogram.fsm.state import StatesGroup, State
-from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types import KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
 from teclados import montar_teclado
 from aiogram.filters import StateFilter
 from utils import ler_cache_nomes_grupos, salvar_nome_grupo, validar_e_formatar_alvo, id_da_origem, normalizar_origens_rotas, salvar_json_atomico
@@ -103,14 +103,11 @@ teclado_espelhador_janela = montar_teclado([
 
 teclado_espelhador_confirmacao = montar_teclado([[KeyboardButton(text="Aprovar ✅"), KeyboardButton(text="Cancelar Operação ❌")]])
 
-# Ações da lista negra de canais. Sem o is_persistent dos outros teclados, como sempre foi.
-teclado_espelhador_lista_negra = ReplyKeyboardMarkup(
-    keyboard=[
-        [KeyboardButton(text="➕ Add à Blacklist"), KeyboardButton(text="🗑️ Rem. da Blacklist")],
-        [KeyboardButton(text="Cancelar Operação ❌")]
-    ],
-    resize_keyboard=True
-)
+# Ações da lista negra de canais.
+teclado_espelhador_lista_negra = montar_teclado([
+    [KeyboardButton(text="➕ Add à Blacklist"), KeyboardButton(text="🗑️ Rem. da Blacklist")],
+    [KeyboardButton(text="Cancelar Operação ❌")]
+])
 
 # Com mais de uma rota: as origens novas entram só nesta rota ou em todas.
 teclado_espelhador_abrangencia = montar_teclado([

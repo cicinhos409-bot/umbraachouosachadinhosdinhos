@@ -18,19 +18,18 @@ def test_montar_teclado_fixa_embaixo_e_ajusta_o_tamanho(bm):
     assert _botoes(bm.teclado_janela_dia_todo) == [["Dia Todo (24h) 🕛"], ["Cancelar ❌"]]
 
 
-def test_ninguem_monta_teclado_do_padrao_a_mao():
-    # O padrão (fixo e ajustado) sai só do teclados.montar_teclado, no bot_mestre e nos
-    # painéis em arquivo próprio: assim um ajuste vale para todos.
+def test_ninguem_monta_teclado_a_mao():
+    # Todo teclado sai do teclados.montar_teclado, fixo embaixo da conversa, no bot_mestre
+    # e nos painéis em arquivo próprio: assim um ajuste vale para todos.
+    # Decisão do Rafael: DECISOES.md, Código e manutenção.
     fora = []
     for caminho in sorted(glob.glob(os.path.join(PASTA, "*.py"))):
         if os.path.basename(caminho) == "teclados.py":
             continue
         arvore = ast.parse(open(caminho, encoding="utf-8").read())
         for no in ast.walk(arvore):
-            if isinstance(no, ast.Call) and getattr(no.func, "id", None) == "ReplyKeyboardMarkup":
-                nomes = sorted(k.arg for k in no.keywords)
-                if nomes == ["is_persistent", "keyboard", "resize_keyboard"]:
-                    fora.append(f"{os.path.basename(caminho)}:{no.lineno}")
+            if isinstance(no, ast.Call) and getattr(no.func, "id", getattr(no.func, "attr", None)) == "ReplyKeyboardMarkup":
+                fora.append(f"{os.path.basename(caminho)}:{no.lineno}")
     assert fora == [], "use teclados.montar_teclado: " + ", ".join(fora)
 
 

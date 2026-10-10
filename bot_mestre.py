@@ -41,7 +41,7 @@ from aiogram.filters import Command, StateFilter
 from aiogram import BaseMiddleware
 from typing import Callable, Dict, Any, Awaitable
 from aiogram.fsm.storage.base import StorageKey
-from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, FSInputFile, InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types import KeyboardButton, FSInputFile, InlineKeyboardMarkup, InlineKeyboardButton
 import subprocess
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from api_gemini import gerar_texto_gemini, analisar_video_gemini, MODELOS_CASCATA_GEMINI, client_genai
@@ -3774,10 +3774,7 @@ async def confirmar_exclusao_total(message: types.Message, state: FSMContext):
     await painel_parceiros(message, state)
 
 # --- Cadastro de parceiro: 7 passos + confirmação ---
-teclado_wizard_nav = ReplyKeyboardMarkup(
-    keyboard=[[KeyboardButton(text="Voltar ⬅️"), KeyboardButton(text="Cancelar ❌")]],
-    resize_keyboard=True
-)
+teclado_wizard_nav = montar_teclado([[KeyboardButton(text="Voltar ⬅️"), KeyboardButton(text="Cancelar ❌")]])
 
 # Link real, usado só para provar que as credenciais funcionam.
 LINK_TESTE_SHOPEE = "https://shopee.com.br/product/366207309/22648772967"
@@ -10699,10 +10696,7 @@ async def revisar_edicao_nicho(message: types.Message, state: FSMContext):
         f"<b>Como vai ficar{quantia}:</b>\n{_mostrar_valor_campo(novo_valor)}\n\n"
         "Confirma a troca?",
         parse_mode="HTML",
-        reply_markup=ReplyKeyboardMarkup(
-            keyboard=[[KeyboardButton(text="Confirmar ✅")], [KeyboardButton(text="Cancelar ❌")]],
-            resize_keyboard=True
-        )
+        reply_markup=montar_teclado([[KeyboardButton(text="Confirmar ✅")], [KeyboardButton(text="Cancelar ❌")]])
     )
     await state.set_state(AchadinhosFluxo.aguardando_confirmacao_edicao)
 
@@ -12266,7 +12260,7 @@ async def processar_data_retorno(message: types.Message, state: FSMContext):
     
     if not spam_ativo and not rotina_ativa:
         await state.update_data(servicos_selecionados="Nenhum (Apenas Avisos)")
-        await message.answer(f"Ambos os serviços já estão pausados manualmente.\nApenas a rotina diária de avisos será agendada até {data_retorno_str}.\nConfirma o agendamento desta pausa?", reply_markup=ReplyKeyboardMarkup(keyboard=[[KeyboardButton(text="Confirmar Pausa ✅"), KeyboardButton(text="Cancelar ❌")]], resize_keyboard=True))
+        await message.answer(f"Ambos os serviços já estão pausados manualmente.\nApenas a rotina diária de avisos será agendada até {data_retorno_str}.\nConfirma o agendamento desta pausa?", reply_markup=teclado_com_cancelar("Confirmar Pausa ✅"))
         await state.set_state(PausaProgramadaFluxo.aguardando_confirmacao_pausa)
     else:
         opcoes = []
@@ -12281,7 +12275,7 @@ async def processar_data_retorno(message: types.Message, state: FSMContext):
         botoes.append([KeyboardButton(text="Cancelar ❌")])
         
         texto = f"Data e hora de retorno: <b>{data_retorno_str}</b>.\nQuais serviços você deseja pausar automaticamente agora?"
-        await message.answer(texto, parse_mode="HTML", reply_markup=ReplyKeyboardMarkup(keyboard=botoes, resize_keyboard=True))
+        await message.answer(texto, parse_mode="HTML", reply_markup=montar_teclado(botoes))
         await state.set_state(PausaProgramadaFluxo.aguardando_selecao_servicos)
 
 @dp.message(PausaProgramadaFluxo.aguardando_selecao_servicos)
