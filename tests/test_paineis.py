@@ -1,4 +1,5 @@
 """Painéis do bot: SPAM, Cancelar das rotinas, painel do buscador e painel de ofertas do Grupo Público."""
+import asyncio
 import logging
 from types import SimpleNamespace
 
@@ -107,3 +108,53 @@ def test_painel_antigo_que_nao_sai_fica_no_log(bm, monkeypatch, caplog):
         rodar(bm.reenviar_botao_ofertas())
     assert any("Não consegui apagar o painel anterior (ID 55)" in r.getMessage() for r in caplog.records)
     assert bm.ler_submissao_config()["msg_botao_ofertas"] == 100
+
+
+def _admin_no_privado(bm, texto):
+    return SimpleNamespace(text=texto, from_user=SimpleNamespace(id=bm.ADMIN_ID),
+                           chat=SimpleNamespace(id=bm.ADMIN_ID, type="private"), message_thread_id=None)
+
+
+def test_painel_inicial_volta_depois_de_15_min_em_qualquer_menu(bm, monkeypatch):
+    # O Rafael notou em 10/10: o "Painel Inicial restaurado" vinha em alguns menus e em
+    # outros não. A marca de "está no Painel Inicial" ficava ligada ao entrar num menu
+    # sem fluxo (ex.: Outros Canais), e o fim dos 15 min achava que ele ainda estava lá.
+    from aiogram.fsm.context import FSMContext
+    from aiogram.fsm.storage.base import StorageKey
+
+    enviadas = []
+
+    async def send_message(chat_id, texto, **k):
+        enviadas.append(texto)
+        return SimpleNamespace(message_id=len(enviadas))
+
+    async def delete_message(**k):
+        return True
+
+    monkeypatch.setattr(bm.bot, "send_message", send_message)
+    monkeypatch.setattr(bm.bot, "delete_message", delete_message)
+    dormir = asyncio.sleep
+    monkeypatch.setattr(bm.asyncio, "sleep", lambda *_: dormir(0))
+    estado = FSMContext(storage=bm.dp.storage, key=StorageKey(bot_id=bm.bot.id, chat_id=bm.ADMIN_ID,
+                                                              user_id=bm.ADMIN_ID, thread_id=None))
+    middleware = bm.InatividadeMiddleware()
+
+    async def tocar(texto, handler):
+        await middleware(handler, _admin_no_privado(bm, texto), {"state": estado})
+
+    async def menu_sem_fluxo(evento, dados):
+        return None
+
+    async def mostra_o_painel_inicial(evento, dados):
+        await dados["state"].update_data(painel_atual="raiz")
+
+    async def cenario():
+        await estado.clear()
+        await tocar("Voltar ao Início 🔙", mostra_o_painel_inicial)
+        await bm.resetar_sessao_inatividade(bm.ADMIN_ID, bm.ADMIN_ID)
+        assert enviadas == []                                  # já estava no Painel Inicial
+        await tocar("Outros Canais 🗂️", menu_sem_fluxo)
+        await bm.resetar_sessao_inatividade(bm.ADMIN_ID, bm.ADMIN_ID)
+        assert "🏠 Painel Inicial restaurado." in enviadas
+
+    rodar(cenario())

@@ -236,6 +236,7 @@ As regras de PR, CI, merge e avisos estão no `CLAUDE.md`, em "Como trabalhamos"
   - Tailscale (rede privada do celular): login.tailscale.com, entrando pelo Google. Guarda só qual conta Google; a senha é a do Google e não fica no bot.
   - Oracle Cloud (servidor dos robôs): cloud.oracle.com, com nome da conta na nuvem, e-mail e senha.
   - O Rafael cadastra e troca os dados pelo próprio bot (Editar Tailscale ✏️ e Editar Oracle ✏️). Ficam no banco do servidor, nunca no código (o repositório é público) nem no log; a mensagem com a senha é apagada da conversa logo depois de guardada.
+- **10/10/2026:** depois de 15 min sem uso, o painel limpa o fluxo aberto e manda "🏠 Painel Inicial restaurado." com o teclado inicial, de qualquer menu em que o Rafael esteja. Ele notou que alguns menus voltavam e outros não. Se ele já está no Painel Inicial, nada é enviado.
 
 ## Código e manutenção
 

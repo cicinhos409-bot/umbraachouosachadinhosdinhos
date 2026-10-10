@@ -2697,6 +2697,14 @@ class InatividadeMiddleware(BaseMiddleware):
         if eh_painel_admin:
             job_id = f"job_inatividade_{event.from_user.id}"
 
+            # Botão ou texto do admin tira a marca de "está no Painel Inicial"; quem mostra o
+            # Painel Inicial põe de novo. Assim, ao fim dos 15 min, o painel volta de qualquer
+            # menu, e não só dos que estavam no meio de um fluxo. Clique em botão inline não
+            # troca o teclado de baixo e não mexe na marca.
+            estado = data.get("state")
+            if estado is not None and not hasattr(event, "data"):
+                await estado.update_data(painel_atual=None)
+
             from datetime import datetime, timedelta
             novo_limite = datetime.now(fuso_horario) + timedelta(minutes=15)
 
