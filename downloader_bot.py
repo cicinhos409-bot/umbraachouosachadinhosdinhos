@@ -138,12 +138,11 @@ def _garantir_tabela_cortesia(cursor):
 def downloads_totais(user_id):
     """Quantos a pessoa já baixou desde sempre (decide a cortesia). Nunca é zerado."""
     try:
-        conexao = db.conectar()
-        cursor = conexao.cursor()
-        _garantir_tabela_cortesia(cursor)
-        cursor.execute("SELECT total FROM downloads_totais WHERE user_id = ?", (user_id,))
-        linha = cursor.fetchone()
-        conexao.close()
+        with db.conexao() as conexao:
+            cursor = conexao.cursor()
+            _garantir_tabela_cortesia(cursor)
+            cursor.execute("SELECT total FROM downloads_totais WHERE user_id = ?", (user_id,))
+            linha = cursor.fetchone()
         return linha[0] if linha else 0
     except Exception as e:
         logger.error(f"❌ Erro ao ler o total: {e}")
@@ -160,11 +159,10 @@ def topico_submissao():
     Devolve None quando não achar — e aí o convite simplesmente não sai.
     """
     try:
-        conexao = db.conectar()
-        cursor = conexao.cursor()
-        cursor.execute("SELECT valor FROM configuracoes WHERE chave = 'submissao_config'")
-        linha = cursor.fetchone()
-        conexao.close()
+        with db.conexao() as conexao:
+            cursor = conexao.cursor()
+            cursor.execute("SELECT valor FROM configuracoes WHERE chave = 'submissao_config'")
+            linha = cursor.fetchone()
         if not linha:
             return None
         topico = (json.loads(linha[0]) or {}).get("topico_envio")
@@ -219,15 +217,13 @@ async def convidar_para_comunidade(message, mencao, total_downloads):
 def somar_download_total(user_id):
     """+1 no total da pessoa (downloads_totais)."""
     try:
-        conexao = db.conectar()
-        cursor = conexao.cursor()
-        _garantir_tabela_cortesia(cursor)
-        cursor.execute("""
-            INSERT INTO downloads_totais (user_id, total) VALUES (?, 1)
-            ON CONFLICT(user_id) DO UPDATE SET total = total + 1
-        """, (user_id,))
-        conexao.commit()
-        conexao.close()
+        with db.conexao() as conexao:
+            cursor = conexao.cursor()
+            _garantir_tabela_cortesia(cursor)
+            cursor.execute("""
+                INSERT INTO downloads_totais (user_id, total) VALUES (?, 1)
+                ON CONFLICT(user_id) DO UPDATE SET total = total + 1
+            """, (user_id,))
     except Exception as e:
         logger.error(f"❌ Erro ao somar o total: {e}")
 
@@ -245,12 +241,11 @@ def _garantir_tabela_painel(cursor):
 def ler_msg_painel():
     """ID da última mensagem do painel. Sobrevive a reinício do serviço."""
     try:
-        conexao = db.conectar()
-        cursor = conexao.cursor()
-        _garantir_tabela_painel(cursor)
-        cursor.execute("SELECT valor FROM painel_downloader WHERE chave = 'msg_id'")
-        linha = cursor.fetchone()
-        conexao.close()
+        with db.conexao() as conexao:
+            cursor = conexao.cursor()
+            _garantir_tabela_painel(cursor)
+            cursor.execute("SELECT valor FROM painel_downloader WHERE chave = 'msg_id'")
+            linha = cursor.fetchone()
         return int(linha[0]) if linha and linha[0] else None
     except Exception as e:
         logger.error(f"❌ Erro ao ler o painel: {e}")
@@ -260,13 +255,11 @@ def ler_msg_painel():
 def salvar_msg_painel(msg_id):
     """Guarda o ID da mensagem atual do painel."""
     try:
-        conexao = db.conectar()
-        cursor = conexao.cursor()
-        _garantir_tabela_painel(cursor)
-        cursor.execute("INSERT OR REPLACE INTO painel_downloader (chave, valor) VALUES ('msg_id', ?)",
-                       (str(msg_id),))
-        conexao.commit()
-        conexao.close()
+        with db.conexao() as conexao:
+            cursor = conexao.cursor()
+            _garantir_tabela_painel(cursor)
+            cursor.execute("INSERT OR REPLACE INTO painel_downloader (chave, valor) VALUES ('msg_id', ?)",
+                           (str(msg_id),))
     except Exception as e:
         logger.error(f"❌ Erro ao salvar o painel: {e}")
 
@@ -274,12 +267,11 @@ def downloads_hoje(user_id):
     """Quantos já usou hoje. Persistente: reiniciar o bot não zera o contador."""
     try:
         hoje = datetime.now(FUSO).strftime("%Y-%m-%d")
-        conexao = db.conectar()
-        cursor = conexao.cursor()
-        _garantir_tabela_downloads(cursor)
-        cursor.execute("SELECT quantidade FROM downloads_usuarios WHERE user_id = ? AND data = ?", (user_id, hoje))
-        linha = cursor.fetchone()
-        conexao.close()
+        with db.conexao() as conexao:
+            cursor = conexao.cursor()
+            _garantir_tabela_downloads(cursor)
+            cursor.execute("SELECT quantidade FROM downloads_usuarios WHERE user_id = ? AND data = ?", (user_id, hoje))
+            linha = cursor.fetchone()
         return linha[0] if linha else 0
     except Exception as e:
         logger.error(f"❌ Erro ao contar downloads: {e}")
@@ -289,15 +281,13 @@ def registrar_download(user_id):
     """Conta APÓS a entrega: tentativa que falhou não gasta a cota do usuário."""
     try:
         hoje = datetime.now(FUSO).strftime("%Y-%m-%d")
-        conexao = db.conectar()
-        cursor = conexao.cursor()
-        _garantir_tabela_downloads(cursor)
-        cursor.execute('''
-            INSERT INTO downloads_usuarios (user_id, data, quantidade) VALUES (?, ?, 1)
-            ON CONFLICT(user_id, data) DO UPDATE SET quantidade = quantidade + 1
-        ''', (user_id, hoje))
-        conexao.commit()
-        conexao.close()
+        with db.conexao() as conexao:
+            cursor = conexao.cursor()
+            _garantir_tabela_downloads(cursor)
+            cursor.execute('''
+                INSERT INTO downloads_usuarios (user_id, data, quantidade) VALUES (?, ?, 1)
+                ON CONFLICT(user_id, data) DO UPDATE SET quantidade = quantidade + 1
+            ''', (user_id, hoje))
     except Exception as e:
         logger.error(f"❌ Erro ao registrar download: {e}")
 
@@ -305,13 +295,11 @@ def limpar_downloads_antigos(dias=7):
     """A contagem só importa no dia. Guardar uma semana já é folga."""
     try:
         corte = (datetime.now(FUSO) - timedelta(days=dias)).strftime("%Y-%m-%d")
-        conexao = db.conectar()
-        cursor = conexao.cursor()
-        _garantir_tabela_downloads(cursor)
-        cursor.execute("DELETE FROM downloads_usuarios WHERE data < ?", (corte,))
-        removidos = cursor.rowcount
-        conexao.commit()
-        conexao.close()
+        with db.conexao() as conexao:
+            cursor = conexao.cursor()
+            _garantir_tabela_downloads(cursor)
+            cursor.execute("DELETE FROM downloads_usuarios WHERE data < ?", (corte,))
+            removidos = cursor.rowcount
         if removidos:
             logger.info(f"🧹 {removidos} registro(s) de download antigos removidos.")
     except Exception:
@@ -368,16 +356,15 @@ def _garantir_cache_videos(cursor):
 def buscar_cache_video(url):
     """Devolve o file_id já guardado, ou None."""
     try:
-        conexao = db.conectar()
-        cursor = conexao.cursor()
-        _garantir_cache_videos(cursor)
-        chave = chave_cache_video(url)
-        cursor.execute("SELECT file_id FROM cache_videos WHERE chave = ?", (chave,))
-        linha = cursor.fetchone()
-        if linha:
-            cursor.execute("UPDATE cache_videos SET usos = usos + 1 WHERE chave = ?", (chave,))
-            conexao.commit()
-        conexao.close()
+        with db.conexao() as conexao:
+            cursor = conexao.cursor()
+            _garantir_cache_videos(cursor)
+            chave = chave_cache_video(url)
+            cursor.execute("SELECT file_id FROM cache_videos WHERE chave = ?", (chave,))
+            linha = cursor.fetchone()
+            if linha:
+                cursor.execute("UPDATE cache_videos SET usos = usos + 1 WHERE chave = ?", (chave,))
+                conexao.commit()
         return linha[0] if linha else None
     except Exception as e:
         logger.error(f"❌ Erro ao consultar o cache: {e}")
@@ -386,26 +373,22 @@ def buscar_cache_video(url):
 def guardar_cache_video(url, file_id, plataforma):
     """Guarda o file_id do vídeo entregue para este link (a primeira entrega vale)."""
     try:
-        conexao = db.conectar()
-        cursor = conexao.cursor()
-        _garantir_cache_videos(cursor)
-        cursor.execute(
-            "INSERT OR IGNORE INTO cache_videos (chave, file_id, plataforma, data_cache, usos) VALUES (?, ?, ?, ?, 1)",
-            (chave_cache_video(url), file_id, plataforma, datetime.now(FUSO).strftime("%Y-%m-%d %H:%M:%S"))
-        )
-        conexao.commit()
-        conexao.close()
+        with db.conexao() as conexao:
+            cursor = conexao.cursor()
+            _garantir_cache_videos(cursor)
+            cursor.execute(
+                "INSERT OR IGNORE INTO cache_videos (chave, file_id, plataforma, data_cache, usos) VALUES (?, ?, ?, ?, 1)",
+                (chave_cache_video(url), file_id, plataforma, datetime.now(FUSO).strftime("%Y-%m-%d %H:%M:%S"))
+            )
     except Exception as e:
         logger.error(f"❌ Erro ao guardar no cache: {e}")
 
 def remover_cache_video(url):
     """Chamado quando o file_id guardado não funciona mais."""
     try:
-        conexao = db.conectar()
-        cursor = conexao.cursor()
-        cursor.execute("DELETE FROM cache_videos WHERE chave = ?", (chave_cache_video(url),))
-        conexao.commit()
-        conexao.close()
+        with db.conexao() as conexao:
+            cursor = conexao.cursor()
+            cursor.execute("DELETE FROM cache_videos WHERE chave = ?", (chave_cache_video(url),))
     except Exception:
         pass
 

@@ -35,7 +35,23 @@ def test_nenhum_robo_abre_o_banco_por_fora():
             for numero, linha in enumerate(f, 1):
                 if padrao.search(linha):
                     culpados.append(f"{os.path.basename(caminho)}:{numero}")
-    assert culpados == [], "use db.conectar() ou db.conexao(): " + ", ".join(culpados)
+    assert culpados == [], "use with db.conexao() as conexao: " + ", ".join(culpados)
+
+
+def test_robos_so_abrem_o_banco_num_with():
+    # Conexão solta (db.conectar) fica aberta quando algo estoura antes do close(), e
+    # uma gravação já feita nela segura o lock dos cinco robôs até o coletor de lixo
+    # passar: foi assim que o bot_mestre ficou 30 s travado em "database is locked".
+    padrao = re.compile(r"\bdb\.conectar\(")
+    culpados = []
+    for caminho in glob.glob(os.path.join(RAIZ, "*.py")):
+        if os.path.basename(caminho) == "db.py":
+            continue
+        with open(caminho, encoding="utf-8") as f:
+            for numero, linha in enumerate(f, 1):
+                if padrao.search(linha):
+                    culpados.append(f"{os.path.basename(caminho)}:{numero}")
+    assert culpados == [], "use with db.conexao() as conexao: " + ", ".join(culpados)
 
 
 def test_conexao_sai_em_wal_e_espera_o_lock():

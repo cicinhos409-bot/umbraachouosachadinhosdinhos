@@ -223,9 +223,12 @@ CHAVE_CONVITE = "pool_contas_convite_autorais"
 # senha de 2FA entram cifradas no banco e só são abertas dentro da memória, no
 # instante de montar o cliente Telethon.
 
-def _obter_conexao():
-    """Conexão ao banco principal que devolve linhas acessíveis por nome de coluna."""
-    return db.conectar(linhas_por_nome=True)
+def _conexao():
+    """
+    Conexão ao banco principal num with, com linhas acessíveis por nome de coluna:
+    grava no fim, desfaz se der erro e fecha sempre (db.conexao).
+    """
+    return db.conexao(linhas_por_nome=True)
 
 
 def _obter_sal():
@@ -237,24 +240,21 @@ def _obter_sal():
     ele no banco, o par que precisa viajar junto continua sendo só
     (.env + banco_dados.db).
     """
-    conexao = _obter_conexao()
-    cursor = conexao.cursor()
-    cursor.execute(
-        "CREATE TABLE IF NOT EXISTS configuracoes (chave TEXT PRIMARY KEY, valor TEXT)"
-    )
-    cursor.execute("SELECT valor FROM configuracoes WHERE chave = ?", (CHAVE_SAL,))
-    linha = cursor.fetchone()
-    if linha and linha["valor"]:
-        conexao.close()
-        return base64.b64decode(linha["valor"])
+    with _conexao() as conexao:
+        cursor = conexao.cursor()
+        cursor.execute(
+            "CREATE TABLE IF NOT EXISTS configuracoes (chave TEXT PRIMARY KEY, valor TEXT)"
+        )
+        cursor.execute("SELECT valor FROM configuracoes WHERE chave = ?", (CHAVE_SAL,))
+        linha = cursor.fetchone()
+        if linha and linha["valor"]:
+            return base64.b64decode(linha["valor"])
 
-    sal = os.urandom(16)
-    cursor.execute(
-        "INSERT OR REPLACE INTO configuracoes (chave, valor) VALUES (?, ?)",
-        (CHAVE_SAL, base64.b64encode(sal).decode()),
-    )
-    conexao.commit()
-    conexao.close()
+        sal = os.urandom(16)
+        cursor.execute(
+            "INSERT OR REPLACE INTO configuracoes (chave, valor) VALUES (?, ?)",
+            (CHAVE_SAL, base64.b64encode(sal).decode()),
+        )
     logger.info("🧂 [Pool] Sal criptográfico criado pela primeira vez neste banco.")
     return sal
 
@@ -350,108 +350,106 @@ _TABELAS_PRONTAS = False
 def inicializar_tabelas():
     """Cria as tabelas do pool. Seguro chamar quantas vezes quiser."""
     global _TABELAS_PRONTAS
-    conexao = _obter_conexao()
-    cursor = conexao.cursor()
+    with _conexao() as conexao:
+        cursor = conexao.cursor()
 
-    # 1) O cadastro das contas.
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS contas_telegram (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            apelido TEXT UNIQUE NOT NULL,
-            telefone TEXT,
-            user_id INTEGER,
-            username TEXT,
-            nome_exibicao TEXT,
-            sessao_cifrada BLOB,
-            senha_2fa_cifrada BLOB,
-            status_grupo TEXT DEFAULT 'DESCONHECIDO',
-            status_sessao TEXT DEFAULT 'OK',
-            ja_esteve_no_grupo INTEGER DEFAULT 0,
-            funcoes_permitidas TEXT DEFAULT 'espelho,repostagem',
-            prioridade INTEGER DEFAULT 100,
-            habilitada INTEGER DEFAULT 1,
-            ultima_checagem TEXT,
-            ultimo_erro TEXT,
-            criada_em TEXT,
-            atualizada_em TEXT
-        )
-    ''')
+        # 1) O cadastro das contas.
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS contas_telegram (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                apelido TEXT UNIQUE NOT NULL,
+                telefone TEXT,
+                user_id INTEGER,
+                username TEXT,
+                nome_exibicao TEXT,
+                sessao_cifrada BLOB,
+                senha_2fa_cifrada BLOB,
+                status_grupo TEXT DEFAULT 'DESCONHECIDO',
+                status_sessao TEXT DEFAULT 'OK',
+                ja_esteve_no_grupo INTEGER DEFAULT 0,
+                funcoes_permitidas TEXT DEFAULT 'espelho,repostagem',
+                prioridade INTEGER DEFAULT 100,
+                habilitada INTEGER DEFAULT 1,
+                ultima_checagem TEXT,
+                ultimo_erro TEXT,
+                criada_em TEXT,
+                atualizada_em TEXT
+            )
+        ''')
 
-    # 2) Quem está de plantão em cada posto. Uma linha por função, sempre.
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS funcoes_contas (
-            funcao TEXT PRIMARY KEY,
-            conta_id INTEGER,
-            assumida_em TEXT,
-            motivo TEXT
-        )
-    ''')
+        # 2) Quem está de plantão em cada posto. Uma linha por função, sempre.
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS funcoes_contas (
+                funcao TEXT PRIMARY KEY,
+                conta_id INTEGER,
+                assumida_em TEXT,
+                motivo TEXT
+            )
+        ''')
 
-    # 3) Diário de bordo. Serve para responder "por que a conta X parou de
-    #    postar dia tal?" sem depender do journalctl, que rotaciona.
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS historico_contas (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            data TEXT,
-            apelido TEXT,
-            evento TEXT,
-            detalhe TEXT
-        )
-    ''')
+        # 3) Diário de bordo. Serve para responder "por que a conta X parou de
+        #    postar dia tal?" sem depender do journalctl, que rotaciona.
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS historico_contas (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                data TEXT,
+                apelido TEXT,
+                evento TEXT,
+                detalhe TEXT
+            )
+        ''')
 
-    # 4) O que cada conta fez em cada função: última ação ok e último erro. É daqui
-    #    que sai o ✅/❌ do relatório ("a conta está funcionando na função dela?").
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS atividade_contas (
-            conta_id INTEGER,
-            funcao TEXT,
-            ultimo_ok TEXT,
-            ultimo_erro TEXT,
-            erro_em TEXT,
-            total_ok INTEGER DEFAULT 0,
-            PRIMARY KEY (conta_id, funcao)
-        )
-    ''')
+        # 4) O que cada conta fez em cada função: última ação ok e último erro. É daqui
+        #    que sai o ✅/❌ do relatório ("a conta está funcionando na função dela?").
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS atividade_contas (
+                conta_id INTEGER,
+                funcao TEXT,
+                ultimo_ok TEXT,
+                ultimo_erro TEXT,
+                erro_em TEXT,
+                total_ok INTEGER DEFAULT 0,
+                PRIMARY KEY (conta_id, funcao)
+            )
+        ''')
 
-    # A repostagem é um rodízio: a linha dela guarda a lista inteira em contas_ids
-    # (conta_id fica com a primeira, para quem ainda lê um plantonista só).
-    try:
-        cursor.execute("ALTER TABLE funcoes_contas ADD COLUMN contas_ids TEXT")
-    except sqlite3.OperationalError:
-        pass  # coluna já existe
-
-    # A conta da captura é quem publica no canal de destino: 1 = pode publicar,
-    # 0 = não pode (não é admin), NULL = ainda não conferido.
-    try:
-        cursor.execute("ALTER TABLE contas_telegram ADD COLUMN publica_no_destino INTEGER")
-    except sqlite3.OperationalError:
-        pass  # coluna já existe
-
-    # "id:access_hash" do grupo de origem, guardado quando a conta está nele. Quando o
-    # grupo some das conversas, é com ele que se pergunta ao Telegram se ela saiu ou foi
-    # banida. E a situação marcada à mão pelo Rafael, para o que aconteceu antes disso.
-    for coluna in ("grupo_acesso TEXT", "situacao_manual TEXT"):
+        # A repostagem é um rodízio: a linha dela guarda a lista inteira em contas_ids
+        # (conta_id fica com a primeira, para quem ainda lê um plantonista só).
         try:
-            cursor.execute(f"ALTER TABLE contas_telegram ADD COLUMN {coluna}")
+            cursor.execute("ALTER TABLE funcoes_contas ADD COLUMN contas_ids TEXT")
         except sqlite3.OperationalError:
             pass  # coluna já existe
 
-    # Nome que o Rafael deu à conta no painel. NULL = automático (@ ou nome do Telegram).
-    try:
-        cursor.execute("ALTER TABLE contas_telegram ADD COLUMN nome_painel TEXT")
-    except sqlite3.OperationalError:
-        pass  # coluna já existe
+        # A conta da captura é quem publica no canal de destino: 1 = pode publicar,
+        # 0 = não pode (não é admin), NULL = ainda não conferido.
+        try:
+            cursor.execute("ALTER TABLE contas_telegram ADD COLUMN publica_no_destino INTEGER")
+        except sqlite3.OperationalError:
+            pass  # coluna já existe
 
-    # Garante que as duas linhas de função existem desde o começo (vagas).
-    for funcao in FUNCOES:
-        cursor.execute(
-            "INSERT OR IGNORE INTO funcoes_contas (funcao, conta_id, assumida_em, motivo) "
-            "VALUES (?, NULL, NULL, 'posto criado vago')",
-            (funcao,),
-        )
+        # "id:access_hash" do grupo de origem, guardado quando a conta está nele. Quando o
+        # grupo some das conversas, é com ele que se pergunta ao Telegram se ela saiu ou foi
+        # banida. E a situação marcada à mão pelo Rafael, para o que aconteceu antes disso.
+        for coluna in ("grupo_acesso TEXT", "situacao_manual TEXT"):
+            try:
+                cursor.execute(f"ALTER TABLE contas_telegram ADD COLUMN {coluna}")
+            except sqlite3.OperationalError:
+                pass  # coluna já existe
 
-    conexao.commit()
-    conexao.close()
+        # Nome que o Rafael deu à conta no painel. NULL = automático (@ ou nome do Telegram).
+        try:
+            cursor.execute("ALTER TABLE contas_telegram ADD COLUMN nome_painel TEXT")
+        except sqlite3.OperationalError:
+            pass  # coluna já existe
+
+        # Garante que as duas linhas de função existem desde o começo (vagas).
+        for funcao in FUNCOES:
+            cursor.execute(
+                "INSERT OR IGNORE INTO funcoes_contas (funcao, conta_id, assumida_em, motivo) "
+                "VALUES (?, NULL, NULL, 'posto criado vago')",
+                (funcao,),
+            )
+
     if not _TABELAS_PRONTAS:
         logger.info("👥 [Pool] Tabelas de contas verificadas.")
     _TABELAS_PRONTAS = True
@@ -464,14 +462,12 @@ def _agora():
 def registrar_evento(apelido, evento, detalhe=""):
     """Grava uma linha no diário de bordo e espelha no log."""
     try:
-        conexao = _obter_conexao()
-        cursor = conexao.cursor()
-        cursor.execute(
-            "INSERT INTO historico_contas (data, apelido, evento, detalhe) VALUES (?, ?, ?, ?)",
-            (_agora(), apelido, evento, detalhe),
-        )
-        conexao.commit()
-        conexao.close()
+        with _conexao() as conexao:
+            cursor = conexao.cursor()
+            cursor.execute(
+                "INSERT INTO historico_contas (data, apelido, evento, detalhe) VALUES (?, ?, ?, ?)",
+                (_agora(), apelido, evento, detalhe),
+            )
     except Exception as e:
         logger.error(f"❌ [Pool] Falha ao gravar histórico: {e}")
     logger.info(f"📒 [Pool] {apelido}: {evento} {('— ' + detalhe) if detalhe else ''}")
@@ -484,29 +480,27 @@ def registrar_evento(apelido, evento, detalhe=""):
 def listar_contas(somente_habilitadas=False):
     """Devolve todas as contas como lista de dicionários."""
     inicializar_tabelas()
-    conexao = _obter_conexao()
-    cursor = conexao.cursor()
-    sql = "SELECT * FROM contas_telegram"
-    if somente_habilitadas:
-        sql += " WHERE habilitada = 1"
-    sql += " ORDER BY prioridade ASC, id ASC"
-    cursor.execute(sql)
-    linhas = [dict(l) for l in cursor.fetchall()]
-    conexao.close()
+    with _conexao() as conexao:
+        cursor = conexao.cursor()
+        sql = "SELECT * FROM contas_telegram"
+        if somente_habilitadas:
+            sql += " WHERE habilitada = 1"
+        sql += " ORDER BY prioridade ASC, id ASC"
+        cursor.execute(sql)
+        linhas = [dict(l) for l in cursor.fetchall()]
     return linhas
 
 
 def obter_conta(apelido):
     """Busca uma conta pelo apelido (aceita também o id numérico em texto)."""
     inicializar_tabelas()
-    conexao = _obter_conexao()
-    cursor = conexao.cursor()
-    cursor.execute("SELECT * FROM contas_telegram WHERE apelido = ?", (str(apelido),))
-    linha = cursor.fetchone()
-    if not linha and str(apelido).isdigit():
-        cursor.execute("SELECT * FROM contas_telegram WHERE id = ?", (int(apelido),))
+    with _conexao() as conexao:
+        cursor = conexao.cursor()
+        cursor.execute("SELECT * FROM contas_telegram WHERE apelido = ?", (str(apelido),))
         linha = cursor.fetchone()
-    conexao.close()
+        if not linha and str(apelido).isdigit():
+            cursor.execute("SELECT * FROM contas_telegram WHERE id = ?", (int(apelido),))
+            linha = cursor.fetchone()
     return dict(linha) if linha else None
 
 
@@ -520,57 +514,55 @@ def salvar_conta(apelido, sessao=None, telefone=None, user_id=None, username=Non
     'sessao' e 'senha_2fa' entram em texto puro e saem cifrados daqui.
     """
     inicializar_tabelas()
-    conexao = _obter_conexao()
-    cursor = conexao.cursor()
+    with _conexao() as conexao:
+        cursor = conexao.cursor()
 
-    cursor.execute("SELECT id FROM contas_telegram WHERE apelido = ?", (apelido,))
-    existente = cursor.fetchone()
+        cursor.execute("SELECT id FROM contas_telegram WHERE apelido = ?", (apelido,))
+        existente = cursor.fetchone()
 
-    if not existente:
+        if not existente:
+            cursor.execute(
+                "INSERT INTO contas_telegram (apelido, criada_em, atualizada_em) VALUES (?, ?, ?)",
+                (apelido, _agora(), _agora()),
+            )
+            conexao.commit()
+
+        campos = []
+        valores = []
+
+        if sessao is not None:
+            campos.append("sessao_cifrada = ?")
+            valores.append(cifrar(sessao))
+        if senha_2fa is not None:
+            campos.append("senha_2fa_cifrada = ?")
+            valores.append(cifrar(senha_2fa))
+        if telefone is not None:
+            campos.append("telefone = ?")
+            valores.append(telefone)
+        if user_id is not None:
+            campos.append("user_id = ?")
+            valores.append(user_id)
+        if username is not None:
+            campos.append("username = ?")
+            valores.append(username)
+        if nome_exibicao is not None:
+            campos.append("nome_exibicao = ?")
+            valores.append(nome_exibicao)
+        if funcoes_permitidas is not None:
+            campos.append("funcoes_permitidas = ?")
+            valores.append(funcoes_permitidas)
+        if prioridade is not None:
+            campos.append("prioridade = ?")
+            valores.append(int(prioridade))
+
+        campos.append("atualizada_em = ?")
+        valores.append(_agora())
+        valores.append(apelido)
+
         cursor.execute(
-            "INSERT INTO contas_telegram (apelido, criada_em, atualizada_em) VALUES (?, ?, ?)",
-            (apelido, _agora(), _agora()),
+            f"UPDATE contas_telegram SET {', '.join(campos)} WHERE apelido = ?",
+            valores,
         )
-        conexao.commit()
-
-    campos = []
-    valores = []
-
-    if sessao is not None:
-        campos.append("sessao_cifrada = ?")
-        valores.append(cifrar(sessao))
-    if senha_2fa is not None:
-        campos.append("senha_2fa_cifrada = ?")
-        valores.append(cifrar(senha_2fa))
-    if telefone is not None:
-        campos.append("telefone = ?")
-        valores.append(telefone)
-    if user_id is not None:
-        campos.append("user_id = ?")
-        valores.append(user_id)
-    if username is not None:
-        campos.append("username = ?")
-        valores.append(username)
-    if nome_exibicao is not None:
-        campos.append("nome_exibicao = ?")
-        valores.append(nome_exibicao)
-    if funcoes_permitidas is not None:
-        campos.append("funcoes_permitidas = ?")
-        valores.append(funcoes_permitidas)
-    if prioridade is not None:
-        campos.append("prioridade = ?")
-        valores.append(int(prioridade))
-
-    campos.append("atualizada_em = ?")
-    valores.append(_agora())
-    valores.append(apelido)
-
-    cursor.execute(
-        f"UPDATE contas_telegram SET {', '.join(campos)} WHERE apelido = ?",
-        valores,
-    )
-    conexao.commit()
-    conexao.close()
 
     if not existente:
         registrar_evento(apelido, "CADASTRADA", f"user_id={user_id} telefone={telefone}")
@@ -583,32 +575,30 @@ def atualizar_status(apelido, status_grupo=None, status_sessao=None, erro=None):
     if not conta:
         return None
 
-    conexao = _obter_conexao()
-    cursor = conexao.cursor()
-    campos = ["ultima_checagem = ?"]
-    valores = [_agora()]
+    with _conexao() as conexao:
+        cursor = conexao.cursor()
+        campos = ["ultima_checagem = ?"]
+        valores = [_agora()]
 
-    if status_grupo is not None:
-        campos.append("status_grupo = ?")
-        valores.append(status_grupo)
-        # Memória de "já esteve dentro": é o que diferencia NUNCA_ENTROU de SAIU.
-        if status_grupo == STATUS_NO_GRUPO:
-            campos.append("ja_esteve_no_grupo = 1")
-            campos.append("situacao_manual = NULL")
-    if status_sessao is not None:
-        campos.append("status_sessao = ?")
-        valores.append(status_sessao)
+        if status_grupo is not None:
+            campos.append("status_grupo = ?")
+            valores.append(status_grupo)
+            # Memória de "já esteve dentro": é o que diferencia NUNCA_ENTROU de SAIU.
+            if status_grupo == STATUS_NO_GRUPO:
+                campos.append("ja_esteve_no_grupo = 1")
+                campos.append("situacao_manual = NULL")
+        if status_sessao is not None:
+            campos.append("status_sessao = ?")
+            valores.append(status_sessao)
 
-    campos.append("ultimo_erro = ?")
-    valores.append(erro or "")
-    valores.append(apelido)
+        campos.append("ultimo_erro = ?")
+        valores.append(erro or "")
+        valores.append(apelido)
 
-    cursor.execute(
-        f"UPDATE contas_telegram SET {', '.join(campos)} WHERE apelido = ?",
-        valores,
-    )
-    conexao.commit()
-    conexao.close()
+        cursor.execute(
+            f"UPDATE contas_telegram SET {', '.join(campos)} WHERE apelido = ?",
+            valores,
+        )
 
     if status_grupo and status_grupo != conta.get("status_grupo"):
         registrar_evento(apelido, "STATUS_GRUPO",
@@ -622,30 +612,26 @@ def atualizar_status(apelido, status_grupo=None, status_sessao=None, erro=None):
 def definir_habilitada(apelido, ligada):
     """Liga/desliga uma conta manualmente, sem apagar nada."""
     inicializar_tabelas()
-    conexao = _obter_conexao()
-    cursor = conexao.cursor()
-    cursor.execute(
-        "UPDATE contas_telegram SET habilitada = ?, atualizada_em = ? WHERE apelido = ?",
-        (1 if ligada else 0, _agora(), apelido),
-    )
-    conexao.commit()
-    conexao.close()
+    with _conexao() as conexao:
+        cursor = conexao.cursor()
+        cursor.execute(
+            "UPDATE contas_telegram SET habilitada = ?, atualizada_em = ? WHERE apelido = ?",
+            (1 if ligada else 0, _agora(), apelido),
+        )
     registrar_evento(apelido, "HABILITADA" if ligada else "DESABILITADA", "ação manual")
 
 
 def remover_conta(apelido):
     """Apaga a conta do cadastro. O plantão dela é redistribuído na sequência."""
     inicializar_tabelas()
-    conexao = _obter_conexao()
-    cursor = conexao.cursor()
-    cursor.execute("SELECT id FROM contas_telegram WHERE apelido = ?", (apelido,))
-    linha = cursor.fetchone()
-    if linha:
-        cursor.execute("UPDATE funcoes_contas SET conta_id = NULL, motivo = 'conta removida' "
-                       "WHERE conta_id = ?", (linha["id"],))
-    cursor.execute("DELETE FROM contas_telegram WHERE apelido = ?", (apelido,))
-    conexao.commit()
-    conexao.close()
+    with _conexao() as conexao:
+        cursor = conexao.cursor()
+        cursor.execute("SELECT id FROM contas_telegram WHERE apelido = ?", (apelido,))
+        linha = cursor.fetchone()
+        if linha:
+            cursor.execute("UPDATE funcoes_contas SET conta_id = NULL, motivo = 'conta removida' "
+                           "WHERE conta_id = ?", (linha["id"],))
+        cursor.execute("DELETE FROM contas_telegram WHERE apelido = ?", (apelido,))
     registrar_evento(apelido, "REMOVIDA", "ação manual")
 
 
@@ -742,12 +728,10 @@ def definir_senha_2fa(apelido):
         return False
     senha = getpass.getpass(f"🔐 Senha de 2 etapas de '{apelido}' (vazio para apagar): ")
     if senha == "":
-        conexao = _obter_conexao()
-        cursor = conexao.cursor()
-        cursor.execute("UPDATE contas_telegram SET senha_2fa_cifrada = NULL WHERE apelido = ?",
-                       (apelido,))
-        conexao.commit()
-        conexao.close()
+        with _conexao() as conexao:
+            cursor = conexao.cursor()
+            cursor.execute("UPDATE contas_telegram SET senha_2fa_cifrada = NULL WHERE apelido = ?",
+                           (apelido,))
         registrar_evento(apelido, "SENHA_2FA_REMOVIDA", "")
         print("🗑️ Senha removida do cofre.")
         return True
@@ -908,14 +892,12 @@ def atribuir_funcao(apelido, funcao):
         return (True, "")
 
     anterior = obter_conta_da_funcao(funcao)
-    conexao = _obter_conexao()
-    cursor = conexao.cursor()
-    cursor.execute(
-        "UPDATE funcoes_contas SET conta_id = ?, assumida_em = ?, motivo = ? WHERE funcao = ?",
-        (conta["id"], _agora(), "atribuição manual pelo painel", funcao),
-    )
-    conexao.commit()
-    conexao.close()
+    with _conexao() as conexao:
+        cursor = conexao.cursor()
+        cursor.execute(
+            "UPDATE funcoes_contas SET conta_id = ?, assumida_em = ?, motivo = ? WHERE funcao = ?",
+            (conta["id"], _agora(), "atribuição manual pelo painel", funcao),
+        )
     registrar_evento(apelido, f"FUNCAO_{funcao.upper()}",
                      f"{anterior['apelido'] if anterior else '—'} → {apelido} (manual)")
 
@@ -945,26 +927,24 @@ def registrar_atividade(conta_id, funcao, ok, detalhe=""):
         return
     try:
         inicializar_tabelas()
-        conexao = _obter_conexao()
-        cursor = conexao.cursor()
-        cursor.execute(
-            "INSERT OR IGNORE INTO atividade_contas (conta_id, funcao, total_ok) VALUES (?, ?, 0)",
-            (conta_id, funcao),
-        )
-        if ok:
+        with _conexao() as conexao:
+            cursor = conexao.cursor()
             cursor.execute(
-                "UPDATE atividade_contas SET ultimo_ok = ?, total_ok = total_ok + 1 "
-                "WHERE conta_id = ? AND funcao = ?",
-                (_agora(), conta_id, funcao),
+                "INSERT OR IGNORE INTO atividade_contas (conta_id, funcao, total_ok) VALUES (?, ?, 0)",
+                (conta_id, funcao),
             )
-        else:
-            cursor.execute(
-                "UPDATE atividade_contas SET ultimo_erro = ?, erro_em = ? "
-                "WHERE conta_id = ? AND funcao = ?",
-                (str(detalhe)[:200], _agora(), conta_id, funcao),
-            )
-        conexao.commit()
-        conexao.close()
+            if ok:
+                cursor.execute(
+                    "UPDATE atividade_contas SET ultimo_ok = ?, total_ok = total_ok + 1 "
+                    "WHERE conta_id = ? AND funcao = ?",
+                    (_agora(), conta_id, funcao),
+                )
+            else:
+                cursor.execute(
+                    "UPDATE atividade_contas SET ultimo_erro = ?, erro_em = ? "
+                    "WHERE conta_id = ? AND funcao = ?",
+                    (str(detalhe)[:200], _agora(), conta_id, funcao),
+                )
     except Exception as e:
         logger.error(f"❌ [Pool] Falha ao registrar atividade: {e}")
 
@@ -972,11 +952,10 @@ def registrar_atividade(conta_id, funcao, ok, detalhe=""):
 def ler_atividade():
     """{(conta_id, funcao): {ultimo_ok, ultimo_erro, erro_em, total_ok}}"""
     inicializar_tabelas()
-    conexao = _obter_conexao()
-    cursor = conexao.cursor()
-    cursor.execute("SELECT * FROM atividade_contas")
-    dados = {(linha["conta_id"], linha["funcao"]): dict(linha) for linha in cursor.fetchall()}
-    conexao.close()
+    with _conexao() as conexao:
+        cursor = conexao.cursor()
+        cursor.execute("SELECT * FROM atividade_contas")
+        dados = {(linha["conta_id"], linha["funcao"]): dict(linha) for linha in cursor.fetchall()}
     return dados
 
 
@@ -1097,11 +1076,9 @@ def texto_grupo(conta):
 def marcar_situacao(apelido, situacao):
     """Marca à mão que a conta saiu ou foi banida; None volta ao que o robô descobrir."""
     situacao = situacao if situacao in SITUACOES_MANUAIS else None
-    conexao = _obter_conexao()
-    conexao.execute("UPDATE contas_telegram SET situacao_manual = ?, atualizada_em = ? WHERE apelido = ?",
-                    (situacao, _agora(), apelido))
-    conexao.commit()
-    conexao.close()
+    with _conexao() as conexao:
+        conexao.execute("UPDATE contas_telegram SET situacao_manual = ?, atualizada_em = ? WHERE apelido = ?",
+                        (situacao, _agora(), apelido))
     registrar_evento(apelido, "SITUACAO_MANUAL", situacao or "automático")
 
 
@@ -1134,11 +1111,9 @@ def nome_da_conta(conta):
 def definir_nome(apelido, nome):
     """Grava o nome do painel; None (ou vazio) volta ao nome automático."""
     nome = (nome or "").strip()[:LIMITE_NOME_PAINEL] or None
-    conexao = _obter_conexao()
-    conexao.execute("UPDATE contas_telegram SET nome_painel = ?, atualizada_em = ? WHERE apelido = ?",
-                    (nome, _agora(), apelido))
-    conexao.commit()
-    conexao.close()
+    with _conexao() as conexao:
+        conexao.execute("UPDATE contas_telegram SET nome_painel = ?, atualizada_em = ? WHERE apelido = ?",
+                        (nome, _agora(), apelido))
     registrar_evento(apelido, "NOME", "editado no painel" if nome else "automático")
 
 
@@ -1352,23 +1327,21 @@ def aplicar_funcoes():
         return []
 
     apelido_por_id = {c["id"]: c["apelido"] for c in contas}
-    conexao = _obter_conexao()
-    cursor = conexao.cursor()
-    if nova[FUNCAO_ESPELHO] != ocupacao.get(FUNCAO_ESPELHO):
-        cursor.execute(
-            "UPDATE funcoes_contas SET conta_id = ?, assumida_em = ?, motivo = ? WHERE funcao = ?",
-            (nova[FUNCAO_ESPELHO], _agora(), "redistribuição automática", FUNCAO_ESPELHO),
-        )
-    rodizio = nova[FUNCAO_REPOSTAGEM]
-    if rodizio != _lista_ids(ocupacao.get(FUNCAO_REPOSTAGEM)):
-        cursor.execute(
-            "UPDATE funcoes_contas SET conta_id = ?, contas_ids = ?, assumida_em = ?, motivo = ? "
-            "WHERE funcao = ?",
-            (rodizio[0] if rodizio else None, ",".join(str(i) for i in rodizio),
-             _agora(), "redistribuição automática", FUNCAO_REPOSTAGEM),
-        )
-    conexao.commit()
-    conexao.close()
+    with _conexao() as conexao:
+        cursor = conexao.cursor()
+        if nova[FUNCAO_ESPELHO] != ocupacao.get(FUNCAO_ESPELHO):
+            cursor.execute(
+                "UPDATE funcoes_contas SET conta_id = ?, assumida_em = ?, motivo = ? WHERE funcao = ?",
+                (nova[FUNCAO_ESPELHO], _agora(), "redistribuição automática", FUNCAO_ESPELHO),
+            )
+        rodizio = nova[FUNCAO_REPOSTAGEM]
+        if rodizio != _lista_ids(ocupacao.get(FUNCAO_REPOSTAGEM)):
+            cursor.execute(
+                "UPDATE funcoes_contas SET conta_id = ?, contas_ids = ?, assumida_em = ?, motivo = ? "
+                "WHERE funcao = ?",
+                (rodizio[0] if rodizio else None, ",".join(str(i) for i in rodizio),
+                 _agora(), "redistribuição automática", FUNCAO_REPOSTAGEM),
+            )
 
     for funcao, antigo, novo, motivo in mudancas:
         de = apelido_por_id.get(antigo, "—")
@@ -1383,11 +1356,10 @@ def aplicar_funcoes():
 def ler_ocupacao():
     """Devolve {"espelho": id|None, "repostagem": [ids do rodízio]} lido do banco."""
     inicializar_tabelas()
-    conexao = _obter_conexao()
-    cursor = conexao.cursor()
-    cursor.execute("SELECT funcao, conta_id, contas_ids FROM funcoes_contas")
-    linhas = {linha["funcao"]: linha for linha in cursor.fetchall()}
-    conexao.close()
+    with _conexao() as conexao:
+        cursor = conexao.cursor()
+        cursor.execute("SELECT funcao, conta_id, contas_ids FROM funcoes_contas")
+        linhas = {linha["funcao"]: linha for linha in cursor.fetchall()}
 
     espelho = linhas.get(FUNCAO_ESPELHO)
     repost = linhas.get(FUNCAO_REPOSTAGEM)
@@ -1427,16 +1399,14 @@ def obter_conta_da_funcao(funcao):
     logar, não quebrar.
     """
     inicializar_tabelas()
-    conexao = _obter_conexao()
-    cursor = conexao.cursor()
-    cursor.execute("SELECT conta_id FROM funcoes_contas WHERE funcao = ?", (funcao,))
-    linha = cursor.fetchone()
-    if not linha or not linha["conta_id"]:
-        conexao.close()
-        return None
-    cursor.execute("SELECT * FROM contas_telegram WHERE id = ?", (linha["conta_id"],))
-    conta = cursor.fetchone()
-    conexao.close()
+    with _conexao() as conexao:
+        cursor = conexao.cursor()
+        cursor.execute("SELECT conta_id FROM funcoes_contas WHERE funcao = ?", (funcao,))
+        linha = cursor.fetchone()
+        if not linha or not linha["conta_id"]:
+            return None
+        cursor.execute("SELECT * FROM contas_telegram WHERE id = ?", (linha["conta_id"],))
+        conta = cursor.fetchone()
     return dict(conta) if conta else None
 
 
@@ -1505,11 +1475,10 @@ def obter_grupo_autorais():
     trocado no painel, o pool acompanha sozinho, sem editar código.
     """
     try:
-        conexao = _obter_conexao()
-        cursor = conexao.cursor()
-        cursor.execute("SELECT valor FROM configuracoes WHERE chave = 'autorais_config'")
-        linha = cursor.fetchone()
-        conexao.close()
+        with _conexao() as conexao:
+            cursor = conexao.cursor()
+            cursor.execute("SELECT valor FROM configuracoes WHERE chave = 'autorais_config'")
+            linha = cursor.fetchone()
         if linha and linha["valor"]:
             cfg = json.loads(linha["valor"])
             origem = cfg.get("origem")
@@ -1523,9 +1492,8 @@ def obter_grupo_autorais():
 def obter_destino_autorais():
     """Canal onde a conta da captura publica os vídeos ('autorais_config' → 'destino')."""
     try:
-        conexao = _obter_conexao()
-        linha = conexao.execute("SELECT valor FROM configuracoes WHERE chave = 'autorais_config'").fetchone()
-        conexao.close()
+        with _conexao() as conexao:
+            linha = conexao.execute("SELECT valor FROM configuracoes WHERE chave = 'autorais_config'").fetchone()
         destino = str(json.loads(linha["valor"]).get("destino") or "").split(":")[0].strip() if linha else ""
         if destino.lstrip("-").isdigit():
             return int(destino)
@@ -1536,11 +1504,9 @@ def obter_destino_autorais():
 
 
 def marcar_publicacao_no_destino(apelido, pode):
-    conexao = _obter_conexao()
-    conexao.execute("UPDATE contas_telegram SET publica_no_destino = ? WHERE apelido = ?",
-                    (None if pode is None else int(bool(pode)), apelido))
-    conexao.commit()
-    conexao.close()
+    with _conexao() as conexao:
+        conexao.execute("UPDATE contas_telegram SET publica_no_destino = ? WHERE apelido = ?",
+                        (None if pode is None else int(bool(pode)), apelido))
 
 
 async def conferir_destino(cliente, conta):
@@ -1596,11 +1562,9 @@ def guardar_acesso_grupo(apelido, entidade):
     hash_acesso = getattr(entidade, "access_hash", None)
     if not hash_acesso or not getattr(entidade, "id", None):
         return
-    conexao = _obter_conexao()
-    conexao.execute("UPDATE contas_telegram SET grupo_acesso = ? WHERE apelido = ?",
-                    (f"{entidade.id}:{hash_acesso}", apelido))
-    conexao.commit()
-    conexao.close()
+    with _conexao() as conexao:
+        conexao.execute("UPDATE contas_telegram SET grupo_acesso = ? WHERE apelido = ?",
+                        (f"{entidade.id}:{hash_acesso}", apelido))
 
 
 def _hash_do_grupo(conta, id_interno):
@@ -2074,11 +2038,10 @@ async def adotar_sessoes_existentes():
 def ler_convite():
     """O link de convite do grupo dos Autorais guardado, ou None."""
     inicializar_tabelas()
-    conexao = _obter_conexao()
-    cursor = conexao.cursor()
-    cursor.execute("SELECT valor FROM configuracoes WHERE chave = ?", (CHAVE_CONVITE,))
-    linha = cursor.fetchone()
-    conexao.close()
+    with _conexao() as conexao:
+        cursor = conexao.cursor()
+        cursor.execute("SELECT valor FROM configuracoes WHERE chave = ?", (CHAVE_CONVITE,))
+        linha = cursor.fetchone()
     if not linha or not linha["valor"]:
         return None
     try:
@@ -2145,14 +2108,12 @@ async def entrar_no_grupo(apelido):
 def guardar_convite(link):
     """Grava o link de convite do grupo dos Autorais na tabela configuracoes."""
     inicializar_tabelas()
-    conexao = _obter_conexao()
-    cursor = conexao.cursor()
-    cursor.execute(
-        "INSERT OR REPLACE INTO configuracoes (chave, valor) VALUES (?, ?)",
-        (CHAVE_CONVITE, json.dumps(link)),
-    )
-    conexao.commit()
-    conexao.close()
+    with _conexao() as conexao:
+        cursor = conexao.cursor()
+        cursor.execute(
+            "INSERT OR REPLACE INTO configuracoes (chave, valor) VALUES (?, ?)",
+            (CHAVE_CONVITE, json.dumps(link)),
+        )
     print("✅ Link de convite guardado.")
 
 

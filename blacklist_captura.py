@@ -142,37 +142,36 @@ _TABELA_PRONTA = False
 # 1. BANCO
 # =============================================================================
 
-def _obter_conexao():
-    return db.conectar(DB_NAME, linhas_por_nome=True)
+def _conexao():
+    """Conexão num with: grava no fim, desfaz se der erro e fecha sempre (db.conexao)."""
+    return db.conexao(DB_NAME, linhas_por_nome=True)
 
 
 def inicializar_tabelas():
     """Cria a tabela da lista negra. Seguro chamar quantas vezes quiser."""
     global _TABELA_PRONTA
-    conexao = _obter_conexao()
-    cursor = conexao.cursor()
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS blacklist_captura (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER,
-            username TEXT,
-            nome_exibicao TEXT,
-            origem TEXT DEFAULT 'manual',
-            escopo TEXT DEFAULT 'autorais',
-            motivo TEXT,
-            resolvido INTEGER DEFAULT 0,
-            criada_em TEXT,
-            atualizada_em TEXT
-        )
-    ''')
-    # Índices únicos parciais: impedem a mesma pessoa entrar duas vezes, sem
-    # atrapalhar as linhas que ainda estão sem id (ou sem @).
-    cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_bl_user_id "
-                   "ON blacklist_captura(user_id) WHERE user_id IS NOT NULL")
-    cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_bl_username "
-                   "ON blacklist_captura(username) WHERE username IS NOT NULL")
-    conexao.commit()
-    conexao.close()
+    with _conexao() as conexao:
+        cursor = conexao.cursor()
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS blacklist_captura (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER,
+                username TEXT,
+                nome_exibicao TEXT,
+                origem TEXT DEFAULT 'manual',
+                escopo TEXT DEFAULT 'autorais',
+                motivo TEXT,
+                resolvido INTEGER DEFAULT 0,
+                criada_em TEXT,
+                atualizada_em TEXT
+            )
+        ''')
+        # Índices únicos parciais: impedem a mesma pessoa entrar duas vezes, sem
+        # atrapalhar as linhas que ainda estão sem id (ou sem @).
+        cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_bl_user_id "
+                       "ON blacklist_captura(user_id) WHERE user_id IS NOT NULL")
+        cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_bl_username "
+                       "ON blacklist_captura(username) WHERE username IS NOT NULL")
     if not _TABELA_PRONTA:
         logger.info("🚫 [Lista Negra] Tabela verificada.")
     _TABELA_PRONTA = True
@@ -333,15 +332,14 @@ def invalidar_cache():
 def listar(incluir_pool=True):
     """Devolve as entradas da lista negra como lista de dicionários."""
     inicializar_tabelas()
-    conexao = _obter_conexao()
-    cursor = conexao.cursor()
-    if incluir_pool:
-        cursor.execute("SELECT * FROM blacklist_captura ORDER BY origem DESC, id ASC")
-    else:
-        cursor.execute("SELECT * FROM blacklist_captura WHERE origem != ? ORDER BY id ASC",
-                       (ORIGEM_POOL,))
-    linhas = [dict(l) for l in cursor.fetchall()]
-    conexao.close()
+    with _conexao() as conexao:
+        cursor = conexao.cursor()
+        if incluir_pool:
+            cursor.execute("SELECT * FROM blacklist_captura ORDER BY origem DESC, id ASC")
+        else:
+            cursor.execute("SELECT * FROM blacklist_captura WHERE origem != ? ORDER BY id ASC",
+                           (ORIGEM_POOL,))
+        linhas = [dict(l) for l in cursor.fetchall()]
     return linhas
 
 
@@ -446,52 +444,48 @@ def adicionar(user_id=None, username=None, nome_exibicao=None,
     if user_id is None and not arroba:
         return (False, "informe um ID numérico ou um @username")
 
-    conexao = _obter_conexao()
-    cursor = conexao.cursor()
+    with _conexao() as conexao:
+        cursor = conexao.cursor()
 
-    existente = None
-    if user_id is not None:
-        cursor.execute("SELECT * FROM blacklist_captura WHERE user_id = ?", (int(user_id),))
-        existente = cursor.fetchone()
-    if existente is None and arroba:
-        cursor.execute("SELECT * FROM blacklist_captura WHERE username = ?", (arroba,))
-        existente = cursor.fetchone()
+        existente = None
+        if user_id is not None:
+            cursor.execute("SELECT * FROM blacklist_captura WHERE user_id = ?", (int(user_id),))
+            existente = cursor.fetchone()
+        if existente is None and arroba:
+            cursor.execute("SELECT * FROM blacklist_captura WHERE username = ?", (arroba,))
+            existente = cursor.fetchone()
 
-    if existente is not None:
-        campos, valores = [], []
-        if user_id is not None and not existente["user_id"]:
-            campos.append("user_id = ?")
-            valores.append(int(user_id))
-            campos.append("resolvido = 1")
-        if arroba and not existente["username"]:
-            campos.append("username = ?")
-            valores.append(arroba)
-        if nome_exibicao:
-            campos.append("nome_exibicao = ?")
-            valores.append(nome_exibicao)
-        # O escopo mais amplo vence: se já era global, continua global.
-        if escopo == ESCOPO_GLOBAL and existente["escopo"] != ESCOPO_GLOBAL:
-            campos.append("escopo = ?")
-            valores.append(ESCOPO_GLOBAL)
-        campos.append("atualizada_em = ?")
-        valores.append(_agora())
-        valores.append(existente["id"])
-        cursor.execute(f"UPDATE blacklist_captura SET {', '.join(campos)} WHERE id = ?", valores)
-        conexao.commit()
-        conexao.close()
-        invalidar_cache()
-        return (True, "entrada já existia e foi atualizada")
-
-    cursor.execute(
-        "INSERT INTO blacklist_captura "
-        "(user_id, username, nome_exibicao, origem, escopo, motivo, resolvido, criada_em, atualizada_em) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        (int(user_id) if user_id is not None else None, arroba, nome_exibicao,
-         origem, escopo, motivo, 1 if user_id is not None else 0, _agora(), _agora()),
-    )
-    conexao.commit()
-    conexao.close()
+        if existente is not None:
+            campos, valores = [], []
+            if user_id is not None and not existente["user_id"]:
+                campos.append("user_id = ?")
+                valores.append(int(user_id))
+                campos.append("resolvido = 1")
+            if arroba and not existente["username"]:
+                campos.append("username = ?")
+                valores.append(arroba)
+            if nome_exibicao:
+                campos.append("nome_exibicao = ?")
+                valores.append(nome_exibicao)
+            # O escopo mais amplo vence: se já era global, continua global.
+            if escopo == ESCOPO_GLOBAL and existente["escopo"] != ESCOPO_GLOBAL:
+                campos.append("escopo = ?")
+                valores.append(ESCOPO_GLOBAL)
+            campos.append("atualizada_em = ?")
+            valores.append(_agora())
+            valores.append(existente["id"])
+            cursor.execute(f"UPDATE blacklist_captura SET {', '.join(campos)} WHERE id = ?", valores)
+        else:
+            cursor.execute(
+                "INSERT INTO blacklist_captura "
+                "(user_id, username, nome_exibicao, origem, escopo, motivo, resolvido, criada_em, atualizada_em) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (int(user_id) if user_id is not None else None, arroba, nome_exibicao,
+                 origem, escopo, motivo, 1 if user_id is not None else 0, _agora(), _agora()),
+            )
     invalidar_cache()
+    if existente is not None:
+        return (True, "entrada já existia e foi atualizada")
 
     rotulo = f"@{arroba}" if arroba else str(user_id)
     logger.info(f"🚫 [Lista Negra] {rotulo} adicionado ({origem}/{escopo}).")
@@ -507,26 +501,22 @@ def remover(alvo):
     tirar de vez, remova a conta do pool_contas — aí ela sai daqui sozinha.
     """
     inicializar_tabelas()
-    conexao = _obter_conexao()
-    cursor = conexao.cursor()
+    with _conexao() as conexao:
+        cursor = conexao.cursor()
 
-    texto = str(alvo).strip()
-    if texto.lstrip("-").isdigit():
-        cursor.execute("SELECT * FROM blacklist_captura WHERE user_id = ?", (int(texto),))
-    else:
-        cursor.execute("SELECT * FROM blacklist_captura WHERE username = ?", (_limpar_arroba(texto),))
-    linha = cursor.fetchone()
+        texto = str(alvo).strip()
+        if texto.lstrip("-").isdigit():
+            cursor.execute("SELECT * FROM blacklist_captura WHERE user_id = ?", (int(texto),))
+        else:
+            cursor.execute("SELECT * FROM blacklist_captura WHERE username = ?", (_limpar_arroba(texto),))
+        linha = cursor.fetchone()
 
-    if linha is None:
-        conexao.close()
-        return (False, "não encontrado na lista")
-    if linha["origem"] == ORIGEM_POOL:
-        conexao.close()
-        return (False, "é uma conta sua do pool — remova pelo painel de Contas")
+        if linha is None:
+            return (False, "não encontrado na lista")
+        if linha["origem"] == ORIGEM_POOL:
+            return (False, "é uma conta sua do pool — remova pelo painel de Contas")
 
-    cursor.execute("DELETE FROM blacklist_captura WHERE id = ?", (linha["id"],))
-    conexao.commit()
-    conexao.close()
+        cursor.execute("DELETE FROM blacklist_captura WHERE id = ?", (linha["id"],))
     invalidar_cache()
     logger.info(f"✅ [Lista Negra] {texto} removido.")
     return (True, "removido")
@@ -574,16 +564,14 @@ def sincronizar_contas_do_pool():
             adicionadas += 1
 
     # Faxina: entradas 'pool' de contas que não existem mais.
-    conexao = _obter_conexao()
-    cursor = conexao.cursor()
-    cursor.execute("SELECT id, user_id FROM blacklist_captura WHERE origem = ?", (ORIGEM_POOL,))
-    removidas = 0
-    for linha in cursor.fetchall():
-        if linha["user_id"] and int(linha["user_id"]) not in ids_do_pool:
-            cursor.execute("DELETE FROM blacklist_captura WHERE id = ?", (linha["id"],))
-            removidas += 1
-    conexao.commit()
-    conexao.close()
+    with _conexao() as conexao:
+        cursor = conexao.cursor()
+        cursor.execute("SELECT id, user_id FROM blacklist_captura WHERE origem = ?", (ORIGEM_POOL,))
+        removidas = 0
+        for linha in cursor.fetchall():
+            if linha["user_id"] and int(linha["user_id"]) not in ids_do_pool:
+                cursor.execute("DELETE FROM blacklist_captura WHERE id = ?", (linha["id"],))
+                removidas += 1
     if removidas or adicionadas:
         invalidar_cache()
         logger.info(f"🔄 [Lista Negra] Pool sincronizado: +{adicionadas} / -{removidas}.")
@@ -629,15 +617,13 @@ async def resolver_pendentes(cliente=None):
         try:
             nome = " ".join(filter(None, [getattr(entidade, "first_name", None),
                                           getattr(entidade, "last_name", None)])).strip()
-            conexao = _obter_conexao()
-            cursor = conexao.cursor()
-            cursor.execute(
-                "UPDATE blacklist_captura SET user_id = ?, nome_exibicao = ?, "
-                "resolvido = 1, atualizada_em = ? WHERE id = ?",
-                (int(entidade.id), nome or linha.get("nome_exibicao"), _agora(), linha["id"]),
-            )
-            conexao.commit()
-            conexao.close()
+            with _conexao() as conexao:
+                cursor = conexao.cursor()
+                cursor.execute(
+                    "UPDATE blacklist_captura SET user_id = ?, nome_exibicao = ?, "
+                    "resolvido = 1, atualizada_em = ? WHERE id = ?",
+                    (int(entidade.id), nome or linha.get("nome_exibicao"), _agora(), linha["id"]),
+                )
             resolvidas += 1
             logger.info(f"🔎 [Lista Negra] @{arroba} resolvido para o ID {entidade.id}.")
         except Exception as e:
