@@ -10,6 +10,7 @@ import logging
 from zoneinfo import ZoneInfo
 import traceback
 import db
+import links_grupos
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -277,6 +278,9 @@ async def validar_e_formatar_alvo(bot_instance, entrada):
             if chat_obj.type in ["supergroup", "channel"] and not id_confirmado.startswith("-100"):
                  id_confirmado = f"-100{id_confirmado}"
             nome_confirmado = chat_obj.title or chat_obj.full_name or id_confirmado
+            # O @ e o convite (quando o bot é admin) servem de atalho nos painéis.
+            links_grupos.guardar(id_confirmado, getattr(chat_obj, "username", None),
+                                 getattr(chat_obj, "invite_link", None))
             break 
         except Exception:
             continue 

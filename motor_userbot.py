@@ -56,6 +56,7 @@ import legendas
 from videos import verificar_e_otimizar_video, calcular_hash_video
 import fila_espelhador
 import rotas_espelhador
+import links_grupos  # atalhos dos grupos nos painéis
 
 LIMITE_REGISTROS_HASH = 1000  # hashes de vídeo guardados por contexto na anti-duplicata
 
@@ -1044,6 +1045,7 @@ async def monitorar_status_alvos():
                     for alvo in alvos_atuais:
                         try:
                             entidade, alvo_correto = await validar_e_obter_entidade(client, alvo)
+                            links_grupos.guardar_entidade(entidade)
                             nome = getattr(entidade, 'title', getattr(entidade, 'username', str(alvo_correto)))
                             novos_status_coletados[alvo_correto] = {"status": "ok", "nome": nome}
                             
@@ -1058,6 +1060,7 @@ async def monitorar_status_alvos():
                     if destino_atual:
                         try:
                             entidade_dest, dest_correto = await validar_e_obter_entidade(client, destino_atual)
+                            links_grupos.guardar_entidade(entidade_dest)
                             nome_dest = getattr(entidade_dest, 'title', getattr(entidade_dest, 'username', str(dest_correto)))
                             status_destino_coletado = {"status": "ok", "nome": nome_dest}
                             if str(destino_atual) != dest_correto:
@@ -1171,6 +1174,7 @@ async def monitorar_status_espelhos():
                             
                         try:
                             entidade, canal_correto = await validar_e_obter_entidade(client, canal)
+                            links_grupos.guardar_entidade(entidade)
                             
                             if str(canal) != canal_correto:
                                 if tipo_ponta == "origem_lista": rota["origens"][idx] = canal_correto
@@ -1231,6 +1235,18 @@ async def monitorar_status_espelhos():
             logger.error(f"⚠️ Erro na auditoria do espelhador: {e}")
             
         await asyncio.sleep(60)
+
+async def atualizar_links_todo_dia():
+    """
+    Uma vez por dia, relê as conversas da conta para guardar o @ e a última mensagem dos
+    grupos que entraram depois de ligar (atalhos dos painéis).
+    """
+    while True:
+        await asyncio.sleep(24 * 3600)
+        try:
+            await links_grupos.atualizar_pela_conta(client, "Motor")
+        except Exception as e:
+            logger.warning(f"⚠️ [Links] Não consegui reler as conversas: {type(e).__name__}")
 
 async def monitorar_topicos_submissao():
     """
@@ -1320,7 +1336,8 @@ async def main():
     
     logger.info("🔄 Sincronizando banco de dados de grupos e access_hashes...")
     try:
-        await client.get_dialogs()
+        # Também guarda o @ e a última mensagem de cada grupo: atalhos dos painéis.
+        await links_grupos.atualizar_pela_conta(client, "Motor")
         logger.info("✅ Sincronização concluída! IDs numéricos agora serão reconhecidos pelo Auditor.")
     except Exception as e:
         logger.warning(f"⚠️ Aviso na sincronização: {e}")
@@ -1336,6 +1353,7 @@ async def main():
     asyncio.create_task(analisar_fila_espiao_loop())
     asyncio.create_task(monitorar_status_alvos())
     asyncio.create_task(monitorar_status_espelhos())
+    asyncio.create_task(atualizar_links_todo_dia())
     asyncio.create_task(monitorar_topicos_submissao())
     
     await client.run_until_disconnected()

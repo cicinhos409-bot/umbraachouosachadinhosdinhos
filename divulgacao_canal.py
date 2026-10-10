@@ -89,6 +89,7 @@ telegram_lock = asyncio.Lock()
 logger.info("🚦 Semáforo de controle de tráfego do Telegram ativado!")
 
 import db
+import links_grupos  # atalhos dos grupos nos painéis
 
 # Escopos de divulgação, todos tratados pelo mesmo código. Para criar um escopo,
 # basta acrescentar uma entrada: chave = configuração no banco (criada pelo painel
@@ -508,9 +509,13 @@ async def sincronizar_nomes_topicos():
             await client.connect()
 
         foruns = []
+        dialogos = []
         async for dialogo in client.iter_dialogs():
+            dialogos.append(dialogo)
             if getattr(dialogo.entity, "forum", False):
                 foruns.append(dialogo.entity)
+        # Na mesma passada, o @ e a última mensagem de cada grupo (atalhos dos painéis).
+        links_grupos.guardar_dialogos(dialogos)
 
         for entidade in foruns:
             chat_id = f"-100{entidade.id}"
@@ -591,7 +596,8 @@ async def main():
     # para ID numérico, mesmo com a conta no canal: o Telethon precisa do access_hash
     # em cache.
     try:
-        await client.get_dialogs()
+        # Também guarda o @ e a última mensagem de cada grupo: atalhos dos painéis.
+        await links_grupos.atualizar_pela_conta(client, "Divulgação")
         logger.info("🗂️ Cache de entidades da sessão preenchido.")
     except Exception as e:
         logger.warning(f"⚠️ Não consegui preencher o cache de entidades: {e}")

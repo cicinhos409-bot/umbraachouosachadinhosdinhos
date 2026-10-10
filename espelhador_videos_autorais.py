@@ -56,6 +56,7 @@ from videos import verificar_e_otimizar_video
 from motor_filas import calcular_horarios_distribuicao, faixa_de_config, sortear_teto_do_dia
 import blacklist_captura  # de quem este robô nunca captura
 import repetidos_publico  # vídeo que já foi ao Grupo Público não vai de novo
+import links_grupos  # atalhos dos grupos nos painéis
 import pool_contas  # quem captura e quem reposta
 
 logger = configurar_logs(__name__)
@@ -2186,9 +2187,13 @@ async def registrar_falha_repost(conta, erro):
 
 
 async def _preparar_cliente(cliente):
-    """Carrega as conversas: a StringSession nasce sem cache de entidades e get_entity por ID falharia."""
+    """
+    Carrega as conversas: a StringSession nasce sem cache de entidades e get_entity por ID
+    falharia. Na mesma leitura, guarda o @ e a última mensagem de cada grupo (atalhos dos
+    painéis).
+    """
     try:
-        await cliente.get_dialogs()
+        await links_grupos.atualizar_pela_conta(cliente, "Contas")
     except Exception as e:
         logger.warning(f"⚠️ [Contas] Não consegui carregar as conversas: {e}")
 
