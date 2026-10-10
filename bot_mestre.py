@@ -7691,9 +7691,7 @@ async def relatorio_filas_unificado(message: types.Message, state: FSMContext):
     dados_espiao = {}
     if tipo_fila == "Espelhador":
         try:
-            with open("espelhos_config.json", "r", encoding="utf-8") as f:
-                 dados_espelho = json.load(f)
-                 atraso_dias = dados_espelho.get("config_global", {}).get("intervalo_dias", 0)
+            atraso_dias = painel_espelhos.ler_espelhos().get("config_global", {}).get("intervalo_dias", 0)
         except: pass
     elif tipo_fila == "Autorais":
         config_aut = ler_autorais_config()
@@ -14879,17 +14877,14 @@ async def checkup_diario_grupos():
     relatorio += "\n"
     
     # 2. Espelhador: rotas com falha
-    try:
-        with open("espelhos_config.json", "r", encoding="utf-8") as f:
-            dados_espelho = json.load(f)
-            
-        rotas = dados_espelho.get("rotas", [])
+    rotas = painel_espelhos.ler_espelhos().get("rotas", [])
+    if rotas:
         erros_espelho = [r for r in rotas if r.get("status_verificacao") == "erro"]
         
         relatorio += "🔄 <b>Espelhador de Canais:</b>\n"
         relatorio += f"✅ Rotas ativas: {len(rotas) - len(erros_espelho)}\n"
         relatorio += f"🔴 Rotas quebradas: {len(erros_espelho)}\n"
-    except FileNotFoundError:
+    else:
         relatorio += "🔄 <b>Espelhador de Canais:</b> <i>Nenhuma rota configurada.</i>\n"
         
     relatorio += "\n<i>*O Userbot testa a conexão constantemente e converte usernames para IDs. Use os painéis para verificar e corrigir as falhas apontadas acima.</i>"

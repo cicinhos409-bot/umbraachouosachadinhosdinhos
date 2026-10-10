@@ -6,7 +6,7 @@ Espião: captura os vídeos com link da Shopee postados nos canais-alvo (alvos_e
 para a fila de clonagem (configuracoes, chave fila_clonagem) e, em segundo plano,
 pede à IA o nome do produto. Quem publica essa fila é o bot_mestre.
 
-Espelhador: para cada rota de espelhos_config.json (origens -> destino), captura o
+Espelhador: para cada rota (rotas_espelhador.py, no banco: origens -> destino), captura o
 vídeo com link da Shopee, converte o link para afiliado e enfileira na fila do
 banco (fila_espelhador.py). Um laço publica cada item no horário sorteado pelo
 motor_filas, respeitando o atraso D+X e o teto diário da rota.
@@ -31,7 +31,7 @@ from telethon import utils
 from telethon import TelegramClient, events
 from telethon.errors import FloodWaitError
 from dotenv import load_dotenv
-from utils import registrar_erro_json, chave_cache_ia, consultar_cache_ia, gravar_cache_ia, normalizar_origens_rotas, salvar_json_atomico
+from utils import registrar_erro_json, chave_cache_ia, consultar_cache_ia, gravar_cache_ia
 from motor_filas import calcular_horarios_distribuicao, aplicar_limite_diario_fila, ler_faixa_limite
 from zoneinfo import ZoneInfo
 
@@ -55,6 +55,7 @@ from links_shopee import extrair_link_shopee
 import legendas
 from videos import verificar_e_otimizar_video, calcular_hash_video
 import fila_espelhador
+import rotas_espelhador
 
 LIMITE_REGISTROS_HASH = 1000  # hashes de vídeo guardados por contexto na anti-duplicata
 
@@ -335,14 +336,24 @@ async def interceptar_mensagem(event):
 
 # ---------------- Espelhador ----------------
 def ler_espelhos_config():
-    """Rotas do Espelhador (espelhos_config.json), editadas pelo painel_espelhos."""
-    try:
-        with open("espelhos_config.json", "r") as f:
-            dados = json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError):
-        return {"rotas": []}
-    normalizar_origens_rotas(dados)
-    return dados
+    """Rotas do Espelhador (rotas_espelhador.py, no banco), editadas pelo painel_espelhos."""
+    return rotas_espelhador.ler()
+
+def desligar_esvaziar_agora(nomes):
+    """
+    Desliga o "Esvaziar agora" das rotas nomes, que o ciclo já reagendou. Grava sobre as
+    rotas de agora: o ciclo leu as rotas minutos antes, e o painel pode ter mudado outras
+    coisas nesse meio tempo.
+    """
+    if not nomes:
+        return
+
+    def _desligar(atual):
+        for r in atual.get("rotas", []):
+            if r.get("nome") in nomes:
+                r["esvaziar_agora"] = False
+
+    rotas_espelhador.atualizar(_desligar)
 
 def ler_fila_espelhador():
     """Fila do Espelhador (fila_espelhador.CHAVE no banco): itens agendados e o histórico do que já saiu."""
@@ -455,7 +466,6 @@ async def processar_fila_espelhador_loop():
             itens_restantes = []
             agora = datetime.now(fuso_horario)
             hoje_str = agora.strftime("%Y-%m-%d")
-            houve_alteracao_rota = False
             houve_agendamento = False
             houve_disparo = False
             
@@ -658,14 +668,8 @@ async def processar_fila_espelhador_loop():
                 else:
                     itens_restantes.append(item)
                     
-            # "Esvaziar agora" vale uma vez: desliga o pedido nas rotas.
-            for r in config.get("rotas", []):
-                if r.get("esvaziar_agora"):
-                    r["esvaziar_agora"] = False
-                    houve_alteracao_rota = True
-            
-            if houve_alteracao_rota:
-                salvar_json_atomico("espelhos_config.json", config, indent=4, ensure_ascii=False)
+            # "Esvaziar agora" vale uma vez: desliga o pedido nas rotas que este ciclo atendeu.
+            desligar_esvaziar_agora({r.get("nome") for r in config.get("rotas", []) if r.get("esvaziar_agora")})
                     
             # Grava a fila só se algo mudou (agendamento, publicação ou itens removidos).
             if podou_historico or len(fila) != len(itens_restantes) or houve_agendamento or houve_disparo:
@@ -1120,106 +1124,108 @@ async def monitorar_status_alvos():
 
         await asyncio.sleep(60)
 
+def _canais_da_rota(rota):
+    """Origens e destino da rota, para o auditor saber se o painel trocou os canais no meio."""
+    return json.dumps({"origens": rota.get("origens"), "origem": rota.get("origem"),
+                       "destino": rota.get("destino")}, sort_keys=True, ensure_ascii=False)
+
+
+def _assinatura_rotas(rotas):
+    return str([{"origens": r.get("origens", [r.get("origem")]), "destino": r.get("destino")} for r in rotas])
+
+
 async def monitorar_status_espelhos():
     """
     O mesmo que monitorar_status_alvos, para as origens e destinos das rotas do
-    Espelhador (espelhos_config.json): status e nome por canal e ID corrigido.
+    Espelhador: status e nome por canal e ID corrigido. Confere de novo quando as
+    origens ou os destinos mudam. Grava só o que conferiu, sobre as rotas de agora: a
+    conferência espera o Telegram, e o painel pode ter mudado a rota nesse meio tempo.
     """
     ultima_assinatura_rotas = None
-    ultima_modificacao = 0
 
     logger.info("🚀 Iniciando monitoramento ultraleve (1 min) para as rotas do Espelhador...")
     while True:
         try:
-            # Data de modificação do arquivo: se não mudou, não há o que conferir.
-            try:
-                modificacao_atual = os.path.getmtime("espelhos_config.json")
-            except OSError:
-                modificacao_atual = 0
+            dados_espelho = rotas_espelhador.ler()
+            rotas = dados_espelho.get("rotas", [])
 
-            if modificacao_atual != ultima_modificacao:
-                try:
-                    with open("espelhos_config.json", "r", encoding="utf-8") as f:
-                        dados_espelho = json.load(f)
-                except FileNotFoundError:
-                    dados_espelho = {"rotas": []}
-                # Origem no formato antigo {"id", "nome"} vira texto; se mudou, a auditoria grava.
-                origens_normalizadas = normalizar_origens_rotas(dados_espelho)
-                
-                rotas = dados_espelho.get("rotas", [])
-                
-                assinatura_atual = str([{ "origens": r.get("origens", [r.get("origem")]), "destino": r.get("destino") } for r in rotas])
-                
-                # Só confere se mudaram as origens ou destinos das rotas.
-                if assinatura_atual != ultima_assinatura_rotas:
-                    logger.info("🔍 [Auditor] Mudança detectada nas rotas do Espelhador. Iniciando validação...")
-                    alterado = origens_normalizadas
+            # Só confere se mudaram as origens ou destinos das rotas.
+            if _assinatura_rotas(rotas) != ultima_assinatura_rotas:
+                logger.info("🔍 [Auditor] Mudança detectada nas rotas do Espelhador. Iniciando validação...")
+                alterado = False
+                vistas = {rota.get("nome"): _canais_da_rota(rota) for rota in rotas}
+
+                for rota in rotas:
+                    canais_para_verificar = []
                     
-                    for rota in rotas:
-                        canais_para_verificar = []
+                    if "origens" in rota:
+                        for i, c in enumerate(rota["origens"]):
+                            canais_para_verificar.append(("origem_lista", c, i))
+                    elif "origem" in rota:
+                        canais_para_verificar.append(("origem_legado", rota["origem"], None))
                         
-                        if "origens" in rota:
-                            for i, c in enumerate(rota["origens"]):
-                                canais_para_verificar.append(("origem_lista", c, i))
-                        elif "origem" in rota:
-                            canais_para_verificar.append(("origem_legado", rota["origem"], None))
+                    canais_para_verificar.append(("destino", rota.get("destino"), None))
+                    
+                    for tipo_ponta, canal, idx in canais_para_verificar:
+                        if not canal: continue
                             
-                        canais_para_verificar.append(("destino", rota.get("destino"), None))
-                        
-                        for tipo_ponta, canal, idx in canais_para_verificar:
-                            if not canal: continue
-                                
-                            try:
-                                entidade, canal_correto = await validar_e_obter_entidade(client, canal)
-                                
-                                if str(canal) != canal_correto:
-                                    if tipo_ponta == "origem_lista": rota["origens"][idx] = canal_correto
-                                    elif tipo_ponta == "origem_legado": rota["origem"] = canal_correto
-                                    elif tipo_ponta == "destino": rota["destino"] = canal_correto
-                                    alterado = True
-                                    canal = canal_correto 
-                                
-                                nome_canal = getattr(entidade, 'title', getattr(entidade, 'username', str(canal)))
-                                if "status_canais" not in rota: rota["status_canais"] = {}
-                                
-                                info_atual = rota["status_canais"].get(str(canal), {})
-                                if not isinstance(info_atual, dict): info_atual = {}
-                                
-                                if info_atual.get("status") != "ok" or info_atual.get("nome") != nome_canal:
-                                    rota["status_canais"][str(canal)] = {"status": "ok", "nome": nome_canal}
-                                    alterado = True
+                        try:
+                            entidade, canal_correto = await validar_e_obter_entidade(client, canal)
+                            
+                            if str(canal) != canal_correto:
+                                if tipo_ponta == "origem_lista": rota["origens"][idx] = canal_correto
+                                elif tipo_ponta == "origem_legado": rota["origem"] = canal_correto
+                                elif tipo_ponta == "destino": rota["destino"] = canal_correto
+                                alterado = True
+                                canal = canal_correto 
+                            
+                            nome_canal = getattr(entidade, 'title', getattr(entidade, 'username', str(canal)))
+                            if "status_canais" not in rota: rota["status_canais"] = {}
+                            
+                            info_atual = rota["status_canais"].get(str(canal), {})
+                            if not isinstance(info_atual, dict): info_atual = {}
+                            
+                            if info_atual.get("status") != "ok" or info_atual.get("nome") != nome_canal:
+                                rota["status_canais"][str(canal)] = {"status": "ok", "nome": nome_canal}
+                                alterado = True
 
-                                if rota.get("status_verificacao") == "erro":
-                                    rota["status_verificacao"] = "ok"
-                                    alterado = True
-                                    
-                            except Exception:
-                                if "status_canais" not in rota: rota["status_canais"] = {}
-                                info_atual = rota["status_canais"].get(str(canal), {})
-                                if not isinstance(info_atual, dict): info_atual = {}
+                            if rota.get("status_verificacao") == "erro":
+                                rota["status_verificacao"] = "ok"
+                                alterado = True
                                 
-                                if info_atual.get("status") != "erro":
-                                    rota["status_canais"][str(canal)] = {"status": "erro", "nome": str(canal)}
-                                    alterado = True
-                                    
-                                if rota.get("status_verificacao") != "erro":
-                                    rota["status_verificacao"] = "erro"
-                                    alterado = True
-                                    
-                    if alterado:
-                        salvar_json_atomico("espelhos_config.json", dados_espelho, indent=4, ensure_ascii=False)
-                        logger.info("✅ Arquivo do Espelhador atualizado e sincronizado após auditoria.")
-                        
-                    ultima_assinatura_rotas = str([{ "origens": r.get("origens", [r.get("origem")]), "destino": r.get("destino") } for r in rotas])
-                    
-                    try:
-                        ultima_modificacao = os.path.getmtime("espelhos_config.json")
-                    except OSError:
-                        ultima_modificacao = modificacao_atual
-                        
-                    logger.info("✅ Auditoria do Espelhador concluída. Nomes atualizados!")
-                else:
-                    ultima_modificacao = modificacao_atual
+                        except Exception:
+                            if "status_canais" not in rota: rota["status_canais"] = {}
+                            info_atual = rota["status_canais"].get(str(canal), {})
+                            if not isinstance(info_atual, dict): info_atual = {}
+                            
+                            if info_atual.get("status") != "erro":
+                                rota["status_canais"][str(canal)] = {"status": "erro", "nome": str(canal)}
+                                alterado = True
+                                
+                            if rota.get("status_verificacao") != "erro":
+                                rota["status_verificacao"] = "erro"
+                                alterado = True
+                                
+                if alterado:
+                    conferidas = {rota.get("nome"): rota for rota in rotas}
+
+                    def _gravar_conferencia(atual):
+                        for r in atual.get("rotas", []):
+                            conferida = conferidas.get(r.get("nome"))
+                            # Rota que o painel criou, renomeou ou cujos canais trocou durante a
+                            # conferência fica como está; canais trocados fazem a próxima volta
+                            # conferir de novo.
+                            if conferida is None or _canais_da_rota(r) != vistas.get(r.get("nome")):
+                                continue
+                            for campo in ("origens", "origem", "destino", "status_canais", "status_verificacao"):
+                                if campo in conferida:
+                                    r[campo] = conferida[campo]
+
+                    rotas_espelhador.atualizar(_gravar_conferencia)
+                    logger.info("✅ Rotas do Espelhador atualizadas e sincronizadas após auditoria.")
+
+                ultima_assinatura_rotas = _assinatura_rotas(rotas)
+                logger.info("✅ Auditoria do Espelhador concluída. Nomes atualizados!")
 
         except Exception as e:
             logger.error(f"⚠️ Erro na auditoria do espelhador: {e}")
@@ -1322,9 +1328,10 @@ async def main():
     alvos = carregar_alvos()
     logger.info(f"📡 Radar ativo para {len(alvos)} concorrentes.")
     
-    # A fila do Espelhador sai do arquivo para o banco aqui, quando a versão anterior
-    # deste robô já parou: nenhuma gravação velha chega depois da passagem.
+    # A fila e as rotas do Espelhador saem do arquivo para o banco aqui, quando a versão
+    # anterior deste robô já parou: nenhuma gravação velha chega depois da passagem.
     fila_espelhador.passar_arquivo_para_o_banco()
+    rotas_espelhador.passar_arquivo_para_o_banco()
     asyncio.create_task(processar_fila_espelhador_loop())
     asyncio.create_task(analisar_fila_espiao_loop())
     asyncio.create_task(monitorar_status_alvos())

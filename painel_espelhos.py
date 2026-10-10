@@ -1,7 +1,7 @@
 """
 Painel do Espelhador de Canais (handlers aiogram incluídos no bot_mestre).
 
-Cria, edita e remove as rotas de espelhos_config.json. Cada rota liga várias
+Cria, edita e remove as rotas (rotas_espelhador.py, no banco). Cada rota liga várias
 origens (canais/grupos vigiados) a um destino, com janela de horário, atraso D+X,
 modo de distribuição (ordem de chegada ou aleatório), limite diário e lista negra.
 Quem captura e publica é o motor_userbot; este módulo grava a configuração e só
@@ -15,7 +15,6 @@ A fila liga cada vídeo à rota pelo NOME, por isso renomear rota sincroniza a f
 Para voltar ao menu da rota, os handlers chamam selecionar_acao_edicao com uma
 cópia da mensagem cujo texto é o número da rota, como se o usuário o digitasse.
 """
-import json
 import logging
 import re
 from datetime import datetime
@@ -23,11 +22,12 @@ from zoneinfo import ZoneInfo
 from aiogram import Router, Bot, types, F
 from aiogram.fsm.context import FSMContext
 import fila_espelhador
+import rotas_espelhador
 from aiogram.fsm.state import StatesGroup, State
 from aiogram.types import KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
 from teclados import montar_teclado
 from aiogram.filters import StateFilter
-from utils import ler_cache_nomes_grupos, salvar_nome_grupo, validar_e_formatar_alvo, id_da_origem, normalizar_origens_rotas, salvar_json_atomico
+from utils import ler_cache_nomes_grupos, salvar_nome_grupo, validar_e_formatar_alvo, id_da_origem
 from motor_filas import ler_faixa_limite, sortear_teto_do_dia
 
 logger = logging.getLogger("Espelhador")
@@ -116,16 +116,10 @@ teclado_espelhador_abrangencia = montar_teclado([
     [KeyboardButton(text="Cancelar Operação ❌")]
 ])
 
-# --- Arquivos do Espelhador ---
+# --- Rotas e fila do Espelhador ---
 def ler_espelhos():
-    """Rotas de espelhos_config.json (origens já no formato de texto). Arquivo ausente ou inválido = nenhuma rota."""
-    try:
-        with open("espelhos_config.json", "r") as f:
-            dados = json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError):
-        return {"rotas": []}
-    normalizar_origens_rotas(dados)
-    return dados
+    """As rotas (rotas_espelhador.py, no banco), com as origens no formato de texto."""
+    return rotas_espelhador.ler()
 
 def ler_contador_espelhador(nome_rota):
     """Quantos vídeos da rota ainda esperam publicação (os já publicados não contam)."""
@@ -133,7 +127,8 @@ def ler_contador_espelhador(nome_rota):
     return len([item for item in fila if item.get("nome_rota") == nome_rota and item.get("processado") not in [True, 1, "true", "True"]])
 
 def salvar_espelhos(dados):
-    salvar_json_atomico("espelhos_config.json", dados, indent=4)
+    """Grava as rotas como o handler as deixou: só quem lê e grava sem esperar nada no meio."""
+    rotas_espelhador.salvar(dados)
 
 def _renomear_rota_na_fila(nome_antigo, novo_nome):
     """
@@ -322,7 +317,9 @@ async def painel_espelhador(message: types.Message, state: FSMContext):
     texto = "🔄 <b>Painel do Espelhador de Canais</b>\n\n"
     texto += "Este módulo clona publicações de um grupo para outro automaticamente, convertendo os links e respeitando um atraso programado.\n\n"
     
-    houve_alteracao = False
+    # Rotas renomeadas nesta tela (nome antigo -> novo). A tela espera o Telegram no meio,
+    # então grava só a troca de nome, sobre as rotas de agora.
+    renomeadas = {}
 
     if rotas:
         texto += "📡 <b>Rotas Ativas:</b>\n"
@@ -356,8 +353,8 @@ async def painel_espelhador(message: types.Message, state: FSMContext):
                 if nome_real:
                     _renomear_rota_na_fila(rota['nome'], f"Espelho: {nome_real}")
                     nome_rota = f"Espelho: {nome_real}"
+                    renomeadas[rota['nome']] = nome_rota
                     rota['nome'] = nome_rota
-                    houve_alteracao = True
 
             qtd_fila = ler_contador_espelhador(rota['nome'])
             
@@ -426,9 +423,12 @@ async def painel_espelhador(message: types.Message, state: FSMContext):
         
         texto += "\nEscolha a ação que deseja realizar:"
             
-        if houve_alteracao:
-            dados["rotas"] = rotas
-            salvar_espelhos(dados)
+        if renomeadas:
+            def _renomear(atual):
+                for r in atual.get("rotas", []):
+                    if r.get("nome") in renomeadas:
+                        r["nome"] = renomeadas[r["nome"]]
+            rotas_espelhador.atualizar(_renomear)
             
     else:
         texto += "<i>Nenhuma rota de espelhamento cadastrada no momento.</i>\n\n"
@@ -1936,10 +1936,16 @@ async def salvar_bl_add_espelhador(message: types.Message, state: FSMContext):
         await message.answer(texto_aviso, reply_markup=teclado_espelhador_confirmacao, parse_mode="HTML")
         await state.set_state(EspelhadorFluxo.aguardando_confirmacao_blacklist_conflito)
     else:
-        for n in novos_blacklist:
-            blacklist.append(n)
-        dados["rotas"][idx]["blacklist"] = blacklist
-        salvar_espelhos(dados)
+        # A validação acima esperou o Telegram: acrescenta sobre as rotas de agora.
+        def _bloquear(atual):
+            lista = atual["rotas"][idx].setdefault("blacklist", [])
+            for n in novos_blacklist:
+                if n not in lista:
+                    lista.append(n)
+            return list(lista)
+        blacklist = rotas_espelhador.atualizar(_bloquear)
+        if blacklist is None:
+            raise RuntimeError("não consegui gravar a lista negra da rota")
         
         # Mostra a lista atualizada e continua no menu da lista negra.
         cache_nomes = ler_cache_nomes_grupos()
