@@ -297,7 +297,7 @@ async def validar_e_formatar_alvo(bot_instance, entrada):
 def obter_banco_global_origens():
     """
     Todas as origens (canais/grupos) monitoradas por algum robô: alvos do Espião,
-    origem do Autorais e origens das rotas do Espelhador (espelhos_config.json).
+    origem do Autorais e origens das rotas do Espelhador (rotas_espelhador.py).
     Alimenta o botão "Importar Banco Global", que copia essas origens para outro robô.
     """
     origens_globais = set()
@@ -323,13 +323,12 @@ def obter_banco_global_origens():
     except Exception: pass
     
     try:
-        with open("espelhos_config.json", "r", encoding="utf-8") as f:
-            dados_espelhos = json.load(f)
-            for rota in dados_espelhos.get("rotas", []):
-                for o in rota.get("origens", []):
-                    origens_globais.add(id_da_origem(o))
-                if "origem" in rota:
-                    origens_globais.add(str(rota["origem"]))
+        import rotas_espelhador  # aqui dentro: ele importa o utils
+        for rota in rotas_espelhador.ler().get("rotas", []):
+            for o in rota.get("origens", []):
+                origens_globais.add(id_da_origem(o))
+            if "origem" in rota:
+                origens_globais.add(str(rota["origem"]))
     except Exception: pass
     
     return list(origens_globais)
@@ -349,7 +348,7 @@ def id_da_origem(origem):
 
 def normalizar_origens_rotas(dados):
     """
-    Converte, em dados (conteúdo do espelhos_config.json), as origens gravadas como
+    Converte, em dados (as rotas do Espelhador), as origens gravadas como
     {"id", "nome"} para o ID em texto, sem repetir origem. Também tira de
     status_canais as entradas que o auditor criou para o formato antigo.
 
@@ -375,36 +374,3 @@ def normalizar_origens_rotas(dados):
                 del status[chave]
                 mudou = True
     return mudou
-
-
-def salvar_json_atomico(caminho, dados, **opcoes_dump):
-    """
-    Grava dados em JSON sem que outro processo leia o arquivo pela metade.
-
-    O espelhos_config.json é reescrito pelo painel e pelo motor_userbot. Com open("w")
-    o arquivo fica vazio até o json.dump terminar; quem lê nesse instante recebe JSON
-    inválido, e o painel trata isso como "nenhuma rota" (um salvamento seguinte
-    apagaria todas). Aqui o conteúdo
-    vai para um arquivo temporário na mesma pasta e os.replace troca os dois de uma
-    vez: quem lê vê o arquivo antigo inteiro ou o novo inteiro.
-
-    opcoes_dump vai direto para json.dump (indent, ensure_ascii).
-    """
-    import tempfile
-    pasta = os.path.dirname(os.path.abspath(caminho))
-    descritor, temporario = tempfile.mkstemp(dir=pasta, prefix=".tmp_", suffix=".json")
-    try:
-        with os.fdopen(descritor, "w", encoding="utf-8") as f:
-            json.dump(dados, f, **opcoes_dump)
-        # mkstemp cria com permissão 600; mantém a do arquivo que está sendo trocado.
-        try:
-            os.chmod(temporario, os.stat(caminho).st_mode & 0o777)
-        except FileNotFoundError:
-            os.chmod(temporario, 0o644)
-        os.replace(temporario, caminho)
-    except BaseException:
-        try:
-            os.remove(temporario)
-        except OSError:
-            pass
-        raise

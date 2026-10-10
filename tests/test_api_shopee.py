@@ -5,6 +5,7 @@ import pytest
 
 import api_shopee
 import inventario
+import rotas_espelhador
 from conftest import rodar
 
 
@@ -618,7 +619,7 @@ def test_inventario_conta_pendentes_do_espelhador_de_antes_do_conserto(capsys, f
          "link_original": "y"},
         {"id": "c", "nome_rota": "R", "processado": True, "data_postagem": "2026-10-05"},
     ])
-    (pasta / "espelhos_config.json").write_text(json.dumps({"rotas": [{"nome": "R"}]}), encoding="utf-8")
+    rotas_espelhador.salvar({"rotas": [{"nome": "R"}]})
     inventario.fila_do_espelhador()
     saida = capsys.readouterr().out
     assert "pendentes: 2, capturados antes do conserto do link de produto: 1, sem o link original guardado: 1" in saida

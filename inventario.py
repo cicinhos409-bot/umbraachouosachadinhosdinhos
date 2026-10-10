@@ -32,6 +32,7 @@ import urllib.parse
 
 import db
 import fila_espelhador
+import rotas_espelhador
 
 SERVICOS = ("bot_mestre_bot", "divulgacao_canal_bot", "motor_userbot_bot",
             "espelhador_videos_autorais_bot", "downloader_bot")
@@ -170,15 +171,15 @@ CONSERTO_LINK_PRODUTO = "2026-10-05 22:43:00"
 
 def fila_do_espelhador():
     secao("Fila e rotas do Espelhador")
-    for nome in (fila_espelhador.ARQUIVO, fila_espelhador.ARQUIVO + ".bkp", "espelhos_config.json"):
+    for nome in (fila_espelhador.ARQUIVO, fila_espelhador.ARQUIVO + ".bkp",
+                 rotas_espelhador.ARQUIVO, rotas_espelhador.ARQUIVO + ".bkp"):
         caminho = os.path.join(PASTA, nome)
         if not os.path.exists(caminho):
             continue
         print(f"{nome:24} {tamanho_legivel(os.path.getsize(caminho)):>9}")
     try:
         fila = fila_espelhador.ler().get("fila", [])
-        with open(os.path.join(PASTA, "espelhos_config.json"), encoding="utf-8") as f:
-            rotas = {r.get("nome") for r in json.load(f).get("rotas", [])}
+        rotas = {r.get("nome") for r in rotas_espelhador.ler().get("rotas", [])}
         processados = [i for i in fila if i.get("processado")]
         orfaos = [i for i in fila if i.get("nome_rota") not in rotas]
         datas = sorted(i.get("data_postagem") or "" for i in processados if i.get("data_postagem"))
