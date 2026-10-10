@@ -270,4 +270,4 @@ As regras de PR, CI, merge e avisos estão no `CLAUDE.md`, em "Como trabalhamos"
   - o link de convite de grupo comum em que a conta do robô é admin (lido, nunca criado);
   - supergrupo ou canal privado: t.me/c com a última mensagem, que abre para quem é membro;
   - com tópico, o link abre o tópico;
-  - grupo comum sem convite fica só com o nome: o Telegram não dá @ nem link a esse tipo de grupo.
+  - grupo comum sem convite fica só com o nome, sem aviso (resposta do Rafael em 10/10/2026): o Telegram não dá @ nem link a esse tipo de grupo. O atalho aparece sozinho se a conta do robô virar admin do grupo ou se o grupo virar supergrupo.
