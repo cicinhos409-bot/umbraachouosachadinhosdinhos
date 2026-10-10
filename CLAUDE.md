@@ -71,9 +71,9 @@ arquivo cresce: `grep -n "^# --- " bot_mestre.py`. Os blocos grandes usam
 ## Dados
 
 - `banco_dados.db` (SQLite), sempre pelo `db.py`:
-  - `db.conexao()` num `with`: grava no fim, desfaz se der erro e fecha sempre. Use em código novo.
-  - `db.conectar()`: conexão solta, quem abre fecha.
-  - Nunca `sqlite3.connect` direto: o `tests/test_db.py` barra.
+  - Sempre `with db.conexao() as conexao:` (`linhas_por_nome=True` para `linha["coluna"]`): grava no fim, desfaz se der erro e fecha sempre.
+  - Gravou dentro do `with` e vai esperar um `await` (envio ao Telegram, download)? `conexao.commit()` antes: gravação pendente segura o lock dos outros robôs.
+  - Nunca `sqlite3.connect` nem `db.conectar()` fora do `db.py`: o `tests/test_db.py` barra.
   - O banco fica em modo WAL: leitura e gravação não se bloqueiam. Os arquivos `banco_dados.db-wal` e `-shm` fazem parte do banco.
   - `configuracoes` (chave → JSON): `db.ler_config` e `db.salvar_config`, os mesmos em todos os robôs. Chave que dois robôs gravam: `db.atualizar_config` (lê, altera e grava sem perder a gravação do outro).
   - Filas em tabelas: `fila_postagens` (canal principal), `fila_autorais`, `fila_publico`, `fila_parceiros` e `fila_notas`.

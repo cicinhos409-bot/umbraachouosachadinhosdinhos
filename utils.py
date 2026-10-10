@@ -40,34 +40,32 @@ def registrar_erro_json(mensagem_erro, origem="Geral", contexto_extra=None):
         timestamp = datetime.now(ZoneInfo("America/Sao_Paulo")).strftime("%Y-%m-%d %H:%M:%S")
         contexto_str = json.dumps(contexto_extra) if contexto_extra else "{}"
 
-        conexao = db.conectar()
-        cursor = conexao.cursor()
+        with db.conexao() as conexao:
+            cursor = conexao.cursor()
         
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS erros_logs (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                timestamp TEXT,
-                origem TEXT,
-                erro TEXT,
-                rastro_codigo TEXT,
-                contexto TEXT
-            )
-        ''')
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS erros_logs (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    timestamp TEXT,
+                    origem TEXT,
+                    erro TEXT,
+                    rastro_codigo TEXT,
+                    contexto TEXT
+                )
+            ''')
         
-        cursor.execute('''
-            INSERT INTO erros_logs (timestamp, origem, erro, rastro_codigo, contexto)
-            VALUES (?, ?, ?, ?, ?)
-        ''', (timestamp, origem, str(mensagem_erro), rastro.strip(), contexto_str))
+            cursor.execute('''
+                INSERT INTO erros_logs (timestamp, origem, erro, rastro_codigo, contexto)
+                VALUES (?, ?, ?, ?, ?)
+            ''', (timestamp, origem, str(mensagem_erro), rastro.strip(), contexto_str))
         
-        cursor.execute(f'''
-            DELETE FROM erros_logs 
-            WHERE id NOT IN (
-                SELECT id FROM erros_logs ORDER BY id DESC LIMIT {MAX_ERRORS}
-            )
-        ''')
+            cursor.execute(f'''
+                DELETE FROM erros_logs 
+                WHERE id NOT IN (
+                    SELECT id FROM erros_logs ORDER BY id DESC LIMIT {MAX_ERRORS}
+                )
+            ''')
         
-        conexao.commit()
-        conexao.close()
         
         logger.info(f"✅ Sucesso: Erro de {origem} registado com rastro no SQLite.")
     except Exception as e:
@@ -100,15 +98,14 @@ def consultar_cache_ia(chave):
     if not chave:
         return None
     try:
-        conexao = db.conectar()
-        cursor = conexao.cursor()
-        _garantir_cache_ia(cursor)
-        cursor.execute("SELECT resultado FROM cache_analises_ia WHERE chave = ?", (str(chave),))
-        linha = cursor.fetchone()
-        if linha:
-            cursor.execute("UPDATE cache_analises_ia SET usos = usos + 1 WHERE chave = ?", (str(chave),))
-            conexao.commit()
-        conexao.close()
+        with db.conexao() as conexao:
+            cursor = conexao.cursor()
+            _garantir_cache_ia(cursor)
+            cursor.execute("SELECT resultado FROM cache_analises_ia WHERE chave = ?", (str(chave),))
+            linha = cursor.fetchone()
+            if linha:
+                cursor.execute("UPDATE cache_analises_ia SET usos = usos + 1 WHERE chave = ?", (str(chave),))
+                conexao.commit()
         return linha[0] if linha else None
     except Exception as e:
         logger.error(f"❌ [Cache IA] Erro ao consultar: {e}")
@@ -119,15 +116,13 @@ def gravar_cache_ia(chave, resultado):
     if not chave or not resultado:
         return False
     try:
-        conexao = db.conectar()
-        cursor = conexao.cursor()
-        _garantir_cache_ia(cursor)
-        cursor.execute(
-            "INSERT OR IGNORE INTO cache_analises_ia (chave, resultado, data_analise, usos) VALUES (?, ?, ?, 1)",
-            (str(chave), str(resultado), datetime.now(ZoneInfo("America/Sao_Paulo")).strftime("%Y-%m-%d %H:%M:%S"))
-        )
-        conexao.commit()
-        conexao.close()
+        with db.conexao() as conexao:
+            cursor = conexao.cursor()
+            _garantir_cache_ia(cursor)
+            cursor.execute(
+                "INSERT OR IGNORE INTO cache_analises_ia (chave, resultado, data_analise, usos) VALUES (?, ?, ?, 1)",
+                (str(chave), str(resultado), datetime.now(ZoneInfo("America/Sao_Paulo")).strftime("%Y-%m-%d %H:%M:%S"))
+            )
         return True
     except Exception as e:
         logger.error(f"❌ [Cache IA] Erro ao gravar: {e}")
@@ -136,12 +131,11 @@ def gravar_cache_ia(chave, resultado):
 def estatisticas_cache_ia():
     """(análises guardadas, chamadas à IA economizadas), para o log de faxina."""
     try:
-        conexao = db.conectar()
-        cursor = conexao.cursor()
-        _garantir_cache_ia(cursor)
-        cursor.execute("SELECT COUNT(*), COALESCE(SUM(usos - 1), 0) FROM cache_analises_ia")
-        total, economizadas = cursor.fetchone()
-        conexao.close()
+        with db.conexao() as conexao:
+            cursor = conexao.cursor()
+            _garantir_cache_ia(cursor)
+            cursor.execute("SELECT COUNT(*), COALESCE(SUM(usos - 1), 0) FROM cache_analises_ia")
+            total, economizadas = cursor.fetchone()
         return total or 0, economizadas or 0
     except Exception:
         return 0, 0
@@ -154,13 +148,11 @@ def limpar_cache_ia_antigo(dias=30):
     try:
         from datetime import timedelta
         corte = (datetime.now(ZoneInfo("America/Sao_Paulo")) - timedelta(days=dias)).strftime("%Y-%m-%d %H:%M:%S")
-        conexao = db.conectar()
-        cursor = conexao.cursor()
-        _garantir_cache_ia(cursor)
-        cursor.execute("DELETE FROM cache_analises_ia WHERE data_analise < ?", (corte,))
-        removidos = cursor.rowcount
-        conexao.commit()
-        conexao.close()
+        with db.conexao() as conexao:
+            cursor = conexao.cursor()
+            _garantir_cache_ia(cursor)
+            cursor.execute("DELETE FROM cache_analises_ia WHERE data_analise < ?", (corte,))
+            removidos = cursor.rowcount
         if removidos:
             logger.info(f"🧹 [Cache IA] {removidos} análise(s) com mais de {dias} dias removida(s).")
         return removidos
@@ -173,12 +165,11 @@ def ler_cache_nomes_grupos():
     mostram o nome em vez do ID. A chave de um tópico é "<grupo>_<tópico>".
     """
     try:
-        conexao = db.conectar()
-        cursor = conexao.cursor()
-        cursor.execute("CREATE TABLE IF NOT EXISTS cache_nomes (chat_id TEXT PRIMARY KEY, nome TEXT)")
-        cursor.execute("SELECT chat_id, nome FROM cache_nomes")
-        resultados = cursor.fetchall()
-        conexao.close()
+        with db.conexao() as conexao:
+            cursor = conexao.cursor()
+            cursor.execute("CREATE TABLE IF NOT EXISTS cache_nomes (chat_id TEXT PRIMARY KEY, nome TEXT)")
+            cursor.execute("SELECT chat_id, nome FROM cache_nomes")
+            resultados = cursor.fetchall()
         
         return {linha[0]: linha[1] for linha in resultados}
     except Exception as e:
@@ -198,20 +189,17 @@ def salvar_nome_grupo(chat_id, nome):
         return False
         
     try:
-        conexao = db.conectar()
-        cursor = conexao.cursor()
-        cursor.execute("CREATE TABLE IF NOT EXISTS cache_nomes (chat_id TEXT PRIMARY KEY, nome TEXT)")
+        with db.conexao() as conexao:
+            cursor = conexao.cursor()
+            cursor.execute("CREATE TABLE IF NOT EXISTS cache_nomes (chat_id TEXT PRIMARY KEY, nome TEXT)")
         
-        cursor.execute("SELECT nome FROM cache_nomes WHERE chat_id = ?", (chave,))
-        resultado = cursor.fetchone()
+            cursor.execute("SELECT nome FROM cache_nomes WHERE chat_id = ?", (chave,))
+            resultado = cursor.fetchone()
         
-        if resultado and resultado[0] == nome_str:
-            conexao.close()
-            return False
+            if resultado and resultado[0] == nome_str:
+                return False
             
-        cursor.execute("INSERT OR REPLACE INTO cache_nomes (chat_id, nome) VALUES (?, ?)", (chave, nome_str))
-        conexao.commit()
-        conexao.close()
+            cursor.execute("INSERT OR REPLACE INTO cache_nomes (chat_id, nome) VALUES (?, ?)", (chave, nome_str))
         
         logger.info(f"✅ Nome do grupo {chave} salvo no cache do SQLite: {nome_str}")
         return True
@@ -314,25 +302,24 @@ def obter_banco_global_origens():
     """
     origens_globais = set()
     try:
-        conexao = db.conectar()
-        cursor = conexao.cursor()
+        with db.conexao() as conexao:
+            cursor = conexao.cursor()
         
-        cursor.execute("SELECT valor FROM configuracoes WHERE chave = 'alvos_espiao'")
-        res = cursor.fetchone()
-        if res:
-            dados_espiao = json.loads(res[0])
-            for alvo in dados_espiao.get("alvos", []):
-                origens_globais.add(str(alvo))
+            cursor.execute("SELECT valor FROM configuracoes WHERE chave = 'alvos_espiao'")
+            res = cursor.fetchone()
+            if res:
+                dados_espiao = json.loads(res[0])
+                for alvo in dados_espiao.get("alvos", []):
+                    origens_globais.add(str(alvo))
                 
-        cursor.execute("SELECT valor FROM configuracoes WHERE chave = 'autorais_config'")
-        res = cursor.fetchone()
-        if res:
-            dados_aut = json.loads(res[0])
-            origem = dados_aut.get("origem")
-            if origem and str(origem) not in ["Não definida", "Não definido"]:
-                origens_globais.add(str(origem))
+            cursor.execute("SELECT valor FROM configuracoes WHERE chave = 'autorais_config'")
+            res = cursor.fetchone()
+            if res:
+                dados_aut = json.loads(res[0])
+                origem = dados_aut.get("origem")
+                if origem and str(origem) not in ["Não definida", "Não definido"]:
+                    origens_globais.add(str(origem))
                 
-        conexao.close()
     except Exception: pass
     
     try:

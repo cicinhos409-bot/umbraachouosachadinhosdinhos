@@ -141,40 +141,38 @@ HORAS_ESPERA_SEM_PERMISSAO = 1   # conta sem permissão de postar descansa antes
 def ler_fila_retorno():
     """Fila de retorno (tabela fila_autorais) como {"fila": [itens]}. Cria a tabela e as colunas novas se faltarem."""
     try:
-        conexao = db.conectar()
-        conexao.row_factory = sqlite3.Row
-        cursor = conexao.cursor()
+        with db.conexao(linhas_por_nome=True) as conexao:
+            cursor = conexao.cursor()
         
-        # Cria a tabela se o bot_mestre ainda não a criou.
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS fila_autorais (
-                id_unico TEXT PRIMARY KEY,
-                msg_id_destino INTEGER,
-                legenda TEXT,
-                caminho_arquivo TEXT,
-                data_captura TEXT,
-                data_alvo TEXT,
-                horario_disparo TEXT,
-                processado INTEGER DEFAULT 0
-            )
-        ''')
-        # Colunas novas. O bot_mestre também as cria, mas os serviços sobem em qualquer
-        # ordem, e sem elas o salvar_fila_retorno() falharia com "no such column".
-        try:
-            cursor.execute("ALTER TABLE fila_autorais ADD COLUMN msg_postada_id INTEGER")
-            conexao.commit()
-        except sqlite3.OperationalError:
-            pass
-        try:
-            cursor.execute("ALTER TABLE fila_autorais ADD COLUMN data_postagem TEXT")
-            conexao.commit()
-        except sqlite3.OperationalError:
-            pass
-        _garantir_colunas_novas(cursor, conexao)
+            # Cria a tabela se o bot_mestre ainda não a criou.
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS fila_autorais (
+                    id_unico TEXT PRIMARY KEY,
+                    msg_id_destino INTEGER,
+                    legenda TEXT,
+                    caminho_arquivo TEXT,
+                    data_captura TEXT,
+                    data_alvo TEXT,
+                    horario_disparo TEXT,
+                    processado INTEGER DEFAULT 0
+                )
+            ''')
+            # Colunas novas. O bot_mestre também as cria, mas os serviços sobem em qualquer
+            # ordem, e sem elas o salvar_fila_retorno() falharia com "no such column".
+            try:
+                cursor.execute("ALTER TABLE fila_autorais ADD COLUMN msg_postada_id INTEGER")
+                conexao.commit()
+            except sqlite3.OperationalError:
+                pass
+            try:
+                cursor.execute("ALTER TABLE fila_autorais ADD COLUMN data_postagem TEXT")
+                conexao.commit()
+            except sqlite3.OperationalError:
+                pass
+            _garantir_colunas_novas(cursor, conexao)
 
-        cursor.execute("SELECT * FROM fila_autorais")
-        linhas = cursor.fetchall()
-        conexao.close()
+            cursor.execute("SELECT * FROM fila_autorais")
+            linhas = cursor.fetchall()
         
         fila = []
         for linha in linhas:
@@ -227,99 +225,90 @@ def salvar_fila_retorno(dados):
     voltaria a poder ir ao Grupo Público outra vez. horario_disparo vem do retrato, que é quem
     sorteia os horários; o do banco só vale quando o retrato não tem.
     """
-    # É a transação de escrita mais longa do sistema: a conexão fecha no finally
-    # mesmo se estourar no meio, senão o lock fica preso com o DELETE aberto.
-    conexao = None
+    # É a transação de escrita mais longa do sistema: o with desfaz e fecha mesmo se
+    # estourar no meio, senão o lock ficaria preso com o DELETE aberto.
     try:
-        conexao = db.conectar()
-        cursor = conexao.cursor()
+        with db.conexao() as conexao:
+            cursor = conexao.cursor()
         
-        _garantir_colunas_novas(cursor, conexao)
-        status_atual = {}
-        try:
-            cursor.execute("SELECT id_unico, horario_disparo, processado, data_postagem, msg_postada_id, "
-                           "repostado_publico, data_repost_publico FROM fila_autorais")
-            for linha in cursor.fetchall():
-                status_atual[linha[0]] = linha[1:]
-        except Exception:
-            pass
+            _garantir_colunas_novas(cursor, conexao)
+            status_atual = {}
+            try:
+                cursor.execute("SELECT id_unico, horario_disparo, processado, data_postagem, msg_postada_id, "
+                               "repostado_publico, data_repost_publico FROM fila_autorais")
+                for linha in cursor.fetchall():
+                    status_atual[linha[0]] = linha[1:]
+            except Exception:
+                pass
 
-        cursor.execute("DELETE FROM fila_autorais")
-        for item in dados.get("fila", []):
-            gravado = status_atual.get(item.get("id_unico"))
-            if gravado:
-                horario_bd, processado_final, postagem_final, msg_post_final, repost_pub, data_repost_pub = gravado
-            else:
-                horario_bd, processado_final, postagem_final = "", (1 if item.get("processado") else 0), item.get("data_postagem", "")
-                msg_post_final = item.get("msg_postada_id")
-                repost_pub, data_repost_pub = 0, None
+            cursor.execute("DELETE FROM fila_autorais")
+            for item in dados.get("fila", []):
+                gravado = status_atual.get(item.get("id_unico"))
+                if gravado:
+                    horario_bd, processado_final, postagem_final, msg_post_final, repost_pub, data_repost_pub = gravado
+                else:
+                    horario_bd, processado_final, postagem_final = "", (1 if item.get("processado") else 0), item.get("data_postagem", "")
+                    msg_post_final = item.get("msg_postada_id")
+                    repost_pub, data_repost_pub = 0, None
 
-            horario_final = item.get("horario_disparo") or horario_bd or ""
+                horario_final = item.get("horario_disparo") or horario_bd or ""
 
-            cursor.execute('''
-                INSERT INTO fila_autorais (id_unico, msg_id_destino, legenda, caminho_arquivo, data_captura, data_alvo, horario_disparo, processado, data_postagem, msg_postada_id, autor_id, autor_username, repostado_publico, data_repost_publico, chaves_video)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (
-                item.get("id_unico"),
-                item.get("msg_id_destino"),
-                item.get("legenda"),
-                item.get("caminho_arquivo"),
-                item.get("data_captura"),
-                item.get("data_alvo"),
-                horario_final,
-                processado_final,
-                postagem_final,
-                msg_post_final,
-                item.get("autor_id"),
-                item.get("autor_username") or "",
-                repost_pub or 0,
-                data_repost_pub,
-                item.get("chaves_video") or ""
-            ))
-        conexao.commit()
-        conexao.close()
+                cursor.execute('''
+                    INSERT INTO fila_autorais (id_unico, msg_id_destino, legenda, caminho_arquivo, data_captura, data_alvo, horario_disparo, processado, data_postagem, msg_postada_id, autor_id, autor_username, repostado_publico, data_repost_publico, chaves_video)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (
+                    item.get("id_unico"),
+                    item.get("msg_id_destino"),
+                    item.get("legenda"),
+                    item.get("caminho_arquivo"),
+                    item.get("data_captura"),
+                    item.get("data_alvo"),
+                    horario_final,
+                    processado_final,
+                    postagem_final,
+                    msg_post_final,
+                    item.get("autor_id"),
+                    item.get("autor_username") or "",
+                    repost_pub or 0,
+                    data_repost_pub,
+                    item.get("chaves_video") or ""
+                ))
     except Exception as e:
         logger.error(f"❌ Erro ao salvar fila_autorais no SQLite: {e}")
-    finally:
-        if conexao is not None:
-            try: conexao.close()
-            except Exception: pass
 
 def ler_fila_publico():
     """Fila do Grupo Público (tabela fila_publico), no mesmo formato de ler_fila_retorno()."""
     try:
-        conexao = db.conectar()
-        conexao.row_factory = sqlite3.Row
-        cursor = conexao.cursor()
+        with db.conexao(linhas_por_nome=True) as conexao:
+            cursor = conexao.cursor()
 
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS fila_publico (
-                id_unico TEXT PRIMARY KEY,
-                msg_id_destino INTEGER,
-                legenda TEXT,
-                data_captura TEXT,
-                data_alvo TEXT,
-                horario_disparo TEXT,
-                processado INTEGER DEFAULT 0,
-                data_postagem TEXT
-            )
-        ''')
-        # Colunas novas (caminho_arquivo guarda o vídeo baixado pelo Correio Público).
-        # O bot_mestre também as cria, mas os serviços sobem em qualquer ordem.
-        try:
-            cursor.execute("ALTER TABLE fila_publico ADD COLUMN msg_postada_id INTEGER")
-            conexao.commit()
-        except sqlite3.OperationalError:
-            pass
-        try:
-            cursor.execute("ALTER TABLE fila_publico ADD COLUMN caminho_arquivo TEXT")
-            conexao.commit()
-        except sqlite3.OperationalError:
-            pass
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS fila_publico (
+                    id_unico TEXT PRIMARY KEY,
+                    msg_id_destino INTEGER,
+                    legenda TEXT,
+                    data_captura TEXT,
+                    data_alvo TEXT,
+                    horario_disparo TEXT,
+                    processado INTEGER DEFAULT 0,
+                    data_postagem TEXT
+                )
+            ''')
+            # Colunas novas (caminho_arquivo guarda o vídeo baixado pelo Correio Público).
+            # O bot_mestre também as cria, mas os serviços sobem em qualquer ordem.
+            try:
+                cursor.execute("ALTER TABLE fila_publico ADD COLUMN msg_postada_id INTEGER")
+                conexao.commit()
+            except sqlite3.OperationalError:
+                pass
+            try:
+                cursor.execute("ALTER TABLE fila_publico ADD COLUMN caminho_arquivo TEXT")
+                conexao.commit()
+            except sqlite3.OperationalError:
+                pass
 
-        cursor.execute("SELECT * FROM fila_publico")
-        linhas = cursor.fetchall()
-        conexao.close()
+            cursor.execute("SELECT * FROM fila_publico")
+            linhas = cursor.fetchall()
 
         fila = []
         for linha in linhas:
@@ -349,15 +338,13 @@ INTERVALO_RECONFERIR_PARCEIROS = 6 * 3600   # de quanto em quanto a conta é rec
 def ler_parceiros_pendentes():
     """Parceiros ativos cujo canal de origem o userbot ainda não acessa."""
     try:
-        conexao = db.conectar()
-        conexao.row_factory = sqlite3.Row
-        cursor = conexao.cursor()
-        try:
-            cursor.execute("SELECT * FROM parceiros WHERE ativo = 1 AND (origem_ok IS NULL OR origem_ok = 0)")
-            dados = [dict(l) for l in cursor.fetchall()]
-        except sqlite3.OperationalError:
-            dados = []   # coluna/tabela ainda não existe
-        conexao.close()
+        with db.conexao(linhas_por_nome=True) as conexao:
+            cursor = conexao.cursor()
+            try:
+                cursor.execute("SELECT * FROM parceiros WHERE ativo = 1 AND (origem_ok IS NULL OR origem_ok = 0)")
+                dados = [dict(l) for l in cursor.fetchall()]
+            except sqlite3.OperationalError:
+                dados = []   # coluna/tabela ainda não existe
         return dados
     except Exception:
         return []
@@ -365,12 +352,10 @@ def ler_parceiros_pendentes():
 def marcar_origem_parceiro(parceiro_id, status, motivo=""):
     """Grava em parceiros se o userbot acessa o canal de origem (origem_ok) e, se não, o motivo."""
     try:
-        conexao = db.conectar()
-        cursor = conexao.cursor()
-        cursor.execute("UPDATE parceiros SET origem_ok = ?, origem_erro = ? WHERE id = ?",
-                       (int(status), str(motivo)[:200], int(parceiro_id)))
-        conexao.commit()
-        conexao.close()
+        with db.conexao() as conexao:
+            cursor = conexao.cursor()
+            cursor.execute("UPDATE parceiros SET origem_ok = ?, origem_erro = ? WHERE id = ?",
+                           (int(status), str(motivo)[:200], int(parceiro_id)))
     except Exception as e:
         logger.error(f"❌ [Parceiros] Erro ao marcar origem: {e}")
 
@@ -498,13 +483,11 @@ _origens_parceiros = {"ids": {}, "quando": None}   # id curto da origem -> id do
 
 def ler_parceiros_ativos():
     try:
-        conexao = db.conectar()
-        conexao.row_factory = sqlite3.Row
-        try:
-            dados = [dict(l) for l in conexao.execute("SELECT * FROM parceiros WHERE ativo = 1").fetchall()]
-        except sqlite3.OperationalError:
-            dados = []
-        conexao.close()
+        with db.conexao(linhas_por_nome=True) as conexao:
+            try:
+                dados = [dict(l) for l in conexao.execute("SELECT * FROM parceiros WHERE ativo = 1").fetchall()]
+            except sqlite3.OperationalError:
+                dados = []
         return dados
     except Exception:
         return []
@@ -564,15 +547,13 @@ def anotar_parceiro(parceiro_id, campo, motivo=None):
 # dono para aquele vídeo só acontece mais adiante no mesmo evento.
 def ler_parceiros_ativos_com_acesso():
     try:
-        conexao = db.conectar()
-        conexao.row_factory = sqlite3.Row
-        cursor = conexao.cursor()
-        try:
-            cursor.execute("SELECT * FROM parceiros WHERE ativo = 1 AND origem_ok = 1")
-            dados = [dict(l) for l in cursor.fetchall()]
-        except sqlite3.OperationalError:
-            dados = []
-        conexao.close()
+        with db.conexao(linhas_por_nome=True) as conexao:
+            cursor = conexao.cursor()
+            try:
+                cursor.execute("SELECT * FROM parceiros WHERE ativo = 1 AND origem_ok = 1")
+                dados = [dict(l) for l in cursor.fetchall()]
+            except sqlite3.OperationalError:
+                dados = []
         return dados
     except Exception:
         return []
@@ -613,31 +594,28 @@ def link_do_post(chat, msg_id):
 
 def contar_fila_parceiro(parceiro_id, data_alvo):
     try:
-        conexao = db.conectar()
-        cursor = conexao.cursor()
-        _garantir_fila_parceiros(cursor)
-        cursor.execute("SELECT COUNT(*) FROM fila_parceiros WHERE parceiro_id = ? AND data_alvo = ? AND processado = 0",
-                       (int(parceiro_id), data_alvo))
-        total = cursor.fetchone()[0]
-        conexao.close()
+        with db.conexao() as conexao:
+            cursor = conexao.cursor()
+            _garantir_fila_parceiros(cursor)
+            cursor.execute("SELECT COUNT(*) FROM fila_parceiros WHERE parceiro_id = ? AND data_alvo = ? AND processado = 0",
+                           (int(parceiro_id), data_alvo))
+            total = cursor.fetchone()[0]
         return total
     except Exception:
         return 0
 
 def inserir_fila_parceiro(parceiro_id, caminho, link, data_alvo, link_post=""):
     try:
-        conexao = db.conectar()
-        cursor = conexao.cursor()
-        _garantir_fila_parceiros(cursor)
-        id_unico = f"p{parceiro_id}_{int(datetime.now().timestamp())}_{random.randint(1000, 9999)}"
-        cursor.execute(
-            "INSERT INTO fila_parceiros (id_unico, parceiro_id, caminho_video, link_original, data_captura, "
-            "data_alvo, link_post_origem) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (id_unico, int(parceiro_id), caminho, link, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), data_alvo,
-             link_post or "")
-        )
-        conexao.commit()
-        conexao.close()
+        with db.conexao() as conexao:
+            cursor = conexao.cursor()
+            _garantir_fila_parceiros(cursor)
+            id_unico = f"p{parceiro_id}_{int(datetime.now().timestamp())}_{random.randint(1000, 9999)}"
+            cursor.execute(
+                "INSERT INTO fila_parceiros (id_unico, parceiro_id, caminho_video, link_original, data_captura, "
+                "data_alvo, link_post_origem) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (id_unico, int(parceiro_id), caminho, link, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), data_alvo,
+                 link_post or "")
+            )
         return id_unico
     except Exception as e:
         logger.error(f"❌ [Parceiros] Erro ao inserir na fila: {e}")
@@ -863,16 +841,15 @@ async def resolver_chave_curta(link):
     limite_validade = (datetime.now() - timedelta(days=DIAS_VALIDADE_CACHE_LINKS)).strftime("%Y-%m-%d %H:%M:%S")
 
     try:
-        conexao = db.conectar()
-        cursor = conexao.cursor()
-        _garantir_tabela_links(cursor)
-        conexao.commit()
-        cursor.execute(
-            "SELECT chave_final FROM links_resolvidos WHERE codigo_curto = ? AND data_resolucao >= ?",
-            (codigo, limite_validade)
-        )
-        linha = cursor.fetchone()
-        conexao.close()
+        with db.conexao() as conexao:
+            cursor = conexao.cursor()
+            _garantir_tabela_links(cursor)
+            conexao.commit()
+            cursor.execute(
+                "SELECT chave_final FROM links_resolvidos WHERE codigo_curto = ? AND data_resolucao >= ?",
+                (codigo, limite_validade)
+            )
+            linha = cursor.fetchone()
         if linha is not None:
             return linha[0] or None   # vazio = já foi aberto e não tinha produto
     except Exception as e:
@@ -893,19 +870,17 @@ async def resolver_chave_curta(link):
         chave_final = ""   # o destino também era curto: não serve de identidade
 
     try:
-        conexao = db.conectar()
-        cursor = conexao.cursor()
-        _garantir_tabela_links(cursor)
-        cursor.execute(
-            "INSERT OR REPLACE INTO links_resolvidos (codigo_curto, chave_final, data_resolucao) VALUES (?, ?, ?)",
-            (codigo, chave_final, datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-        )
-        # Aproveita a gravação para apagar o que venceu. Só roda quando aparece
-        # encurtador novo, e a tabela é pequena.
-        cursor.execute("DELETE FROM links_resolvidos WHERE data_resolucao < ?", (limite_validade,))
-        vencidos = cursor.rowcount
-        conexao.commit()
-        conexao.close()
+        with db.conexao() as conexao:
+            cursor = conexao.cursor()
+            _garantir_tabela_links(cursor)
+            cursor.execute(
+                "INSERT OR REPLACE INTO links_resolvidos (codigo_curto, chave_final, data_resolucao) VALUES (?, ?, ?)",
+                (codigo, chave_final, datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+            )
+            # Aproveita a gravação para apagar o que venceu. Só roda quando aparece
+            # encurtador novo, e a tabela é pequena.
+            cursor.execute("DELETE FROM links_resolvidos WHERE data_resolucao < ?", (limite_validade,))
+            vencidos = cursor.rowcount
         if vencidos:
             logger.info(f"🧹 [Link Curto] {vencidos} link(s) fora do prazo de {DIAS_VALIDADE_CACHE_LINKS} dias removido(s).")
     except Exception as e:
@@ -942,13 +917,12 @@ def video_ja_reservado(chaves):
     if not chaves:
         return False
     try:
-        conexao = db.conectar()
-        cursor = conexao.cursor()
-        _garantir_tabela_reservas(cursor)
-        marcadores = ",".join("?" * len(chaves))
-        cursor.execute(f"SELECT 1 FROM videos_reservados WHERE video_id IN ({marcadores}) LIMIT 1", chaves)
-        achou = cursor.fetchone() is not None
-        conexao.close()
+        with db.conexao() as conexao:
+            cursor = conexao.cursor()
+            _garantir_tabela_reservas(cursor)
+            marcadores = ",".join("?" * len(chaves))
+            cursor.execute(f"SELECT 1 FROM videos_reservados WHERE video_id IN ({marcadores}) LIMIT 1", chaves)
+            achou = cursor.fetchone() is not None
         return achou
     except Exception as e:
         logger.error(f"❌ [Reserva] Erro ao consultar: {e}")
@@ -966,20 +940,18 @@ def reservar_video(chaves, parceiro_id=0):
     if not chaves:
         return False
     try:
-        conexao = db.conectar()
-        cursor = conexao.cursor()
-        _garantir_tabela_reservas(cursor)
-        agora_txt = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        reservou = False
-        for c in chaves:
-            cursor.execute(
-                "INSERT OR IGNORE INTO videos_reservados (video_id, parceiro_id, data_reserva) VALUES (?, ?, ?)",
-                (c, int(parceiro_id), agora_txt)
-            )
-            if cursor.rowcount > 0:
-                reservou = True
-        conexao.commit()
-        conexao.close()
+        with db.conexao() as conexao:
+            cursor = conexao.cursor()
+            _garantir_tabela_reservas(cursor)
+            agora_txt = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            reservou = False
+            for c in chaves:
+                cursor.execute(
+                    "INSERT OR IGNORE INTO videos_reservados (video_id, parceiro_id, data_reserva) VALUES (?, ?, ?)",
+                    (c, int(parceiro_id), agora_txt)
+                )
+                if cursor.rowcount > 0:
+                    reservou = True
         return reservou
     except Exception as e:
         logger.error(f"❌ [Reserva] Erro ao reservar {chaves}: {e}")
@@ -994,76 +966,67 @@ def salvar_fila_publico(dados):
     já está no banco esses campos são relidos aqui e mantidos; regravar a partir de
     um retrato antigo devolveria o vídeo a "pendente" (seria publicado de novo).
     """
-    # Mesma transação longa de salvar_fila_retorno: fecha no finally.
-    conexao = None
+    # Mesma transação longa de salvar_fila_retorno: o with desfaz e fecha no erro.
     try:
-        conexao = db.conectar()
-        cursor = conexao.cursor()
+        with db.conexao() as conexao:
+            cursor = conexao.cursor()
 
-        status_atual = {}
-        try:
-            cursor.execute("SELECT id_unico, horario_disparo, processado, data_postagem, caminho_arquivo, msg_postada_id FROM fila_publico")
-            for linha in cursor.fetchall():
-                status_atual[linha[0]] = linha[1:]
-        except Exception:
-            pass
+            status_atual = {}
+            try:
+                cursor.execute("SELECT id_unico, horario_disparo, processado, data_postagem, caminho_arquivo, msg_postada_id FROM fila_publico")
+                for linha in cursor.fetchall():
+                    status_atual[linha[0]] = linha[1:]
+            except Exception:
+                pass
 
-        cursor.execute("DELETE FROM fila_publico")
-        for item in dados.get("fila", []):
-            gravado = status_atual.get(item.get("id_unico"))
-            if gravado:
-                horario_final, processado_final, postagem_final, caminho_final, msg_post_final = gravado
-            else:
-                horario_final = item.get("horario_disparo", "")
-                processado_final = 1 if item.get("processado") else 0
-                postagem_final = item.get("data_postagem", "")
-                msg_post_final = item.get("msg_postada_id")
-                caminho_final = item.get("caminho_arquivo", "")
-            cursor.execute('''
-                INSERT INTO fila_publico (id_unico, msg_id_destino, legenda, data_captura, data_alvo, horario_disparo, processado, data_postagem, caminho_arquivo, msg_postada_id)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (
-                item.get("id_unico"),
-                item.get("msg_id_destino"),
-                item.get("legenda"),
-                item.get("data_captura"),
-                item.get("data_alvo"),
-                horario_final,
-                processado_final,
-                postagem_final,
-                caminho_final,
-                msg_post_final
-            ))
-        conexao.commit()
-        conexao.close()
+            cursor.execute("DELETE FROM fila_publico")
+            for item in dados.get("fila", []):
+                gravado = status_atual.get(item.get("id_unico"))
+                if gravado:
+                    horario_final, processado_final, postagem_final, caminho_final, msg_post_final = gravado
+                else:
+                    horario_final = item.get("horario_disparo", "")
+                    processado_final = 1 if item.get("processado") else 0
+                    postagem_final = item.get("data_postagem", "")
+                    msg_post_final = item.get("msg_postada_id")
+                    caminho_final = item.get("caminho_arquivo", "")
+                cursor.execute('''
+                    INSERT INTO fila_publico (id_unico, msg_id_destino, legenda, data_captura, data_alvo, horario_disparo, processado, data_postagem, caminho_arquivo, msg_postada_id)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (
+                    item.get("id_unico"),
+                    item.get("msg_id_destino"),
+                    item.get("legenda"),
+                    item.get("data_captura"),
+                    item.get("data_alvo"),
+                    horario_final,
+                    processado_final,
+                    postagem_final,
+                    caminho_final,
+                    msg_post_final
+                ))
     except Exception as e:
         logger.error(f"❌ Erro ao salvar fila_publico no SQLite: {e}")
-    finally:
-        if conexao is not None:
-            try: conexao.close()
-            except Exception: pass
 
 def contar_ofertas_dia_publico(data_alvo, incrementar=True):
     """Contador do sorteio do Grupo Público: o mesmo que contar_ofertas_dia(), com tabela própria."""
     try:
-        conexao = db.conectar()
-        cursor = conexao.cursor()
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS contador_publico (
-                data_alvo TEXT PRIMARY KEY,
-                total INTEGER DEFAULT 0
-            )
-        ''')
+        with db.conexao() as conexao:
+            cursor = conexao.cursor()
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS contador_publico (
+                    data_alvo TEXT PRIMARY KEY,
+                    total INTEGER DEFAULT 0
+                )
+            ''')
 
-        if incrementar:
-            cursor.execute("UPDATE contador_publico SET total = total + 1 WHERE data_alvo = ?", (data_alvo,))
-            if cursor.rowcount == 0:
-                cursor.execute("INSERT INTO contador_publico (data_alvo, total) VALUES (?, 1)", (data_alvo,))
+            if incrementar:
+                cursor.execute("UPDATE contador_publico SET total = total + 1 WHERE data_alvo = ?", (data_alvo,))
+                if cursor.rowcount == 0:
+                    cursor.execute("INSERT INTO contador_publico (data_alvo, total) VALUES (?, 1)", (data_alvo,))
 
-        cursor.execute("SELECT total FROM contador_publico WHERE data_alvo = ?", (data_alvo,))
-        resultado = cursor.fetchone()
-        conexao.commit()
-        conexao.close()
+            cursor.execute("SELECT total FROM contador_publico WHERE data_alvo = ?", (data_alvo,))
+            resultado = cursor.fetchone()
         return resultado[0] if resultado else 0
     except Exception as e:
         logger.error(f"❌ Erro no contador de sorteio do Público: {e}")
@@ -1076,28 +1039,27 @@ def contar_ofertas_dia(data_alvo, incrementar=True):
     chance, limite/total.
     """
     try:
-        conexao = db.conectar()
-        cursor = conexao.cursor()
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS contador_autorais (
-                data_alvo TEXT PRIMARY KEY,
-                total INTEGER DEFAULT 0
-            )
-        ''')
+        with db.conexao() as conexao:
+            cursor = conexao.cursor()
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS contador_autorais (
+                    data_alvo TEXT PRIMARY KEY,
+                    total INTEGER DEFAULT 0
+                )
+            ''')
 
-        if incrementar:
-            cursor.execute("UPDATE contador_autorais SET total = total + 1 WHERE data_alvo = ?", (data_alvo,))
-            if cursor.rowcount == 0:
-                cursor.execute("INSERT INTO contador_autorais (data_alvo, total) VALUES (?, 1)", (data_alvo,))
+            if incrementar:
+                cursor.execute("UPDATE contador_autorais SET total = total + 1 WHERE data_alvo = ?", (data_alvo,))
+                if cursor.rowcount == 0:
+                    cursor.execute("INSERT INTO contador_autorais (data_alvo, total) VALUES (?, 1)", (data_alvo,))
 
-            # Contador de data com mais de 90 dias não serve mais.
-            limite_faxina = (datetime.now() - timedelta(days=90)).strftime("%Y-%m-%d")
-            cursor.execute("DELETE FROM contador_autorais WHERE data_alvo < ?", (limite_faxina,))
-            conexao.commit()
+                # Contador de data com mais de 90 dias não serve mais.
+                limite_faxina = (datetime.now() - timedelta(days=90)).strftime("%Y-%m-%d")
+                cursor.execute("DELETE FROM contador_autorais WHERE data_alvo < ?", (limite_faxina,))
+                conexao.commit()
 
-        cursor.execute("SELECT total FROM contador_autorais WHERE data_alvo = ?", (data_alvo,))
-        linha = cursor.fetchone()
-        conexao.close()
+            cursor.execute("SELECT total FROM contador_autorais WHERE data_alvo = ?", (data_alvo,))
+            linha = cursor.fetchone()
         return linha[0] if linha else 0
     except Exception as e:
         logger.error(f"❌ Erro no contador de sorteio: {e}")
@@ -1127,14 +1089,12 @@ def mensagem_ja_processada(chat_id, msg_id):
     # A varredura só olha as últimas mensagens da origem; registro mais velho não serve.
     limite = (datetime.now() - timedelta(days=DIAS_REGISTRO_MENSAGENS_ORIGEM)).strftime("%Y-%m-%d %H:%M:%S")
     try:
-        conexao = db.conectar()
-        cursor = conexao.cursor()
-        cursor.execute("CREATE TABLE IF NOT EXISTS mensagens_origem_autorais (chave TEXT PRIMARY KEY, data_registro TEXT)")
-        cursor.execute("INSERT OR IGNORE INTO mensagens_origem_autorais (chave, data_registro) VALUES (?, ?)", (chave, agora_txt))
-        ja_registrada = cursor.rowcount == 0
-        cursor.execute("DELETE FROM mensagens_origem_autorais WHERE data_registro < ?", (limite,))
-        conexao.commit()
-        conexao.close()
+        with db.conexao() as conexao:
+            cursor = conexao.cursor()
+            cursor.execute("CREATE TABLE IF NOT EXISTS mensagens_origem_autorais (chave TEXT PRIMARY KEY, data_registro TEXT)")
+            cursor.execute("INSERT OR IGNORE INTO mensagens_origem_autorais (chave, data_registro) VALUES (?, ?)", (chave, agora_txt))
+            ja_registrada = cursor.rowcount == 0
+            cursor.execute("DELETE FROM mensagens_origem_autorais WHERE data_registro < ?", (limite,))
         return ja_registrada
     except Exception as e:
         logger.error(f"❌ Erro ao consultar o registro de mensagens da origem: {e}")
@@ -1564,11 +1524,9 @@ async def processar_fila_autorais_loop():
                             except: pass
                         
                         try:
-                            conexao = db.conectar()
-                            cursor = conexao.cursor()
-                            cursor.execute("DELETE FROM fila_autorais WHERE id_unico = ?", (item["id_unico"],))
-                            conexao.commit()
-                            conexao.close()
+                            with db.conexao() as conexao:
+                                cursor = conexao.cursor()
+                                cursor.execute("DELETE FROM fila_autorais WHERE id_unico = ?", (item["id_unico"],))
                             houve_limpeza = True
                             logger.info(f"🧹 [Auto-Limpeza] Vídeo Autoral retido e vencido ({data_alvo}) foi deletado para evitar avalanche.")
                         except Exception:
@@ -1633,12 +1591,11 @@ async def processar_fila_autorais_loop():
             piso_aut, topo_aut = faixa_de_config(config_atual, "limite_min", "limite_max", "limite_videos")
             limite_dia = sortear_teto_do_dia("autorais", hoje_str, piso_aut, topo_aut) or piso_aut or 5
             try:
-                conexao_ct = db.conectar()
-                ja_saiu = conexao_ct.execute(
-                    "SELECT COUNT(*) FROM fila_autorais WHERE processado = 1 AND data_postagem LIKE ?",
-                    (hoje_str + "%",)
-                ).fetchone()[0]
-                conexao_ct.close()
+                with db.conexao() as conexao_ct:
+                    ja_saiu = conexao_ct.execute(
+                        "SELECT COUNT(*) FROM fila_autorais WHERE processado = 1 AND data_postagem LIKE ?",
+                        (hoje_str + "%",)
+                    ).fetchone()[0]
             except Exception:
                 ja_saiu = 0
 
@@ -1707,13 +1664,11 @@ async def processar_fila_autorais_loop():
                         logger.warning(f"🛡️ [Motor Autorais] Vídeo {item.get('id_unico')} tem só {idade_dias} "
                                        f"dia(s) (mínimo {dias_min}). NÃO publicado. Reagendado para {nova_alvo}.")
                         try:
-                            conexao_ag = db.conectar()
-                            conexao_ag.execute(
-                                "UPDATE fila_autorais SET data_alvo = ?, horario_disparo = '' WHERE id_unico = ?",
-                                (nova_alvo, item.get("id_unico"))
-                            )
-                            conexao_ag.commit()
-                            conexao_ag.close()
+                            with db.conexao() as conexao_ag:
+                                conexao_ag.execute(
+                                    "UPDATE fila_autorais SET data_alvo = ?, horario_disparo = '' WHERE id_unico = ?",
+                                    (nova_alvo, item.get("id_unico"))
+                                )
                         except Exception as e:
                             logger.error(f"❌ [Motor Autorais] Falha ao reagendar o vídeo novo demais: {e}")
                         break
@@ -1734,11 +1689,9 @@ async def processar_fila_autorais_loop():
                                     os.remove(caminho_arquivo)
                             except Exception:
                                 pass
-                            conexao_bl = db.conectar()
-                            conexao_bl.execute("DELETE FROM fila_autorais WHERE id_unico = ?",
-                                               (item.get("id_unico"),))
-                            conexao_bl.commit()
-                            conexao_bl.close()
+                            with db.conexao() as conexao_bl:
+                                conexao_bl.execute("DELETE FROM fila_autorais WHERE id_unico = ?",
+                                                   (item.get("id_unico"),))
                             break
 
                     # O arquivo é mesmo daquele dia? Item gravado quando o nome do
@@ -1755,10 +1708,8 @@ async def processar_fila_autorais_loop():
                                              f"capturado em {cap_txt}, mas o arquivo é de "
                                              f"{mtime.strftime('%d/%m')}. Nome reciclado: o original "
                                              "foi sobrescrito. Item descartado sem publicar.")
-                                conexao_bd = db.conectar()
-                                conexao_bd.execute("DELETE FROM fila_autorais WHERE id_unico = ?", (item.get("id_unico"),))
-                                conexao_bd.commit()
-                                conexao_bd.close()
+                                with db.conexao() as conexao_bd:
+                                    conexao_bd.execute("DELETE FROM fila_autorais WHERE id_unico = ?", (item.get("id_unico"),))
                                 break
                         except Exception as e:
                             logger.error(f"❌ [Motor Autorais] Falha ao auditar a idade do arquivo: {e}")
@@ -1828,20 +1779,18 @@ async def processar_fila_autorais_loop():
                     marcou = False
                     for tentativa in range(1, 7):
                         try:
-                            conexao_st = db.conectar()
-                            cursor_st = conexao_st.cursor()
-                            if encerrar_item:
-                                cursor_st.execute(
-                                    "UPDATE fila_autorais SET processado = 1, data_postagem = ?, msg_postada_id = ? WHERE id_unico = ?",
-                                    (item.get("data_postagem", ""), item.get("msg_postada_id"), item.get("id_unico"))
-                                )
-                            else:
-                                cursor_st.execute(
-                                    "UPDATE fila_autorais SET horario_disparo = ? WHERE id_unico = ?",
-                                    (item.get("horario_disparo", ""), item.get("id_unico"))
-                                )
-                            conexao_st.commit()
-                            conexao_st.close()
+                            with db.conexao() as conexao_st:
+                                cursor_st = conexao_st.cursor()
+                                if encerrar_item:
+                                    cursor_st.execute(
+                                        "UPDATE fila_autorais SET processado = 1, data_postagem = ?, msg_postada_id = ? WHERE id_unico = ?",
+                                        (item.get("data_postagem", ""), item.get("msg_postada_id"), item.get("id_unico"))
+                                    )
+                                else:
+                                    cursor_st.execute(
+                                        "UPDATE fila_autorais SET horario_disparo = ? WHERE id_unico = ?",
+                                        (item.get("horario_disparo", ""), item.get("id_unico"))
+                                    )
                             marcou = True
                             break
                         except Exception as e:
@@ -1930,22 +1879,20 @@ async def processar_fila_publico_loop():
 
             # UPDATE pontual, nunca salvar_fila_publico(): aquela função apaga a tabela
             # e reinsere tudo, e o bot_mestre escreve os horários na MESMA fila.
-            conexao = db.conectar()
-            conexao.row_factory = sqlite3.Row
-            cursor = conexao.cursor()
-            cursor.execute('''
-                SELECT * FROM fila_publico
-                WHERE processado = 0
-                AND horario_disparo IS NOT NULL
-                AND horario_disparo != ''
-                AND horario_disparo <= ?
-                AND (caminho_arquivo IS NULL OR caminho_arquivo = '')
-                ORDER BY horario_disparo ASC LIMIT 1
-            ''', (limite,))
-            alvo = cursor.fetchone()
+            # Cada leitura e gravação abre e fecha a própria conexão: o download pode levar
+            # minutos, e nada fica aberto nesse tempo.
+            with db.conexao(linhas_por_nome=True) as conexao:
+                alvo = conexao.execute('''
+                    SELECT * FROM fila_publico
+                    WHERE processado = 0
+                    AND horario_disparo IS NOT NULL
+                    AND horario_disparo != ''
+                    AND horario_disparo <= ?
+                    AND (caminho_arquivo IS NULL OR caminho_arquivo = '')
+                    ORDER BY horario_disparo ASC LIMIT 1
+                ''', (limite,)).fetchone()
 
             if not alvo:
-                conexao.close()
                 await asyncio.sleep(60)
                 continue
 
@@ -1960,9 +1907,8 @@ async def processar_fila_publico_loop():
                 if not msg_origem or not getattr(msg_origem, "media", None):
                     # Mensagem apagada na origem: não há o que baixar e nunca mais vai
                     # haver. Sai da fila, senão fica a ser tentada para sempre.
-                    cursor.execute("DELETE FROM fila_publico WHERE id_unico = ?", (id_unico,))
-                    conexao.commit()
-                    conexao.close()
+                    with db.conexao() as conexao:
+                        conexao.execute("DELETE FROM fila_publico WHERE id_unico = ?", (id_unico,))
                     logger.warning(f"🧹 [Correio Público] Mensagem {msg_id} sumiu da origem. Item {id_unico} removido da fila.")
                     await asyncio.sleep(30)
                     continue
@@ -1971,9 +1917,8 @@ async def processar_fila_publico_loop():
                 # seria baixado, recusado no envio, adiado 30 min e tentado para sempre.
                 tamanho_origem = getattr(getattr(msg_origem, "file", None), "size", 0) or 0
                 if tamanho_origem > LIMITE_UPLOAD_BOT_MB * 1024 * 1024:
-                    cursor.execute("DELETE FROM fila_publico WHERE id_unico = ?", (id_unico,))
-                    conexao.commit()
-                    conexao.close()
+                    with db.conexao() as conexao:
+                        conexao.execute("DELETE FROM fila_publico WHERE id_unico = ?", (id_unico,))
                     logger.warning(f"🚫 [Correio Público] Vídeo {id_unico} tem "
                                    f"{tamanho_origem / (1024**2):.1f} MB, acima do teto de "
                                    f"{LIMITE_UPLOAD_BOT_MB} MB que o bot consegue enviar. Descartado.")
@@ -1983,7 +1928,6 @@ async def processar_fila_publico_loop():
                 # Reconfere antes de gastar banda: a pausa pode ter chegado durante
                 # o minuto de espera do ciclo.
                 if pausa_ativa("publico"):
-                    conexao.close()
                     logger.info("⏸️ [Correio Público] Pausa detetada. Nenhum download será feito.")
                     await asyncio.sleep(60)
                     continue
@@ -1993,11 +1937,11 @@ async def processar_fila_publico_loop():
                 if not caminho or not os.path.exists(caminho):
                     raise ValueError("o download não gerou arquivo")
 
-                cursor.execute(
-                    "UPDATE fila_publico SET caminho_arquivo = ? WHERE id_unico = ?",
-                    (caminho, id_unico)
-                )
-                conexao.commit()
+                with db.conexao() as conexao:
+                    conexao.execute(
+                        "UPDATE fila_publico SET caminho_arquivo = ? WHERE id_unico = ?",
+                        (caminho, id_unico)
+                    )
                 logger.info(f"📥 [Correio Público] Vídeo {id_unico} baixado "
                             f"({os.path.getsize(caminho) / (1024**2):.1f} MB). O bot publica no horário.")
 
@@ -2006,7 +1950,6 @@ async def processar_fila_publico_loop():
                 # mais frágil do sistema e uma rajada teimosa derruba ela.
                 espera = int(getattr(e, "seconds", 60))
                 logger.warning(f"⏳ [Correio Público] FloodWait de {espera}s.")
-                conexao.close()
                 await asyncio.sleep(espera + 5)
                 continue
 
@@ -2014,13 +1957,11 @@ async def processar_fila_publico_loop():
                 logger.error(f"❌ [Correio Público] Falha ao baixar o vídeo {id_unico}: {e} "
                              f"| origem={origem_final!r} msg_id={msg_id!r}")
                 # Falhou: adia 30 min, senão este item segura o preparo dos seguintes.
-                cursor.execute(
-                    "UPDATE fila_publico SET horario_disparo = ? WHERE id_unico = ?",
-                    ((agora + timedelta(minutes=30)).strftime("%Y-%m-%d %H:%M:%S"), id_unico)
-                )
-                conexao.commit()
-
-            conexao.close()
+                with db.conexao() as conexao:
+                    conexao.execute(
+                        "UPDATE fila_publico SET horario_disparo = ? WHERE id_unico = ?",
+                        ((agora + timedelta(minutes=30)).strftime("%Y-%m-%d %H:%M:%S"), id_unico)
+                    )
 
         except Exception as e:
             logger.error(f"❌ [Correio Público] Erro estrutural no loop: {e}")
@@ -2308,10 +2249,8 @@ async def _apos_trocar_captura():
     anterior = (db.ler_config("conta_captura_atual", {}) or {}).get("user_id")
     if id_atual and anterior and anterior != id_atual:
         try:
-            conexao = db.conectar()
-            conexao.execute("UPDATE parceiros SET origem_ok = NULL WHERE ativo = 1")
-            conexao.commit()
-            conexao.close()
+            with db.conexao() as conexao:
+                conexao.execute("UPDATE parceiros SET origem_ok = NULL WHERE ativo = 1")
             logger.info("👥 [Parceiros] Conta da captura mudou: canais dos parceiros serão reconferidos.")
         except sqlite3.OperationalError:
             pass   # tabela de parceiros ainda não existe

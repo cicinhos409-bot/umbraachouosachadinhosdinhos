@@ -2,10 +2,11 @@
 Acesso ao banco_dados.db, o SQLite que os cinco robôs dividem. Toda conexão do
 projeto sai daqui; o tests/test_db.py barra sqlite3.connect em outro arquivo.
 
-- conectar(): conexão pronta (espera até 30 s pelo lock, banco em modo WAL).
-  Quem abre fecha.
-- conexao(): a mesma conexão num with, que grava (commit) no fim, desfaz
-  (rollback) se der erro e fecha sempre, com ou sem erro. Prefira esta em código novo.
+- conexao(): conexão num with, que grava (commit) no fim, desfaz (rollback) se
+  der erro e fecha sempre, com ou sem erro. É a única que os robôs usam; o
+  tests/test_db.py barra db.conectar() fora daqui.
+- conectar(): a conexão pronta (espera até 30 s pelo lock, banco em modo WAL), que
+  o conexao() usa por dentro. Quem abre fecha.
 - ler_config() e salvar_config(): a tabela configuracoes (chave -> JSON).
 - atualizar_config(): lê, altera e grava uma chave sem perder a gravação de
   outro robô que mexa na mesma chave ao mesmo tempo.

@@ -57,8 +57,7 @@ scheduler_instance = None
 
 def garantir_tabela_fila_notas():
     """Cria a fila de envio de notas, se faltar. A coluna valor é acrescentada ao gravar o primeiro lote."""
-    conexao = db.conectar()
-    try:
+    with db.conexao() as conexao:
         conexao.execute('''
             CREATE TABLE IF NOT EXISTS fila_notas (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -69,18 +68,12 @@ def garantir_tabela_fila_notas():
                 motivo_erro TEXT
             )
         ''')
-        conexao.commit()
-    finally:
-        conexao.close()
 
 def _ler_retomada():
     """Horário salvo da retomada automática (datetime) ou None."""
     try:
-        conexao = db.conectar()
-        try:
+        with db.conexao() as conexao:
             linha = conexao.execute("SELECT valor FROM configuracoes WHERE chave = 'retomada_notas'").fetchone()
-        finally:
-            conexao.close()
         return datetime.fromisoformat(linha[0]) if linha and linha[0] else None
     except Exception:
         return None
@@ -89,16 +82,12 @@ def _ler_retomada():
 def _salvar_retomada(quando):
     """Grava o horário da retomada automática; None apaga. Falha só vai para o log."""
     try:
-        conexao = db.conectar()
-        try:
+        with db.conexao() as conexao:
             if quando is None:
                 conexao.execute("DELETE FROM configuracoes WHERE chave = 'retomada_notas'")
             else:
                 conexao.execute("INSERT OR REPLACE INTO configuracoes (chave, valor) VALUES ('retomada_notas', ?)",
                                 (quando.isoformat(),))
-            conexao.commit()
-        finally:
-            conexao.close()
     except Exception as e:
         logger.error(f"❌ [Notas] Não consegui gravar a retomada automática: {e}")
 
@@ -111,11 +100,8 @@ def _restaurar_retomada():
     quando = _ler_retomada()
     if quando is None or scheduler_instance is None:
         return
-    conexao = db.conectar()
-    try:
+    with db.conexao() as conexao:
         pendentes = conexao.execute("SELECT COUNT(*) FROM fila_notas WHERE status = 'PENDENTE'").fetchone()[0]
-    finally:
-        conexao.close()
     if not pendentes:
         _salvar_retomada(None)
         return
@@ -263,6 +249,16 @@ async def processar_fila_envios(msg_progresso: types.Message = None, retomada=Fa
         await _enviar_pendentes(msg_progresso)
 
 
+def _marcar_nota(id_registro, status, motivo_erro=None):
+    """Grava na fila o resultado do envio de uma nota (ENVIADO, ou ERRO com o motivo)."""
+    with db.conexao() as conexao:
+        if motivo_erro is None:
+            conexao.execute("UPDATE fila_notas SET status = ? WHERE id = ?", (status, id_registro))
+        else:
+            conexao.execute("UPDATE fila_notas SET status = ?, motivo_erro = ? WHERE id = ?",
+                            (status, motivo_erro, id_registro))
+
+
 async def _enviar_pendentes(msg_progresso: types.Message = None):
     """
     Envia por e-mail todas as notas PENDENTE, uma por segundo, e apaga o PDF de
@@ -275,14 +271,10 @@ async def _enviar_pendentes(msg_progresso: types.Message = None):
     """
     logger.info("🚀 Iniciando esteira de disparos de notas fiscais...")
     
-    conexao = db.conectar()
-    conexao.row_factory = sqlite3.Row
-    cursor = conexao.cursor()
-    cursor.execute("SELECT * FROM fila_notas WHERE status = 'PENDENTE'")
-    pendentes = cursor.fetchall()
+    with db.conexao(linhas_por_nome=True) as conexao:
+        pendentes = conexao.execute("SELECT * FROM fila_notas WHERE status = 'PENDENTE'").fetchall()
     
     if not pendentes:
-        conexao.close()
         return
 
     total_notas = len(pendentes)
@@ -329,7 +321,6 @@ async def _enviar_pendentes(msg_progresso: types.Message = None):
                 corpo_admin += "</ul>"
             
             await enviar_email_brevo(EMAIL_ADMIN, "Administrador", assunto_admin, corpo_admin)
-            conexao.close()
             
             if msg_progresso:
                 try: 
@@ -353,8 +344,7 @@ async def _enviar_pendentes(msg_progresso: types.Message = None):
         # Sem o PDF, o e-mail sairia sem a nota: marca como erro em vez de enviar.
         if not pdf or not os.path.exists(pdf):
             erro_msg = f"PDF não encontrado no disco ({os.path.basename(pdf or '') or 'sem caminho'})"
-            cursor.execute("UPDATE fila_notas SET status = 'ERRO', motivo_erro = ? WHERE id = ?", (erro_msg, id_registro))
-            conexao.commit()
+            _marcar_nota(id_registro, "ERRO", erro_msg)
             erros += 1
             falhas_etapa.append(f"⚠️ Falha ao processar loja {loja}: {erro_msg}")
             logger.error(f"❌ Nota de {loja} não enviada: {erro_msg}")
@@ -364,7 +354,7 @@ async def _enviar_pendentes(msg_progresso: types.Message = None):
             status_api, resposta_api = await enviar_email_brevo(email, loja, assunto, corpo, pdf)
             
             if status_api in [200, 201]:
-                cursor.execute("UPDATE fila_notas SET status = 'ENVIADO' WHERE id = ?", (id_registro,))
+                _marcar_nota(id_registro, "ENVIADO")
                 envios_realizados += 1
                 
                 logger.info(f"✅ Sucesso: Nota enviada para {loja} ({email}).")
@@ -372,22 +362,20 @@ async def _enviar_pendentes(msg_progresso: types.Message = None):
                 except Exception: pass
             else:
                 erro_msg = f"Erro API {status_api}: {resposta_api}"
-                cursor.execute("UPDATE fila_notas SET status = 'ERRO', motivo_erro = ? WHERE id = ?", (erro_msg, id_registro))
+                _marcar_nota(id_registro, "ERRO", erro_msg)
                 erros += 1
                 falhas_etapa.append(f"⚠️ Falha ao processar loja {loja}: {erro_msg}")
                 logger.error(f"❌ Erro ao enviar para {loja}: {erro_msg}")
                 
         except Exception as e:
             erro_msg = f"Erro Interno: {e}"
-            cursor.execute("UPDATE fila_notas SET status = 'ERRO', motivo_erro = ? WHERE id = ?", (erro_msg, id_registro))
+            _marcar_nota(id_registro, "ERRO", erro_msg)
             erros += 1
             falhas_etapa.append(f"⚠️ Erro de rede/crítico na loja {loja}: {e}")
             logger.error(f"❌ Erro Crítico ao enviar para {loja}: {e}")
             
-        conexao.commit()
         await asyncio.sleep(1)
 
-    conexao.close()
     _salvar_retomada(None)
 
     # A pasta de extração é apagada mesmo quando houve erro de envio; senão os PDFs
@@ -402,12 +390,9 @@ async def _enviar_pendentes(msg_progresso: types.Message = None):
     # Também apaga pastas de rodadas antigas que ficaram para trás por erro ou queda.
     try:
         # Pasta com nota ainda pendente (pausa de 26 h) ou em rascunho fica, mesmo antiga.
-        conexao = db.conectar()
-        try:
+        with db.conexao() as conexao:
             em_uso = {os.path.normpath(os.path.dirname(c)) for (c,) in conexao.execute(
                 "SELECT caminho_pdf FROM fila_notas WHERE status IN ('PENDENTE', 'RASCUNHO')") if c}
-        finally:
-            conexao.close()
 
         removidas = 0
         if os.path.exists(PASTA_TEMP):
@@ -665,11 +650,10 @@ async def receber_zip_e_cruzar(message: types.Message, state: FSMContext):
         await msg_status.edit_text("✅ Extração concluída. Verificando histórico de envios e cruzando dados...")
         
         # PDFs com nome já ENVIADO ou PENDENTE não entram de novo.
-        conexao = db.conectar()
-        cursor = conexao.cursor()
-        cursor.execute("SELECT caminho_pdf FROM fila_notas WHERE status IN ('ENVIADO', 'PENDENTE')")
-        historico = cursor.fetchall()
-        conexao.close()
+        with db.conexao() as conexao:
+            cursor = conexao.cursor()
+            cursor.execute("SELECT caminho_pdf FROM fila_notas WHERE status IN ('ENVIADO', 'PENDENTE')")
+            historico = cursor.fetchall()
         
         pdfs_protegidos = [os.path.basename(row[0]).lower() for row in historico if row[0]]
     else:
@@ -993,36 +977,34 @@ async def gerar_resumo_final_notas(message: types.Message, state: FSMContext):
     csv_path = data.get('csv_path_temp')
     caminho_zip = data.get('zip_path_temp')
     
-    conexao = db.conectar()
-    cursor = conexao.cursor()
+    with db.conexao() as conexao:
+        cursor = conexao.cursor()
     
-    try:
-        cursor.execute("ALTER TABLE fila_notas ADD COLUMN valor TEXT")
-    except sqlite3.OperationalError:
-        pass
+        try:
+            cursor.execute("ALTER TABLE fila_notas ADD COLUMN valor TEXT")
+        except sqlite3.OperationalError:
+            pass
 
-    # Só existe um lote em aprovação por vez: rascunho que sobrou é de lote abortado
-    # (ou interrompido por reinício) e seria enviado junto com este se ficasse.
-    cursor.execute("DELETE FROM fila_notas WHERE status = 'RASCUNHO'")
+        # Só existe um lote em aprovação por vez: rascunho que sobrou é de lote abortado
+        # (ou interrompido por reinício) e seria enviado junto com este se ficasse.
+        cursor.execute("DELETE FROM fila_notas WHERE status = 'RASCUNHO'")
 
-    resumo_tabela = ""
-    for nota in notas_validadas:
-        caminho_completo = os.path.join(pasta_extracao, nota['pdf'])
-        cursor.execute('''
-            INSERT INTO fila_notas (nome_loja, email_destino, caminho_pdf, status, valor)
-            VALUES (?, ?, ?, 'RASCUNHO', ?)
-        ''', (nota['loja'], nota['email'], caminho_completo, nota['valor']))
+        resumo_tabela = ""
+        for nota in notas_validadas:
+            caminho_completo = os.path.join(pasta_extracao, nota['pdf'])
+            cursor.execute('''
+                INSERT INTO fila_notas (nome_loja, email_destino, caminho_pdf, status, valor)
+                VALUES (?, ?, ?, 'RASCUNHO', ?)
+            ''', (nota['loja'], nota['email'], caminho_completo, nota['valor']))
         
-        tipo_icone = "📄"
-        if nota['tipo'] == 'similar':
-            tipo_icone = "🔍"
-        elif nota['tipo'] == 'manual':
-            tipo_icone = "✍️"
+            tipo_icone = "📄"
+            if nota['tipo'] == 'similar':
+                tipo_icone = "🔍"
+            elif nota['tipo'] == 'manual':
+                tipo_icone = "✍️"
             
-        resumo_tabela += f"{tipo_icone} <b>{nota['pdf']}</b>\n   └ Loja: {nota['loja']} | E-mail: {nota['email']}\n\n"
+            resumo_tabela += f"{tipo_icone} <b>{nota['pdf']}</b>\n   └ Loja: {nota['loja']} | E-mail: {nota['email']}\n\n"
         
-    conexao.commit()
-    conexao.close()
     
     try:
         os.remove(csv_path)
@@ -1120,11 +1102,9 @@ async def processar_aprovacao_envio(message: types.Message, state: FSMContext):
     # Muda de estado antes de tudo, para um segundo clique em Aprovar não iniciar outro envio.
     await state.set_state(PainelNotasFluxo.enviando_notas)
 
-    conexao = db.conectar()
-    cursor = conexao.cursor()
-    cursor.execute("UPDATE fila_notas SET status = 'PENDENTE' WHERE status = 'RASCUNHO'")
-    conexao.commit()
-    conexao.close()
+    with db.conexao() as conexao:
+        cursor = conexao.cursor()
+        cursor.execute("UPDATE fila_notas SET status = 'PENDENTE' WHERE status = 'RASCUNHO'")
     
     # A mensagem de progresso é editada a cada nota e precisa ir sem teclado; por
     # isso o teclado é removido numa mensagem à parte, antes dela.

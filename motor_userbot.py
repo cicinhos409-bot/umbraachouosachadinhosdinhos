@@ -104,8 +104,7 @@ def ler_excecao_ponte():
 
 def garantir_tabela_registros_unicos():
     """Cria a tabela da anti-duplicata (links já espelhados e hashes de vídeo), se faltar."""
-    conexao = db.conectar()
-    try:
+    with db.conexao() as conexao:
         conexao.execute('''
             CREATE TABLE IF NOT EXISTS registros_unicos (
                 identificador TEXT,
@@ -115,9 +114,6 @@ def garantir_tabela_registros_unicos():
                 PRIMARY KEY (identificador, contexto)
             )
         ''')
-        conexao.commit()
-    finally:
-        conexao.close()
 
 def verificar_e_registrar_espelho(link_shopee, contexto="global"):
     """
@@ -126,21 +122,18 @@ def verificar_e_registrar_espelho(link_shopee, contexto="global"):
     """
     agora_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     try:
-        conexao = db.conectar()
-        cursor = conexao.cursor()
+        with db.conexao() as conexao:
+            cursor = conexao.cursor()
         
-        cursor.execute("DELETE FROM registros_unicos WHERE tipo = 'espelho' AND contexto = ? AND datetime(data_registro) <= datetime('now', '-1 day')", (contexto,))
+            cursor.execute("DELETE FROM registros_unicos WHERE tipo = 'espelho' AND contexto = ? AND datetime(data_registro) <= datetime('now', '-1 day')", (contexto,))
         
-        cursor.execute("SELECT 1 FROM registros_unicos WHERE identificador = ? AND contexto = ? AND tipo = 'espelho'", (link_shopee, contexto))
-        existe = cursor.fetchone()
+            cursor.execute("SELECT 1 FROM registros_unicos WHERE identificador = ? AND contexto = ? AND tipo = 'espelho'", (link_shopee, contexto))
+            existe = cursor.fetchone()
         
-        if existe:
-            conexao.close()
-            return True
+            if existe:
+                return True
             
-        cursor.execute("INSERT INTO registros_unicos (identificador, contexto, tipo, data_registro) VALUES (?, ?, 'espelho', ?)", (link_shopee, contexto, agora_str))
-        conexao.commit()
-        conexao.close()
+            cursor.execute("INSERT INTO registros_unicos (identificador, contexto, tipo, data_registro) VALUES (?, ?, 'espelho', ?)", (link_shopee, contexto, agora_str))
         return False
     except Exception as e:
         logger.error(f"❌ Erro ao verificar espelho no SQLite: {e}")
@@ -153,22 +146,19 @@ def verificar_e_registrar_hash(hash_video, contexto="global"):
     """
     agora_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     try:
-        conexao = db.conectar()
-        cursor = conexao.cursor()
+        with db.conexao() as conexao:
+            cursor = conexao.cursor()
         
-        cursor.execute("SELECT 1 FROM registros_unicos WHERE identificador = ? AND contexto = ? AND tipo = 'hash'", (hash_video, contexto))
-        existe = cursor.fetchone()
+            cursor.execute("SELECT 1 FROM registros_unicos WHERE identificador = ? AND contexto = ? AND tipo = 'hash'", (hash_video, contexto))
+            existe = cursor.fetchone()
         
-        if existe:
-            conexao.close()
-            return True
+            if existe:
+                return True
             
-        cursor.execute("INSERT INTO registros_unicos (identificador, contexto, tipo, data_registro) VALUES (?, ?, 'hash', ?)", (hash_video, contexto, agora_str))
+            cursor.execute("INSERT INTO registros_unicos (identificador, contexto, tipo, data_registro) VALUES (?, ?, 'hash', ?)", (hash_video, contexto, agora_str))
         
-        cursor.execute(f"DELETE FROM registros_unicos WHERE tipo = 'hash' AND contexto = ? AND identificador NOT IN (SELECT identificador FROM registros_unicos WHERE tipo = 'hash' AND contexto = ? ORDER BY data_registro DESC LIMIT {LIMITE_REGISTROS_HASH})", (contexto, contexto))
+            cursor.execute(f"DELETE FROM registros_unicos WHERE tipo = 'hash' AND contexto = ? AND identificador NOT IN (SELECT identificador FROM registros_unicos WHERE tipo = 'hash' AND contexto = ? ORDER BY data_registro DESC LIMIT {LIMITE_REGISTROS_HASH})", (contexto, contexto))
         
-        conexao.commit()
-        conexao.close()
         return False
     except Exception as e:
         logger.error(f"❌ Erro ao verificar hash no SQLite: {e}")

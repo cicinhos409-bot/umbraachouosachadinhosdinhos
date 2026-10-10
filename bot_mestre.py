@@ -77,195 +77,193 @@ def inicializar_banco_sqlite():
     módulo; ALTER TABLE de coluna que já existe falha e é ignorado.
     """
     logger.info("🚀 Preparando a fundação de dados em SQLite...")
-    conexao = db.conectar()
-    cursor = conexao.cursor()
+    with db.conexao() as conexao:
+        cursor = conexao.cursor()
     
-    # Fila do canal principal (vídeos criados em Criar Postagem).
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS fila_postagens (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            id_unico TEXT UNIQUE,
-            caminho_video TEXT,
-            video_id TEXT,
-            legenda TEXT,
-            data_alvo TEXT,
-            status TEXT DEFAULT 'PENDENTE',
-            prioridade INTEGER DEFAULT 0,
-            data_postagem TEXT,
-            horario_postagem TEXT
-        )
-    ''')
+        # Fila do canal principal (vídeos criados em Criar Postagem).
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS fila_postagens (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id_unico TEXT UNIQUE,
+                caminho_video TEXT,
+                video_id TEXT,
+                legenda TEXT,
+                data_alvo TEXT,
+                status TEXT DEFAULT 'PENDENTE',
+                prioridade INTEGER DEFAULT 0,
+                data_postagem TEXT,
+                horario_postagem TEXT
+            )
+        ''')
     
-    # Configurações de todos os robôs: chave -> JSON (db.ler_config / db.salvar_config).
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS configuracoes (
-            chave TEXT PRIMARY KEY,
-            valor TEXT
-        )
-    ''')
+        # Configurações de todos os robôs: chave -> JSON (db.ler_config / db.salvar_config).
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS configuracoes (
+                chave TEXT PRIMARY KEY,
+                valor TEXT
+            )
+        ''')
     
-    # Mensagens a apagar na faxina da madrugada (registrar_lixeira).
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS lixeira_mensagens (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            msg_id INTEGER,
-            chat_id TEXT,
-            data_inclusao TEXT
-        )
-    ''')
+        # Mensagens a apagar na faxina da madrugada (registrar_lixeira).
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS lixeira_mensagens (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                msg_id INTEGER,
+                chat_id TEXT,
+                data_inclusao TEXT
+            )
+        ''')
     
-    # Log de erros (registrar_erro_json do utils).
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS erros_logs (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            timestamp TEXT,
-            origem TEXT,
-            erro TEXT
-        )
-    ''')
+        # Log de erros (registrar_erro_json do utils).
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS erros_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp TEXT,
+                origem TEXT,
+                erro TEXT
+            )
+        ''')
 
-    # fila_autorais (criada pelo espelhador_videos_autorais): colunas da repostagem no Grupo Público.
-    try:
-        cursor.execute("ALTER TABLE fila_autorais ADD COLUMN repostado_publico INTEGER DEFAULT 0")
-        cursor.execute("ALTER TABLE fila_autorais ADD COLUMN data_repost_publico TEXT")
-        logger.info("📦 Banco de dados atualizado: Colunas de Repostagem Pública adicionadas à fila_autorais.")
-    except sqlite3.OperationalError:
-        pass
-
-    # fila_autorais: data-alvo e status próprios do Grupo Público.
-    try:
-        cursor.execute("ALTER TABLE fila_autorais ADD COLUMN data_alvo_publico TEXT")
-        cursor.execute("ALTER TABLE fila_autorais ADD COLUMN status_publico TEXT")
-        logger.info("📦 Banco de dados atualizado: Colunas 'data_alvo_publico' e 'status_publico' adicionadas à fila_autorais.")
-    except sqlite3.OperationalError:
-        pass
-
-    # status_publico sozinho, para bancos que já tinham data_alvo_publico (o bloco acima para no primeiro erro).
-    try:
-        cursor.execute("ALTER TABLE fila_autorais ADD COLUMN status_publico TEXT")
-        logger.info("📦 Banco de dados atualizado: Coluna 'status_publico' adicionada à fila_autorais.")
-    except sqlite3.OperationalError:
-        pass
-        
-    # msg_postada_id: id da mensagem publicada; monta o link "(Destino)" no relatório.
-    for _tabela_msg in ("fila_autorais", "fila_publico"):
+        # fila_autorais (criada pelo espelhador_videos_autorais): colunas da repostagem no Grupo Público.
         try:
-            cursor.execute(f"ALTER TABLE {_tabela_msg} ADD COLUMN msg_postada_id INTEGER")
-            logger.info(f"📦 Banco de dados atualizado: Coluna 'msg_postada_id' adicionada à {_tabela_msg}.")
+            cursor.execute("ALTER TABLE fila_autorais ADD COLUMN repostado_publico INTEGER DEFAULT 0")
+            cursor.execute("ALTER TABLE fila_autorais ADD COLUMN data_repost_publico TEXT")
+            logger.info("📦 Banco de dados atualizado: Colunas de Repostagem Pública adicionadas à fila_autorais.")
         except sqlite3.OperationalError:
             pass
 
-    # fila_publico.caminho_arquivo: vídeo baixado pelo Correio Público (userbot). O bot não
-    # consegue copiar do canal de origem, que não é nosso, e publica a partir do disco.
-    try:
-        cursor.execute("ALTER TABLE fila_publico ADD COLUMN caminho_arquivo TEXT")
-        logger.info("📦 Banco de dados atualizado: Coluna 'caminho_arquivo' adicionada à fila_publico.")
-    except sqlite3.OperationalError:
-        pass
-
-    # fila_autorais.data_postagem: hora real da publicação do retorno, mostrada no relatório.
-    try:
-        cursor.execute("ALTER TABLE fila_autorais ADD COLUMN data_postagem TEXT")
-        logger.info("📦 Banco de dados atualizado: Coluna 'data_postagem' adicionada à fila_autorais.")
-    except sqlite3.OperationalError:
-        pass
-
-    # Parceiros: afiliados terceiros que repostam com as próprias credenciais. Cada um
-    # tem canais, atraso e cota próprios; nada é compartilhado com o dono.
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS parceiros (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            nome TEXT,
-            app_id TEXT,
-            app_secret TEXT,
-            canal_origem TEXT,
-            canal_destino TEXT,
-            dias_atraso INTEGER DEFAULT 30,
-            limite_diario INTEGER DEFAULT 6,
-            ativo INTEGER DEFAULT 1,
-            data_cadastro TEXT
-        )
-    ''')
-
-    # Parceiros: acesso do userbot ao canal de origem e janela de publicação própria
-    # (0 a 24 = dia todo).
-    for coluna, tipo in [("origem_ok", "INTEGER DEFAULT 0"), ("origem_erro", "TEXT"),
-                         ("janela_inicio", "INTEGER DEFAULT 0"), ("janela_fim", "INTEGER DEFAULT 24"),
-                         ("limite_min", "INTEGER DEFAULT 0"), ("limite_max", "INTEGER DEFAULT 0")]:
+        # fila_autorais: data-alvo e status próprios do Grupo Público.
         try:
-            cursor.execute(f"ALTER TABLE parceiros ADD COLUMN {coluna} {tipo}")
+            cursor.execute("ALTER TABLE fila_autorais ADD COLUMN data_alvo_publico TEXT")
+            cursor.execute("ALTER TABLE fila_autorais ADD COLUMN status_publico TEXT")
+            logger.info("📦 Banco de dados atualizado: Colunas 'data_alvo_publico' e 'status_publico' adicionadas à fila_autorais.")
         except sqlite3.OperationalError:
             pass
 
-    # Reserva global: um vídeo (ou produto) sai num canal só. Quem reserva primeiro leva:
-    # o dono, no sorteio do Grupo Público, ou um parceiro.
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS videos_reservados (
-            video_id TEXT PRIMARY KEY,
-            parceiro_id INTEGER,
-            data_reserva TEXT
-        )
-    ''')
-
-    # Achadinhos já enviados, para o garimpo não repetir item.
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS achadinhos_enviados (
-            item_id TEXT PRIMARY KEY,
-            data_envio TEXT,
-            nicho TEXT
-        )
-    ''')
-
-    # Migração única: a lista antiga (JSON com os últimos 500) vai para a tabela.
-    try:
-        cursor.execute("SELECT valor FROM configuracoes WHERE chave = 'achadinhos_enviados'")
-        antigo = cursor.fetchone()
-        if antigo:
-            lista_antiga = json.loads(antigo[0])
-            if isinstance(lista_antiga, list) and lista_antiga:
-                agora_mig = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                for item_id in lista_antiga:
-                    cursor.execute("INSERT OR IGNORE INTO achadinhos_enviados (item_id, data_envio, nicho) VALUES (?, ?, ?)",
-                                   (str(item_id), agora_mig, "migrado"))
-                logger.info(f"📦 Migração: {len(lista_antiga)} achadinhos antigos movidos para a memória permanente.")
-            cursor.execute("DELETE FROM configuracoes WHERE chave = 'achadinhos_enviados'")
-    except Exception as e:
-        logger.warning(f"⚠️ Não foi possível migrar a lista antiga de achadinhos: {e}")
-
-    # Métricas diárias, usadas como prova social nas mensagens de rotina.
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS historico_metricas (
-            data TEXT,
-            chave TEXT,
-            valor INTEGER,
-            PRIMARY KEY (data, chave)
-        )
-    ''')
-        
-    # Tentativas de envio de cada vídeo do canal principal (executar_postagem_fila).
-    try:
-        cursor.execute("ALTER TABLE fila_postagens ADD COLUMN tentativas INTEGER DEFAULT 0")
-    except sqlite3.OperationalError:
-        pass
-
-    # fila_parceiros (criada pelo robô dos Autorais): link do post de origem no Telegram,
-    # mensagem publicada no destino e nome do produto. Sem a tabela, nada a fazer.
-    for coluna in ("link_post_origem TEXT DEFAULT ''", "msg_postada_id INTEGER", "nome_produto TEXT DEFAULT ''"):
+        # status_publico sozinho, para bancos que já tinham data_alvo_publico (o bloco acima para no primeiro erro).
         try:
-            cursor.execute(f"ALTER TABLE fila_parceiros ADD COLUMN {coluna}")
+            cursor.execute("ALTER TABLE fila_autorais ADD COLUMN status_publico TEXT")
+            logger.info("📦 Banco de dados atualizado: Coluna 'status_publico' adicionada à fila_autorais.")
         except sqlite3.OperationalError:
-            pass  # coluna já existe ou a tabela ainda não nasceu
+            pass
+        
+        # msg_postada_id: id da mensagem publicada; monta o link "(Destino)" no relatório.
+        for _tabela_msg in ("fila_autorais", "fila_publico"):
+            try:
+                cursor.execute(f"ALTER TABLE {_tabela_msg} ADD COLUMN msg_postada_id INTEGER")
+                logger.info(f"📦 Banco de dados atualizado: Coluna 'msg_postada_id' adicionada à {_tabela_msg}.")
+            except sqlite3.OperationalError:
+                pass
 
-    # erros_logs: rastro do código e contexto (registrar_erro_json do utils).
-    try:
-        cursor.execute("ALTER TABLE erros_logs ADD COLUMN rastro_codigo TEXT")
-        cursor.execute("ALTER TABLE erros_logs ADD COLUMN contexto TEXT")
-        logger.info("📦 Banco de dados atualizado: Colunas 'rastro_codigo' e 'contexto' adicionadas à tabela erros_logs.")
-    except sqlite3.OperationalError:
-        pass
+        # fila_publico.caminho_arquivo: vídeo baixado pelo Correio Público (userbot). O bot não
+        # consegue copiar do canal de origem, que não é nosso, e publica a partir do disco.
+        try:
+            cursor.execute("ALTER TABLE fila_publico ADD COLUMN caminho_arquivo TEXT")
+            logger.info("📦 Banco de dados atualizado: Coluna 'caminho_arquivo' adicionada à fila_publico.")
+        except sqlite3.OperationalError:
+            pass
+
+        # fila_autorais.data_postagem: hora real da publicação do retorno, mostrada no relatório.
+        try:
+            cursor.execute("ALTER TABLE fila_autorais ADD COLUMN data_postagem TEXT")
+            logger.info("📦 Banco de dados atualizado: Coluna 'data_postagem' adicionada à fila_autorais.")
+        except sqlite3.OperationalError:
+            pass
+
+        # Parceiros: afiliados terceiros que repostam com as próprias credenciais. Cada um
+        # tem canais, atraso e cota próprios; nada é compartilhado com o dono.
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS parceiros (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                nome TEXT,
+                app_id TEXT,
+                app_secret TEXT,
+                canal_origem TEXT,
+                canal_destino TEXT,
+                dias_atraso INTEGER DEFAULT 30,
+                limite_diario INTEGER DEFAULT 6,
+                ativo INTEGER DEFAULT 1,
+                data_cadastro TEXT
+            )
+        ''')
+
+        # Parceiros: acesso do userbot ao canal de origem e janela de publicação própria
+        # (0 a 24 = dia todo).
+        for coluna, tipo in [("origem_ok", "INTEGER DEFAULT 0"), ("origem_erro", "TEXT"),
+                             ("janela_inicio", "INTEGER DEFAULT 0"), ("janela_fim", "INTEGER DEFAULT 24"),
+                             ("limite_min", "INTEGER DEFAULT 0"), ("limite_max", "INTEGER DEFAULT 0")]:
+            try:
+                cursor.execute(f"ALTER TABLE parceiros ADD COLUMN {coluna} {tipo}")
+            except sqlite3.OperationalError:
+                pass
+
+        # Reserva global: um vídeo (ou produto) sai num canal só. Quem reserva primeiro leva:
+        # o dono, no sorteio do Grupo Público, ou um parceiro.
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS videos_reservados (
+                video_id TEXT PRIMARY KEY,
+                parceiro_id INTEGER,
+                data_reserva TEXT
+            )
+        ''')
+
+        # Achadinhos já enviados, para o garimpo não repetir item.
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS achadinhos_enviados (
+                item_id TEXT PRIMARY KEY,
+                data_envio TEXT,
+                nicho TEXT
+            )
+        ''')
+
+        # Migração única: a lista antiga (JSON com os últimos 500) vai para a tabela.
+        try:
+            cursor.execute("SELECT valor FROM configuracoes WHERE chave = 'achadinhos_enviados'")
+            antigo = cursor.fetchone()
+            if antigo:
+                lista_antiga = json.loads(antigo[0])
+                if isinstance(lista_antiga, list) and lista_antiga:
+                    agora_mig = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    for item_id in lista_antiga:
+                        cursor.execute("INSERT OR IGNORE INTO achadinhos_enviados (item_id, data_envio, nicho) VALUES (?, ?, ?)",
+                                       (str(item_id), agora_mig, "migrado"))
+                    logger.info(f"📦 Migração: {len(lista_antiga)} achadinhos antigos movidos para a memória permanente.")
+                cursor.execute("DELETE FROM configuracoes WHERE chave = 'achadinhos_enviados'")
+        except Exception as e:
+            logger.warning(f"⚠️ Não foi possível migrar a lista antiga de achadinhos: {e}")
+
+        # Métricas diárias, usadas como prova social nas mensagens de rotina.
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS historico_metricas (
+                data TEXT,
+                chave TEXT,
+                valor INTEGER,
+                PRIMARY KEY (data, chave)
+            )
+        ''')
+        
+        # Tentativas de envio de cada vídeo do canal principal (executar_postagem_fila).
+        try:
+            cursor.execute("ALTER TABLE fila_postagens ADD COLUMN tentativas INTEGER DEFAULT 0")
+        except sqlite3.OperationalError:
+            pass
+
+        # fila_parceiros (criada pelo robô dos Autorais): link do post de origem no Telegram,
+        # mensagem publicada no destino e nome do produto. Sem a tabela, nada a fazer.
+        for coluna in ("link_post_origem TEXT DEFAULT ''", "msg_postada_id INTEGER", "nome_produto TEXT DEFAULT ''"):
+            try:
+                cursor.execute(f"ALTER TABLE fila_parceiros ADD COLUMN {coluna}")
+            except sqlite3.OperationalError:
+                pass  # coluna já existe ou a tabela ainda não nasceu
+
+        # erros_logs: rastro do código e contexto (registrar_erro_json do utils).
+        try:
+            cursor.execute("ALTER TABLE erros_logs ADD COLUMN rastro_codigo TEXT")
+            cursor.execute("ALTER TABLE erros_logs ADD COLUMN contexto TEXT")
+            logger.info("📦 Banco de dados atualizado: Colunas 'rastro_codigo' e 'contexto' adicionadas à tabela erros_logs.")
+        except sqlite3.OperationalError:
+            pass
     
-    conexao.commit()
-    conexao.close()
     logger.info("✅ Estrutura SQLite blindada e pronta para receber operações de leitura/escrita.")
 
 inicializar_banco_sqlite()
@@ -790,14 +788,12 @@ def ler_fila_postagens():
             logger.error(f"❌ Erro na migração do JSON: {e}")
 
     try:
-        conexao = db.conectar()
-        conexao.row_factory = sqlite3.Row
-        cursor = conexao.cursor()
+        with db.conexao(linhas_por_nome=True) as conexao:
+            cursor = conexao.cursor()
         
-        # Ordem de exibição: data e depois a ordem dentro do dia.
-        cursor.execute("SELECT * FROM fila_postagens ORDER BY data_alvo ASC, prioridade ASC")
-        linhas = cursor.fetchall()
-        conexao.close()
+            # Ordem de exibição: data e depois a ordem dentro do dia.
+            cursor.execute("SELECT * FROM fila_postagens ORDER BY data_alvo ASC, prioridade ASC")
+            linhas = cursor.fetchall()
         
         fila = []
         for linha in linhas:
@@ -823,30 +819,28 @@ def salvar_fila_postagens(dados):
     o resto do código grava com UPDATE/INSERT pontuais.
     """
     try:
-        conexao = db.conectar()
-        cursor = conexao.cursor()
-        fila = dados.get("fila", [])
+        with db.conexao() as conexao:
+            cursor = conexao.cursor()
+            fila = dados.get("fila", [])
         
-        cursor.execute("DELETE FROM fila_postagens")
-        for i, item in enumerate(fila):
-            status = 'CONCLUIDO' if item.get("postado") else 'PENDENTE'
-            cursor.execute('''
-                INSERT INTO fila_postagens 
-                (id_unico, caminho_video, video_id, legenda, data_alvo, status, prioridade, data_postagem, horario_postagem)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (
-                item.get("id"),
-                item.get("caminho_video"),
-                item.get("video_id"),
-                item.get("legenda"),
-                item.get("data_adicao"),
-                status,
-                i + 1,
-                item.get("data_postagem"),
-                item.get("horario_postagem")
-            ))
-        conexao.commit()
-        conexao.close()
+            cursor.execute("DELETE FROM fila_postagens")
+            for i, item in enumerate(fila):
+                status = 'CONCLUIDO' if item.get("postado") else 'PENDENTE'
+                cursor.execute('''
+                    INSERT INTO fila_postagens 
+                    (id_unico, caminho_video, video_id, legenda, data_alvo, status, prioridade, data_postagem, horario_postagem)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (
+                    item.get("id"),
+                    item.get("caminho_video"),
+                    item.get("video_id"),
+                    item.get("legenda"),
+                    item.get("data_adicao"),
+                    status,
+                    i + 1,
+                    item.get("data_postagem"),
+                    item.get("horario_postagem")
+                ))
     except Exception as e:
         logger.error(f"❌ Erro ao reescrever fila no SQLite: {e}")
 
@@ -874,12 +868,10 @@ def agendar_fila_postagens():
     hoje_str = agora.strftime("%Y-%m-%d")
     
     try:
-        conexao = db.conectar()
-        conexao.row_factory = sqlite3.Row
-        cursor = conexao.cursor()
-        cursor.execute("SELECT id_unico FROM fila_postagens WHERE status = 'PENDENTE' AND (data_alvo <= ? OR data_alvo = '2000-01-01') ORDER BY prioridade ASC", (hoje_str,))
-        pendentes_hoje = cursor.fetchall()
-        conexao.close()
+        with db.conexao(linhas_por_nome=True) as conexao:
+            cursor = conexao.cursor()
+            cursor.execute("SELECT id_unico FROM fila_postagens WHERE status = 'PENDENTE' AND (data_alvo <= ? OR data_alvo = '2000-01-01') ORDER BY prioridade ASC", (hoje_str,))
+            pendentes_hoje = cursor.fetchall()
     except Exception as e:
         logger.error(f"❌ Erro ao ler fila no agendador: {e}")
         return
@@ -977,11 +969,10 @@ async def motor_fila_minuto():
         return  # fora do expediente
         
     try:
-        conexao = db.conectar()
-        cursor = conexao.cursor()
-        cursor.execute("SELECT COUNT(*) FROM fila_postagens WHERE status = 'PENDENTE' AND (data_alvo <= ? OR data_alvo = '2000-01-01')", (hoje_str,))
-        qtd_db = cursor.fetchone()[0]
-        conexao.close()
+        with db.conexao() as conexao:
+            cursor = conexao.cursor()
+            cursor.execute("SELECT COUNT(*) FROM fila_postagens WHERE status = 'PENDENTE' AND (data_alvo <= ? OR data_alvo = '2000-01-01')", (hoje_str,))
+            qtd_db = cursor.fetchone()[0]
         
         if qtd_db > 0:
             qtd_jobs = sum(1 for job in scheduler.get_jobs() if job.id.startswith('job_fila_postagem_'))
@@ -1013,90 +1004,84 @@ async def executar_postagem_fila(item_id):
 
     sucesso = False
     try:
-        conexao = db.conectar()
-        conexao.row_factory = sqlite3.Row
-        cursor = conexao.cursor()
-        cursor.execute("SELECT * FROM fila_postagens WHERE id_unico = ?", (item_id,))
-        item = cursor.fetchone()
+        with db.conexao(linhas_por_nome=True) as conexao:
+            cursor = conexao.cursor()
+            cursor.execute("SELECT * FROM fila_postagens WHERE id_unico = ?", (item_id,))
+            item = cursor.fetchone()
         
-        if not item:
-            conexao.close()
-            return
+            if not item:
+                return
             
-        # Só publica item PENDENTE: job repetido (fiscal, nova tentativa) não posta duas vezes.
-        if item["status"] != 'PENDENTE':
-            logger.warning(f"🛑 Bloqueio ativado: O vídeo já foi processado anteriormente (Status: {item['status']}). Postagem duplicada evitada.")
-            conexao.close()
-            return
+            # Só publica item PENDENTE: job repetido (fiscal, nova tentativa) não posta duas vezes.
+            if item["status"] != 'PENDENTE':
+                logger.warning(f"🛑 Bloqueio ativado: O vídeo já foi processado anteriormente (Status: {item['status']}). Postagem duplicada evitada.")
+                return
             
-        caminho_video = item["caminho_video"]
-        video_id = item["video_id"]
-        legenda = item["legenda"]
+            caminho_video = item["caminho_video"]
+            video_id = item["video_id"]
+            legenda = item["legenda"]
         
-        falha_irreversivel = False
-        novo_file_id = None
+            falha_irreversivel = False
+            novo_file_id = None
         
-        if caminho_video and os.path.exists(caminho_video):
-            # Imagem não vai como vídeo: descarta.
-            if caminho_video.lower().endswith(('.jpg', '.jpeg', '.png', '.webp', '.gif')):
-                logger.warning("🚫 [Segurança] Upload cancelado! Ficheiro é uma imagem.")
-                try: os.remove(caminho_video)
-                except: pass
-                falha_irreversivel = True
-            else:
-                arquivo = FSInputFile(caminho_video)
-                msg = await bot.send_video(chat_id=GRUPO_ID, video=arquivo, caption=legenda, parse_mode="HTML")
-                novo_file_id = msg.video.file_id
+            if caminho_video and os.path.exists(caminho_video):
+                # Imagem não vai como vídeo: descarta.
+                if caminho_video.lower().endswith(('.jpg', '.jpeg', '.png', '.webp', '.gif')):
+                    logger.warning("🚫 [Segurança] Upload cancelado! Ficheiro é uma imagem.")
+                    try: os.remove(caminho_video)
+                    except: pass
+                    falha_irreversivel = True
+                else:
+                    arquivo = FSInputFile(caminho_video)
+                    msg = await bot.send_video(chat_id=GRUPO_ID, video=arquivo, caption=legenda, parse_mode="HTML")
+                    novo_file_id = msg.video.file_id
+                    sucesso = True
+                    registrar_ultimo_post(GRUPO_ID, "video")  # para a intercalação de vídeo e texto (ver registrar_ultimo_post)
+                    logger.info("🚀 [Fluxo] Vídeo enviado com sucesso pelo Motor Central.")
+                    try: os.remove(caminho_video)
+                    except: pass
+            elif video_id:
+                await bot.send_video(chat_id=GRUPO_ID, video=video_id, caption=legenda, parse_mode="HTML")
                 sucesso = True
-                registrar_ultimo_post(GRUPO_ID, "video")  # para a intercalação de vídeo e texto (ver registrar_ultimo_post)
-                logger.info("🚀 [Fluxo] Vídeo enviado com sucesso pelo Motor Central.")
-                try: os.remove(caminho_video)
-                except: pass
-        elif video_id:
-            await bot.send_video(chat_id=GRUPO_ID, video=video_id, caption=legenda, parse_mode="HTML")
-            sucesso = True
-        else:
-            logger.error("❌ Falha irreversível: Vídeo expirou ou foi perdido fisicamente.")
-            falha_irreversivel = True
+            else:
+                logger.error("❌ Falha irreversível: Vídeo expirou ou foi perdido fisicamente.")
+                falha_irreversivel = True
             
-        if sucesso or falha_irreversivel:
-            novo_status = 'CONCLUIDO' if sucesso else 'ERRO'
-            cursor.execute("UPDATE fila_postagens SET status = ?, data_postagem = ?, horario_postagem = ? WHERE id_unico = ?", (novo_status, hoje_str, agora.strftime("%H:%M"), item_id))
+            if sucesso or falha_irreversivel:
+                novo_status = 'CONCLUIDO' if sucesso else 'ERRO'
+                cursor.execute("UPDATE fila_postagens SET status = ?, data_postagem = ?, horario_postagem = ? WHERE id_unico = ?", (novo_status, hoje_str, agora.strftime("%H:%M"), item_id))
             
-            if sucesso and novo_file_id:
-                cursor.execute("UPDATE fila_postagens SET video_id = ?, caminho_video = NULL WHERE caminho_video = ? AND id_unico != ?", (novo_file_id, caminho_video, item_id))
-            conexao.commit()
+                if sucesso and novo_file_id:
+                    cursor.execute("UPDATE fila_postagens SET video_id = ?, caminho_video = NULL WHERE caminho_video = ? AND id_unico != ?", (novo_file_id, caminho_video, item_id))
+                conexao.commit()
             
-        conexao.close()
     except Exception as e:
         logger.error(f"❌ Falha crítica ao postar vídeo da fila: {e}")
         desistiu_apos = None
         try:
-            conexao = db.conectar()
-            cursor = conexao.cursor()
-            if sucesso:
-                # O vídeo já foi para o grupo e a falha veio depois: só falta marcar.
-                # Tentar de novo publicaria duas vezes.
-                cursor.execute("UPDATE fila_postagens SET status = 'CONCLUIDO', data_postagem = ?, horario_postagem = ? WHERE id_unico = ?",
-                               (hoje_str, agora.strftime("%H:%M"), item_id))
-            else:
-                cursor.execute("SELECT COALESCE(tentativas, 0) FROM fila_postagens WHERE id_unico = ? AND status = 'PENDENTE'", (item_id,))
-                linha = cursor.fetchone()
-                if linha is not None:
-                    tentativas = linha[0] + 1
-                    if tentativas < MAX_TENTATIVAS_POSTAGEM:
-                        cursor.execute("UPDATE fila_postagens SET tentativas = ? WHERE id_unico = ?", (tentativas, item_id))
-                        nova_tentativa = agora + timedelta(minutes=MINUTOS_ENTRE_TENTATIVAS)
-                        scheduler.add_job(executar_postagem_fila, 'date', run_date=nova_tentativa, args=[item_id],
-                                          id=f"job_fila_postagem_{item_id}", replace_existing=True)
-                        logger.warning(f"🔁 Tentativa {tentativas}/{MAX_TENTATIVAS_POSTAGEM} do vídeo {item_id} falhou; nova tentativa às {nova_tentativa.strftime('%H:%M')}.")
-                    else:
-                        # data_postagem preenchida: a faxina da madrugada tira o item da fila.
-                        cursor.execute("UPDATE fila_postagens SET status = 'ERRO', tentativas = ?, data_postagem = ?, horario_postagem = ? WHERE id_unico = ?",
-                                       (tentativas, hoje_str, agora.strftime("%H:%M"), item_id))
-                        desistiu_apos = tentativas
-            conexao.commit()
-            conexao.close()
+            with db.conexao() as conexao:
+                cursor = conexao.cursor()
+                if sucesso:
+                    # O vídeo já foi para o grupo e a falha veio depois: só falta marcar.
+                    # Tentar de novo publicaria duas vezes.
+                    cursor.execute("UPDATE fila_postagens SET status = 'CONCLUIDO', data_postagem = ?, horario_postagem = ? WHERE id_unico = ?",
+                                   (hoje_str, agora.strftime("%H:%M"), item_id))
+                else:
+                    cursor.execute("SELECT COALESCE(tentativas, 0) FROM fila_postagens WHERE id_unico = ? AND status = 'PENDENTE'", (item_id,))
+                    linha = cursor.fetchone()
+                    if linha is not None:
+                        tentativas = linha[0] + 1
+                        if tentativas < MAX_TENTATIVAS_POSTAGEM:
+                            cursor.execute("UPDATE fila_postagens SET tentativas = ? WHERE id_unico = ?", (tentativas, item_id))
+                            nova_tentativa = agora + timedelta(minutes=MINUTOS_ENTRE_TENTATIVAS)
+                            scheduler.add_job(executar_postagem_fila, 'date', run_date=nova_tentativa, args=[item_id],
+                                              id=f"job_fila_postagem_{item_id}", replace_existing=True)
+                            logger.warning(f"🔁 Tentativa {tentativas}/{MAX_TENTATIVAS_POSTAGEM} do vídeo {item_id} falhou; nova tentativa às {nova_tentativa.strftime('%H:%M')}.")
+                        else:
+                            # data_postagem preenchida: a faxina da madrugada tira o item da fila.
+                            cursor.execute("UPDATE fila_postagens SET status = 'ERRO', tentativas = ?, data_postagem = ?, horario_postagem = ? WHERE id_unico = ?",
+                                           (tentativas, hoje_str, agora.strftime("%H:%M"), item_id))
+                            desistiu_apos = tentativas
         except Exception: pass
         # Só depois de fechar a conexão acima: registrar_erro_json grava por outra, que
         # esperaria esta soltar o banco (30 s com o robô parado) e desistiria sem registrar.
@@ -1167,41 +1152,39 @@ def recalcular_datas_pos_pausa():
     """
     logger.info("🔄 Iniciando recálculo de datas no SQLite pós-pausa...")
     try:
-        conexao = db.conectar()
-        cursor = conexao.cursor()
+        with db.conexao() as conexao:
+            cursor = conexao.cursor()
         
-        cursor.execute("SELECT MIN(data_alvo) FROM fila_postagens WHERE status = 'PENDENTE' AND data_alvo != '2000-01-01'")
-        resultado = cursor.fetchone()
-        menor_data_str = resultado[0] if resultado else None
+            cursor.execute("SELECT MIN(data_alvo) FROM fila_postagens WHERE status = 'PENDENTE' AND data_alvo != '2000-01-01'")
+            resultado = cursor.fetchone()
+            menor_data_str = resultado[0] if resultado else None
         
-        if not menor_data_str:
-            conexao.close()
-            logger.info("⚠️ Fila vazia ou sem datas futuras, nenhum ajuste necessário.")
-            return
+            if not menor_data_str:
+                logger.info("⚠️ Fila vazia ou sem datas futuras, nenhum ajuste necessário.")
+                return
             
-        from datetime import datetime, timedelta
-        agora = datetime.now(fuso_horario)
-        hoje_obj = agora.date()
-        menor_data_obj = datetime.strptime(menor_data_str, "%Y-%m-%d").date()
+            from datetime import datetime, timedelta
+            agora = datetime.now(fuso_horario)
+            hoje_obj = agora.date()
+            menor_data_obj = datetime.strptime(menor_data_str, "%Y-%m-%d").date()
         
-        if menor_data_obj < hoje_obj:
-            offset_dias = (hoje_obj - menor_data_obj).days
-            logger.info(f"⏳ Deslocamento: {offset_dias} dias. Aplicando offset no banco...")
+            if menor_data_obj < hoje_obj:
+                offset_dias = (hoje_obj - menor_data_obj).days
+                logger.info(f"⏳ Deslocamento: {offset_dias} dias. Aplicando offset no banco...")
             
-            cursor.execute("SELECT id_unico, data_alvo FROM fila_postagens WHERE status = 'PENDENTE' AND data_alvo != '2000-01-01'")
-            itens = cursor.fetchall()
+                cursor.execute("SELECT id_unico, data_alvo FROM fila_postagens WHERE status = 'PENDENTE' AND data_alvo != '2000-01-01'")
+                itens = cursor.fetchall()
             
-            for id_unico, d_str in itens:
-                d_obj = datetime.strptime(d_str, "%Y-%m-%d").date()
-                nova_data = d_obj + timedelta(days=offset_dias)
-                cursor.execute("UPDATE fila_postagens SET data_alvo = ? WHERE id_unico = ?", (nova_data.strftime("%Y-%m-%d"), id_unico))
+                for id_unico, d_str in itens:
+                    d_obj = datetime.strptime(d_str, "%Y-%m-%d").date()
+                    nova_data = d_obj + timedelta(days=offset_dias)
+                    cursor.execute("UPDATE fila_postagens SET data_alvo = ? WHERE id_unico = ?", (nova_data.strftime("%Y-%m-%d"), id_unico))
                 
-            conexao.commit()
-            logger.info("✅ Datas recalculadas no SQLite com sucesso.")
-        else:
-            logger.info("✅ O primeiro vídeo da fila já está no futuro ou presente. Nenhum offset necessário.")
+                conexao.commit()
+                logger.info("✅ Datas recalculadas no SQLite com sucesso.")
+            else:
+                logger.info("✅ O primeiro vídeo da fila já está no futuro ou presente. Nenhum offset necessário.")
             
-        conexao.close()
     except Exception as e:
         logger.error(f"❌ Erro ao recalcular datas pós-pausa: {e}")
 
@@ -1332,12 +1315,10 @@ async def gerar_mensagem_gemini(prompt):
 def registrar_lixeira(msg_id, chat_id=GRUPO_ID):
     """Guarda a mensagem para ser apagada na faxina da madrugada."""
     try:
-        conexao = db.conectar()
-        cursor = conexao.cursor()
-        agora = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        cursor.execute("INSERT INTO lixeira_mensagens (msg_id, chat_id, data_inclusao) VALUES (?, ?, ?)", (msg_id, str(chat_id), agora))
-        conexao.commit()
-        conexao.close()
+        with db.conexao() as conexao:
+            cursor = conexao.cursor()
+            agora = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            cursor.execute("INSERT INTO lixeira_mensagens (msg_id, chat_id, data_inclusao) VALUES (?, ?, ?)", (msg_id, str(chat_id), agora))
         logger.info(f"💾 ID {msg_id} (Chat: {chat_id}) salvo na lixeira persistente (SQLite) para exclusão na madrugada.")
     except Exception as e:
         logger.error(f"❌ Erro ao registrar lixeira no banco: {e}")
@@ -1377,24 +1358,22 @@ def _caminhos_protegidos():
 
     # Fila dos parceiros
     try:
-        conexao = db.conectar()
-        cursor = conexao.cursor()
-        cursor.execute("SELECT caminho_video FROM fila_parceiros WHERE processado = 0")
-        for (c,) in cursor.fetchall():
-            if c: protegidos.add(os.path.abspath(c))
-        conexao.close()
+        with db.conexao() as conexao:
+            cursor = conexao.cursor()
+            cursor.execute("SELECT caminho_video FROM fila_parceiros WHERE processado = 0")
+            for (c,) in cursor.fetchall():
+                if c: protegidos.add(os.path.abspath(c))
     except Exception:
         pass
 
     # Grupo Público: o arquivo que o Correio já baixou e o bot ainda não publicou.
     # Sem isto a faxina o apagaria se o item passasse das 24 h protegidas.
     try:
-        conexao = db.conectar()
-        cursor = conexao.cursor()
-        cursor.execute("SELECT caminho_arquivo FROM fila_publico WHERE processado = 0")
-        for (c,) in cursor.fetchall():
-            if c: protegidos.add(os.path.abspath(c))
-        conexao.close()
+        with db.conexao() as conexao:
+            cursor = conexao.cursor()
+            cursor.execute("SELECT caminho_arquivo FROM fila_publico WHERE processado = 0")
+            for (c,) in cursor.fetchall():
+                if c: protegidos.add(os.path.abspath(c))
     except Exception:
         pass
 
@@ -1514,26 +1493,24 @@ async def varredor_de_lixeira():
     """
     logger.info("🧹 Iniciando varredura diária da lixeira persistente (03h00)...")
     try:
-        conexao = db.conectar()
-        cursor = conexao.cursor()
-        cursor.execute("SELECT id, msg_id, chat_id FROM lixeira_mensagens")
-        mensagens = cursor.fetchall()
+        with db.conexao() as conexao:
+            cursor = conexao.cursor()
+            cursor.execute("SELECT id, msg_id, chat_id FROM lixeira_mensagens")
+            mensagens = cursor.fetchall()
         
-        ids_apagados = []
-        for linha in mensagens:
-            id_banco, msg_id, chat_id = linha
-            try:
-                await apagar_mensagem_automatica(msg_id, chat_id)
-                ids_apagados.append(id_banco)
-            except Exception as e:
-                logger.warning(f"⚠️ Erro ao processar item da lixeira: {e}")
-                ids_apagados.append(id_banco)  # sai da lista mesmo com falha, para não travar a lixeira
+            ids_apagados = []
+            for linha in mensagens:
+                id_banco, msg_id, chat_id = linha
+                try:
+                    await apagar_mensagem_automatica(msg_id, chat_id)
+                    ids_apagados.append(id_banco)
+                except Exception as e:
+                    logger.warning(f"⚠️ Erro ao processar item da lixeira: {e}")
+                    ids_apagados.append(id_banco)  # sai da lista mesmo com falha, para não travar a lixeira
         
-        for id_banco in ids_apagados:
-            cursor.execute("DELETE FROM lixeira_mensagens WHERE id = ?", (id_banco,))
+            for id_banco in ids_apagados:
+                cursor.execute("DELETE FROM lixeira_mensagens WHERE id = ?", (id_banco,))
             
-        conexao.commit()
-        conexao.close()
         logger.info("✅ Lixeira persistente (SQLite) esvaziada com sucesso.")
 
         # Aproveita para podar a memória antiga dos achadinhos.
@@ -1569,11 +1546,9 @@ async def apagar_mensagem_automatica(msg_id, chat_id=GRUPO_ID):
 def salvar_metrica(dia, chave, valor):
     """Grava (ou troca) o valor da métrica no dia."""
     try:
-        conexao = db.conectar()
-        cursor = conexao.cursor()
-        cursor.execute("INSERT OR REPLACE INTO historico_metricas (data, chave, valor) VALUES (?, ?, ?)", (dia, chave, int(valor)))
-        conexao.commit()
-        conexao.close()
+        with db.conexao() as conexao:
+            cursor = conexao.cursor()
+            cursor.execute("INSERT OR REPLACE INTO historico_metricas (data, chave, valor) VALUES (?, ?, ?)", (dia, chave, int(valor)))
     except Exception as e:
         logger.error(f"❌ [Métricas] Erro ao salvar {chave}: {e}")
 
@@ -1581,11 +1556,10 @@ def ler_metrica(chave, dias_atras=0):
     """Valor da métrica em um dia específico. None se não houver registro."""
     try:
         dia = (datetime.now(fuso_horario) - timedelta(days=dias_atras)).strftime("%Y-%m-%d")
-        conexao = db.conectar()
-        cursor = conexao.cursor()
-        cursor.execute("SELECT valor FROM historico_metricas WHERE data = ? AND chave = ?", (dia, chave))
-        r = cursor.fetchone()
-        conexao.close()
+        with db.conexao() as conexao:
+            cursor = conexao.cursor()
+            cursor.execute("SELECT valor FROM historico_metricas WHERE data = ? AND chave = ?", (dia, chave))
+            r = cursor.fetchone()
         return r[0] if r else None
     except Exception:
         return None
@@ -1601,11 +1575,10 @@ def soma_metrica_periodo(chave, dias):
     """Soma dos valores diários no período (para volume, não para saldo)."""
     try:
         ini = (datetime.now(fuso_horario) - timedelta(days=dias)).strftime("%Y-%m-%d")
-        conexao = db.conectar()
-        cursor = conexao.cursor()
-        cursor.execute("SELECT SUM(valor) FROM historico_metricas WHERE chave = ? AND data > ?", (chave, ini))
-        r = cursor.fetchone()
-        conexao.close()
+        with db.conexao() as conexao:
+            cursor = conexao.cursor()
+            cursor.execute("SELECT SUM(valor) FROM historico_metricas WHERE chave = ? AND data > ?", (chave, ini))
+            r = cursor.fetchone()
         return r[0] if r and r[0] else None
     except Exception:
         return None
@@ -1613,11 +1586,10 @@ def soma_metrica_periodo(chave, dias):
 def recorde_metrica(chave):
     """Maior valor já registrado para aquela métrica."""
     try:
-        conexao = db.conectar()
-        cursor = conexao.cursor()
-        cursor.execute("SELECT MAX(valor) FROM historico_metricas WHERE chave = ?", (chave,))
-        r = cursor.fetchone()
-        conexao.close()
+        with db.conexao() as conexao:
+            cursor = conexao.cursor()
+            cursor.execute("SELECT MAX(valor) FROM historico_metricas WHERE chave = ?", (chave,))
+            r = cursor.fetchone()
         return r[0] if r and r[0] else None
     except Exception:
         return None
@@ -1661,19 +1633,18 @@ async def coletar_metricas_diarias():
         # Vídeos publicados hoje
         posts = {"principal": 0, "viral": 0, "publico": 0}
         try:
-            conexao = db.conectar()
-            cursor = conexao.cursor()
+            with db.conexao() as conexao:
+                cursor = conexao.cursor()
 
-            cursor.execute("SELECT COUNT(*) FROM fila_postagens WHERE status = 'CONCLUIDO' AND data_postagem = ?", (hoje_str,))
-            posts["principal"] = cursor.fetchone()[0] or 0
+                cursor.execute("SELECT COUNT(*) FROM fila_postagens WHERE status = 'CONCLUIDO' AND data_postagem = ?", (hoje_str,))
+                posts["principal"] = cursor.fetchone()[0] or 0
 
-            try:
-                cursor.execute("SELECT COUNT(*) FROM fila_publico WHERE processado = 1 AND data_postagem LIKE ?", (f"{hoje_str}%",))
-                posts["publico"] = cursor.fetchone()[0] or 0
-            except Exception:
-                pass
+                try:
+                    cursor.execute("SELECT COUNT(*) FROM fila_publico WHERE processado = 1 AND data_postagem LIKE ?", (f"{hoje_str}%",))
+                    posts["publico"] = cursor.fetchone()[0] or 0
+                except Exception:
+                    pass
 
-            conexao.close()
         except Exception as e:
             logger.warning(f"⚠️ [Métricas] Erro ao contar vídeos: {e}")
 
@@ -1694,11 +1665,10 @@ async def coletar_metricas_diarias():
         # retrato diário habilita os fatos de marco e de crescimento.
         dl_total = dl_usuarios = 0
         try:
-            conexao = db.conectar()
-            cursor = conexao.cursor()
-            cursor.execute("SELECT COALESCE(SUM(total), 0), COUNT(*) FROM downloads_totais")
-            dl_total, dl_usuarios = cursor.fetchone()
-            conexao.close()
+            with db.conexao() as conexao:
+                cursor = conexao.cursor()
+                cursor.execute("SELECT COALESCE(SUM(total), 0), COUNT(*) FROM downloads_totais")
+                dl_total, dl_usuarios = cursor.fetchone()
             salvar_metrica(hoje_str, "downloads_total", dl_total or 0)
             salvar_metrica(hoje_str, "downloads_usuarios", dl_usuarios or 0)
         except Exception:
@@ -1861,11 +1831,10 @@ def contar_videos_pendentes(chat_destino):
             if ler_pausa_programada().get("ativa"):
                 return 0
             hoje = datetime.now(fuso_horario).strftime("%Y-%m-%d")
-            conexao = db.conectar()
-            cursor = conexao.cursor()
-            cursor.execute("SELECT COUNT(*) FROM fila_postagens WHERE status = 'PENDENTE' AND (data_alvo <= ? OR data_alvo = '2000-01-01')", (hoje,))
-            total = cursor.fetchone()[0]
-            conexao.close()
+            with db.conexao() as conexao:
+                cursor = conexao.cursor()
+                cursor.execute("SELECT COUNT(*) FROM fila_postagens WHERE status = 'PENDENTE' AND (data_alvo <= ? OR data_alvo = '2000-01-01')", (hoje,))
+                total = cursor.fetchone()[0]
             return total
 
         # Canal Viral (fila de clonagem do Espião)
@@ -1883,17 +1852,16 @@ def contar_videos_pendentes(chat_destino):
             ])
 
         # Grupo Público (fila_publico)
-        conexao = db.conectar()
-        cursor = conexao.cursor()
-        # Só conta vídeo que pode sair hoje, como no principal: com a fila inteira, um
-        # vídeo agendado para daqui a semanas adiava os textos sem nunca sair.
-        hoje_pub = datetime.now(fuso_horario).strftime("%Y-%m-%d")
-        cursor.execute(
-            "SELECT COUNT(*) FROM fila_publico WHERE processado = 0 AND data_alvo <= ?",
-            (hoje_pub,)
-        )
-        total = cursor.fetchone()[0]
-        conexao.close()
+        with db.conexao() as conexao:
+            cursor = conexao.cursor()
+            # Só conta vídeo que pode sair hoje, como no principal: com a fila inteira, um
+            # vídeo agendado para daqui a semanas adiava os textos sem nunca sair.
+            hoje_pub = datetime.now(fuso_horario).strftime("%Y-%m-%d")
+            cursor.execute(
+                "SELECT COUNT(*) FROM fila_publico WHERE processado = 0 AND data_alvo <= ?",
+                (hoje_pub,)
+            )
+            total = cursor.fetchone()[0]
         return total
     except Exception as e:
         logger.warning(f"⚠️ Não foi possível contar vídeos pendentes: {e}")
@@ -2289,22 +2257,20 @@ def agendar_tarefas_diarias(escopo="todos"):
     if escopo == "todos":
         # Faxina da madrugada: itens CONCLUIDO/ERRO de dias anteriores saem da fila e, sem outro uso, do disco.
         try:
-            conexao = db.conectar()
-            cursor = conexao.cursor()
-            cursor.execute("SELECT caminho_video FROM fila_postagens WHERE status IN ('CONCLUIDO', 'ERRO') AND data_postagem != ?", (hoje_faxina_str,))
-            para_apagar = cursor.fetchall()
-            for item in para_apagar:
-                cam = item[0]
-                if cam and os.path.exists(cam):
-                    cursor.execute("SELECT COUNT(*) FROM fila_postagens WHERE caminho_video = ? AND status = 'PENDENTE'", (cam,))
-                    em_uso = cursor.fetchone()[0]
-                    if em_uso == 0:
-                        try: os.remove(cam)
-                        except: pass
-            cursor.execute("DELETE FROM fila_postagens WHERE status IN ('CONCLUIDO', 'ERRO') AND data_postagem != ?", (hoje_faxina_str,))
-            apagados = cursor.rowcount
-            conexao.commit()
-            conexao.close()
+            with db.conexao() as conexao:
+                cursor = conexao.cursor()
+                cursor.execute("SELECT caminho_video FROM fila_postagens WHERE status IN ('CONCLUIDO', 'ERRO') AND data_postagem != ?", (hoje_faxina_str,))
+                para_apagar = cursor.fetchall()
+                for item in para_apagar:
+                    cam = item[0]
+                    if cam and os.path.exists(cam):
+                        cursor.execute("SELECT COUNT(*) FROM fila_postagens WHERE caminho_video = ? AND status = 'PENDENTE'", (cam,))
+                        em_uso = cursor.fetchone()[0]
+                        if em_uso == 0:
+                            try: os.remove(cam)
+                            except: pass
+                cursor.execute("DELETE FROM fila_postagens WHERE status IN ('CONCLUIDO', 'ERRO') AND data_postagem != ?", (hoje_faxina_str,))
+                apagados = cursor.rowcount
             if apagados > 0: logger.info(f"🧹 Limpeza da madrugada: {apagados} registos antigos eliminados do SQLite.")
         except Exception as e:
             logger.error(f"❌ Erro na faxina da madrugada (SQLite): {e}")
@@ -2581,17 +2547,16 @@ def agendar_tarefas_diarias(escopo="todos"):
 
         horarios_ocupados_publico = []
         try:
-            conexao_pub = db.conectar()
-            cursor_pub = conexao_pub.cursor()
-            cursor_pub.execute("SELECT horario_disparo FROM fila_publico WHERE processado = 0 AND horario_disparo IS NOT NULL AND horario_disparo != ''")
-            for linha_pub in cursor_pub.fetchall():
-                try:
-                    h_p = datetime.strptime(linha_pub[0], "%Y-%m-%d %H:%M:%S").replace(tzinfo=fuso_horario)
-                    if h_p.date() == agora.date() and h_p > agora:
-                        horarios_ocupados_publico.append(h_p)
-                except Exception:
-                    pass
-            conexao_pub.close()
+            with db.conexao() as conexao_pub:
+                cursor_pub = conexao_pub.cursor()
+                cursor_pub.execute("SELECT horario_disparo FROM fila_publico WHERE processado = 0 AND horario_disparo IS NOT NULL AND horario_disparo != ''")
+                for linha_pub in cursor_pub.fetchall():
+                    try:
+                        h_p = datetime.strptime(linha_pub[0], "%Y-%m-%d %H:%M:%S").replace(tzinfo=fuso_horario)
+                        if h_p.date() == agora.date() and h_p > agora:
+                            horarios_ocupados_publico.append(h_p)
+                    except Exception:
+                        pass
             horarios_ocupados_publico.sort()
             logger.info(f"📬 [Rotinas Público] {len(horarios_ocupados_publico)} vídeo(s) servirão de âncora hoje.")
         except Exception as e:
@@ -3040,15 +3005,13 @@ async def painel_submissoes(message: types.Message, state: FSMContext):
 def ler_parceiros(apenas_ativos=False):
     """Parceiros cadastrados (só os ativos, se pedido), em ordem de cadastro."""
     try:
-        conexao = db.conectar()
-        conexao.row_factory = sqlite3.Row
-        cursor = conexao.cursor()
-        sql = "SELECT * FROM parceiros"
-        if apenas_ativos:
-            sql += " WHERE ativo = 1"
-        cursor.execute(sql + " ORDER BY id ASC")
-        dados = [dict(l) for l in cursor.fetchall()]
-        conexao.close()
+        with db.conexao(linhas_por_nome=True) as conexao:
+            cursor = conexao.cursor()
+            sql = "SELECT * FROM parceiros"
+            if apenas_ativos:
+                sql += " WHERE ativo = 1"
+            cursor.execute(sql + " ORDER BY id ASC")
+            dados = [dict(l) for l in cursor.fetchall()]
         return dados
     except Exception as e:
         logger.error(f"❌ [Parceiros] Erro ao ler: {e}")
@@ -3057,21 +3020,20 @@ def ler_parceiros(apenas_ativos=False):
 def salvar_parceiro(dados):
     """Cadastra o parceiro (nasce ativo) e devolve o novo ID, ou None."""
     try:
-        conexao = db.conectar()
-        cursor = conexao.cursor()
-        cursor.execute('''
-            INSERT INTO parceiros (nome, app_id, app_secret, canal_origem, canal_destino,
-                                   dias_atraso, limite_diario, ativo, data_cadastro)
-            VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?)
-        ''', (
-            dados.get("nome"), dados.get("app_id"), dados.get("app_secret"),
-            dados.get("canal_origem"), dados.get("canal_destino"),
-            int(dados.get("dias_atraso", 30)), int(dados.get("limite_diario", 6)),
-            datetime.now(fuso_horario).strftime("%Y-%m-%d %H:%M:%S")
-        ))
-        conexao.commit()
-        novo_id = cursor.lastrowid
-        conexao.close()
+        with db.conexao() as conexao:
+            cursor = conexao.cursor()
+            cursor.execute('''
+                INSERT INTO parceiros (nome, app_id, app_secret, canal_origem, canal_destino,
+                                       dias_atraso, limite_diario, ativo, data_cadastro)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?)
+            ''', (
+                dados.get("nome"), dados.get("app_id"), dados.get("app_secret"),
+                dados.get("canal_origem"), dados.get("canal_destino"),
+                int(dados.get("dias_atraso", 30)), int(dados.get("limite_diario", 6)),
+                datetime.now(fuso_horario).strftime("%Y-%m-%d %H:%M:%S")
+            ))
+            conexao.commit()
+            novo_id = cursor.lastrowid
         return novo_id
     except Exception as e:
         logger.error(f"❌ [Parceiros] Erro ao salvar: {e}")
@@ -3084,11 +3046,9 @@ def atualizar_parceiro(parceiro_id, campo, valor):
                      "limite_min", "limite_max"):
         return False
     try:
-        conexao = db.conectar()
-        cursor = conexao.cursor()
-        cursor.execute(f"UPDATE parceiros SET {campo} = ? WHERE id = ?", (valor, int(parceiro_id)))
-        conexao.commit()
-        conexao.close()
+        with db.conexao() as conexao:
+            cursor = conexao.cursor()
+            cursor.execute(f"UPDATE parceiros SET {campo} = ? WHERE id = ?", (valor, int(parceiro_id)))
         return True
     except Exception as e:
         logger.error(f"❌ [Parceiros] Erro ao atualizar {campo}: {e}")
@@ -3101,15 +3061,13 @@ def excluir_parceiro(parceiro_id):
     vídeo já entregue a alguém nunca volta ao poço.
     """
     try:
-        conexao = db.conectar()
-        cursor = conexao.cursor()
-        cursor.execute("DELETE FROM parceiros WHERE id = ?", (int(parceiro_id),))
-        try:
-            cursor.execute("DELETE FROM fila_parceiros WHERE parceiro_id = ?", (int(parceiro_id),))
-        except sqlite3.OperationalError:
-            pass   # a tabela só nasce na primeira captura de parceiro
-        conexao.commit()
-        conexao.close()
+        with db.conexao() as conexao:
+            cursor = conexao.cursor()
+            cursor.execute("DELETE FROM parceiros WHERE id = ?", (int(parceiro_id),))
+            try:
+                cursor.execute("DELETE FROM fila_parceiros WHERE parceiro_id = ?", (int(parceiro_id),))
+            except sqlite3.OperationalError:
+                pass   # a tabela só nasce na primeira captura de parceiro
         import shutil
         shutil.rmtree(os.path.join("parceiros", str(int(parceiro_id))), ignore_errors=True)
         return True
@@ -3181,13 +3139,11 @@ TETO_DISCO_PARCEIROS_GB_PAINEL = 10  # o mesmo teto do espelhador_videos_autorai
 def ler_fila_parceiro_pendente(parceiro_id):
     """Itens ainda não publicados do parceiro, da data-alvo mais antiga para a mais nova."""
     try:
-        conexao = db.conectar()
-        conexao.row_factory = sqlite3.Row
-        cursor = conexao.cursor()
-        cursor.execute("SELECT * FROM fila_parceiros WHERE parceiro_id = ? AND processado = 0 ORDER BY data_alvo ASC",
-                       (int(parceiro_id),))
-        dados = [dict(l) for l in cursor.fetchall()]
-        conexao.close()
+        with db.conexao(linhas_por_nome=True) as conexao:
+            cursor = conexao.cursor()
+            cursor.execute("SELECT * FROM fila_parceiros WHERE parceiro_id = ? AND processado = 0 ORDER BY data_alvo ASC",
+                           (int(parceiro_id),))
+            dados = [dict(l) for l in cursor.fetchall()]
         return dados
     except Exception:
         return []
@@ -3197,11 +3153,9 @@ def atualizar_item_fila_parceiro(id_unico, campo, valor):
     if campo not in ("horario_disparo", "processado", "data_postagem"):
         return
     try:
-        conexao = db.conectar()
-        cursor = conexao.cursor()
-        cursor.execute(f"UPDATE fila_parceiros SET {campo} = ? WHERE id_unico = ?", (valor, id_unico))
-        conexao.commit()
-        conexao.close()
+        with db.conexao() as conexao:
+            cursor = conexao.cursor()
+            cursor.execute(f"UPDATE fila_parceiros SET {campo} = ? WHERE id_unico = ?", (valor, id_unico))
     except Exception as e:
         logger.error(f"❌ [Parceiros] Erro ao atualizar a fila: {e}")
 
@@ -3211,11 +3165,9 @@ def remover_item_fila_parceiro(id_unico, caminho=None):
         try: os.remove(caminho)
         except Exception: pass
     try:
-        conexao = db.conectar()
-        cursor = conexao.cursor()
-        cursor.execute("DELETE FROM fila_parceiros WHERE id_unico = ?", (id_unico,))
-        conexao.commit()
-        conexao.close()
+        with db.conexao() as conexao:
+            cursor = conexao.cursor()
+            cursor.execute("DELETE FROM fila_parceiros WHERE id_unico = ?", (id_unico,))
     except Exception:
         pass
 
@@ -3229,29 +3181,26 @@ def ler_fila_parceiro_por_dia_captura(parceiro_id):
     """
     grupos = {}
     try:
-        conexao = db.conectar()
-        conexao.row_factory = sqlite3.Row
-        cursor = conexao.cursor()
+        with db.conexao(linhas_por_nome=True) as conexao:
+            cursor = conexao.cursor()
 
-        # A tabela nasce no espelhador, na primeira captura de parceiro. Antes disso
-        # ela não existe, o que é normal e não merece log a cada 2 minutos.
-        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='fila_parceiros'")
-        if not cursor.fetchone():
-            conexao.close()
-            return grupos
+            # A tabela nasce no espelhador, na primeira captura de parceiro. Antes disso
+            # ela não existe, o que é normal e não merece log a cada 2 minutos.
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='fila_parceiros'")
+            if not cursor.fetchone():
+                return grupos
 
-        cursor.execute(
-            "SELECT * FROM fila_parceiros WHERE parceiro_id = ? AND processado = 0 "
-            "AND (horario_disparo IS NULL OR horario_disparo = '')",
-            (int(parceiro_id),)
-        )
-        for linha in cursor.fetchall():
-            item = dict(linha)
-            dia_captura = (item.get("data_captura") or "")[:10]
-            if not dia_captura:
-                continue
-            grupos.setdefault((dia_captura, item.get("data_alvo") or ""), []).append(item)
-        conexao.close()
+            cursor.execute(
+                "SELECT * FROM fila_parceiros WHERE parceiro_id = ? AND processado = 0 "
+                "AND (horario_disparo IS NULL OR horario_disparo = '')",
+                (int(parceiro_id),)
+            )
+            for linha in cursor.fetchall():
+                item = dict(linha)
+                dia_captura = (item.get("data_captura") or "")[:10]
+                if not dia_captura:
+                    continue
+                grupos.setdefault((dia_captura, item.get("data_alvo") or ""), []).append(item)
     except Exception as e:
         logger.error(f"❌ [Parceiros] Erro ao agrupar a fila por dia de captura: {e}")
     return grupos
@@ -4505,211 +4454,205 @@ async def motor_repost_publico_step():
         agora = datetime.now(fuso_horario)
         hoje_str = agora.strftime("%Y-%m-%d")
 
-        conexao = db.conectar()
-        conexao.row_factory = sqlite3.Row
-        cursor = conexao.cursor()
+        with db.conexao(linhas_por_nome=True) as conexao:
+            cursor = conexao.cursor()
 
-        # 1. Agenda os vídeos de hoje e apaga os vencidos (como no loop dos Autorais).
-        cursor.execute("SELECT * FROM fila_publico WHERE processado = 0")
-        pendentes = [dict(linha) for linha in cursor.fetchall()]
+            # 1. Agenda os vídeos de hoje e apaga os vencidos (como no loop dos Autorais).
+            cursor.execute("SELECT * FROM fila_publico WHERE processado = 0")
+            pendentes = [dict(linha) for linha in cursor.fetchall()]
 
-        itens_desagendados = []
-        houve_limpeza = False
+            itens_desagendados = []
+            houve_limpeza = False
 
-        # Tolerância para item que JÁ tem horário: a cada falha ele é adiado 30 min, então
-        # sem um limite ficaria em retry eterno. Dois dias bastam para uma falha passageira.
-        DIAS_TOLERANCIA_PUBLICO = 2
-        limite_encalhe = (agora - timedelta(days=DIAS_TOLERANCIA_PUBLICO)).strftime("%Y-%m-%d")
+            # Tolerância para item que JÁ tem horário: a cada falha ele é adiado 30 min, então
+            # sem um limite ficaria em retry eterno. Dois dias bastam para uma falha passageira.
+            DIAS_TOLERANCIA_PUBLICO = 2
+            limite_encalhe = (agora - timedelta(days=DIAS_TOLERANCIA_PUBLICO)).strftime("%Y-%m-%d")
 
-        for item in pendentes:
-            data_alvo = item.get("data_alvo") or ""
+            for item in pendentes:
+                data_alvo = item.get("data_alvo") or ""
 
-            # Passou da tolerância desde a data-alvo: perde a validade e sai da fila.
-            if data_alvo and data_alvo < limite_encalhe:
-                cursor.execute("DELETE FROM fila_publico WHERE id_unico = ?", (item["id_unico"],))
-                houve_limpeza = True
-                logger.info(f"🧹 [Auto-Limpeza] Vídeo do Público encalhado desde {data_alvo} removido da fila.")
-                continue
-
-            if item.get("horario_disparo"):
-                continue
-
-            # Data-alvo passou sem horário (robô fora do ar): o vídeo perde a validade, sem
-            # avalanche de posts atrasados.
-            if data_alvo and data_alvo < hoje_str:
-                cursor.execute("DELETE FROM fila_publico WHERE id_unico = ?", (item["id_unico"],))
-                houve_limpeza = True
-                logger.info(f"🧹 [Auto-Limpeza] Vídeo do Público vencido ({data_alvo}) removido da fila.")
-                continue
-
-            # Data-alvo hoje: entra no agendamento.
-            if data_alvo == hoje_str:
-                itens_desagendados.append(item)
-
-        if houve_limpeza:
-            conexao.commit()
-
-        if itens_desagendados:
-            dias_publico = int(config.get("repost_dias", 15))
-
-            config_fila = {
-                "inicio": janela_inicio,
-                "fim": janela_fim,
-                "modo": "aleatorio",  # Vídeos do Público misturam-se naturalmente
-                "intervalo_dias": 1,  # a data_alvo já tem o atraso; 1 só faz o motor espalhar pela janela
-                # Piso de segurança, não intervalo padrão: com poucos vídeos o motor divide a
-                # janela e espalha pelo dia. O piso só age em volume alto.
-                "espacamento_base_min": 15,
-                "espacamento_variacao_min": 6,
-                "limite_dias_descarte": dias_publico + 7  # 7 dias de folga depois da data-alvo
-            }
-
-            logger.info(f"⚙️ [Motor Público] Acionando Motor Central para {len(itens_desagendados)} vídeos de hoje...")
-            calcular_horarios_distribuicao(itens_desagendados, config_fila, forcar=False)
-
-            for item in itens_desagendados:
-                if item.get("descartar_por_idade"):
+                # Passou da tolerância desde a data-alvo: perde a validade e sai da fila.
+                if data_alvo and data_alvo < limite_encalhe:
                     cursor.execute("DELETE FROM fila_publico WHERE id_unico = ?", (item["id_unico"],))
+                    houve_limpeza = True
+                    logger.info(f"🧹 [Auto-Limpeza] Vídeo do Público encalhado desde {data_alvo} removido da fila.")
                     continue
-                cursor.execute("UPDATE fila_publico SET horario_disparo = ? WHERE id_unico = ?",
-                               (item.get("horario_disparo", ""), item["id_unico"]))
-            conexao.commit()
 
-        # 2. Publica, no horário sorteado.
-        # Com repost_via_userbot = True na submissao_config, este motor não publica (o envio
-        # voltaria para o userbot). O padrão é o bot publicar, creditando o perfil na legenda.
-        if config.get("repost_via_userbot", False):
-            conexao.close()
-            return
+                if item.get("horario_disparo"):
+                    continue
 
-        # Fora da janela nada sai: item atrasado de ontem não pode sair de madrugada.
-        if not (janela_inicio <= agora.hour < janela_fim):
-            conexao.close()
-            return
+                # Data-alvo passou sem horário (robô fora do ar): o vídeo perde a validade, sem
+                # avalanche de posts atrasados.
+                if data_alvo and data_alvo < hoje_str:
+                    cursor.execute("DELETE FROM fila_publico WHERE id_unico = ?", (item["id_unico"],))
+                    houve_limpeza = True
+                    logger.info(f"🧹 [Auto-Limpeza] Vídeo do Público vencido ({data_alvo}) removido da fila.")
+                    continue
 
-        cursor.execute('''
-            SELECT * FROM fila_publico
-            WHERE processado = 0
-            AND horario_disparo IS NOT NULL
-            AND horario_disparo != ''
-            AND horario_disparo <= ?
-            ORDER BY horario_disparo ASC LIMIT 1
-        ''', (agora.strftime("%Y-%m-%d %H:%M:%S"),))
+                # Data-alvo hoje: entra no agendamento.
+                if data_alvo == hoje_str:
+                    itens_desagendados.append(item)
 
-        video_alvo = cursor.fetchone()
-
-        if video_alvo:
-            id_unico = video_alvo["id_unico"]
-            legenda_original = video_alvo["legenda"] or ""
-            caminho = dict(video_alvo).get("caminho_arquivo") or ""
-
-            # Quem baixa o arquivo é o userbot (Correio Público, no espelhador): o canal de
-            # origem não é nosso e o bot não consegue lê-lo. Aqui o bot só publica do disco.
-            if not caminho or not os.path.exists(caminho):
-                # Repete a cada 10 min enquanto o Correio não baixa: o aviso sai uma vez a cada
-                # 6 h por vídeo, e as outras voltas ficam no DEBUG.
-                ultimo_aviso = _avisos_sem_arquivo_publico.get(id_unico)
-                if not ultimo_aviso or agora - ultimo_aviso >= timedelta(hours=6):
-                    _avisos_sem_arquivo_publico[id_unico] = agora
-                    logger.warning(f"⏳ [Motor Público] Vídeo {id_unico} ainda sem arquivo no disco. "
-                                   "O correio do userbot não baixou. Nova tentativa a cada 10 min.")
-                else:
-                    logger.debug(f"⏳ [Motor Público] Vídeo {id_unico} continua sem arquivo no disco.")
-                cursor.execute(
-                    "UPDATE fila_publico SET horario_disparo = ? WHERE id_unico = ?",
-                    ((agora + timedelta(minutes=10)).strftime("%Y-%m-%d %H:%M:%S"), id_unico)
-                )
+            if houve_limpeza:
                 conexao.commit()
-            elif os.path.getsize(caminho) > LIMITE_UPLOAD_BOT_MB * 1024 * 1024:
-                # Rede de segurança: o Correio já barra arquivo grande antes de baixar; se um
-                # escapar, sai da fila em vez de ser recusado para sempre.
-                logger.warning(f"🚫 [Motor Público] Vídeo {id_unico} tem "
-                               f"{os.path.getsize(caminho) / (1024**2):.1f} MB, acima do teto de "
-                               f"{LIMITE_UPLOAD_BOT_MB} MB da Bot API. Item descartado.")
-                cursor.execute("DELETE FROM fila_publico WHERE id_unico = ?", (id_unico,))
+
+            if itens_desagendados:
+                dias_publico = int(config.get("repost_dias", 15))
+
+                config_fila = {
+                    "inicio": janela_inicio,
+                    "fim": janela_fim,
+                    "modo": "aleatorio",  # Vídeos do Público misturam-se naturalmente
+                    "intervalo_dias": 1,  # a data_alvo já tem o atraso; 1 só faz o motor espalhar pela janela
+                    # Piso de segurança, não intervalo padrão: com poucos vídeos o motor divide a
+                    # janela e espalha pelo dia. O piso só age em volume alto.
+                    "espacamento_base_min": 15,
+                    "espacamento_variacao_min": 6,
+                    "limite_dias_descarte": dias_publico + 7  # 7 dias de folga depois da data-alvo
+                }
+
+                logger.info(f"⚙️ [Motor Público] Acionando Motor Central para {len(itens_desagendados)} vídeos de hoje...")
+                calcular_horarios_distribuicao(itens_desagendados, config_fila, forcar=False)
+
+                for item in itens_desagendados:
+                    if item.get("descartar_por_idade"):
+                        cursor.execute("DELETE FROM fila_publico WHERE id_unico = ?", (item["id_unico"],))
+                        continue
+                    cursor.execute("UPDATE fila_publico SET horario_disparo = ? WHERE id_unico = ?",
+                                   (item.get("horario_disparo", ""), item["id_unico"]))
                 conexao.commit()
-                try: os.remove(caminho)
-                except Exception: pass
-            else:
-                logger.info("🚀 [Motor Público] Vídeo elegível detetado. A iniciar a repostagem...")
-                import re
 
-                link_shopee = links_shopee.primeiro_link(legenda_original) or "https://shopee.com.br"
+            # 2. Publica, no horário sorteado.
+            # Com repost_via_userbot = True na submissao_config, este motor não publica (o envio
+            # voltaria para o userbot). O padrão é o bot publicar, creditando o perfil na legenda.
+            if config.get("repost_via_userbot", False):
+                return
 
-                match_item = re.search(r'📦\s*Item:\s*([^\n<]+)', legenda_original)
-                nome_produto = match_item.group(1).strip() if match_item else "Produto Exclusivo"
+            # Fora da janela nada sai: item atrasado de ontem não pode sair de madrugada.
+            if not (janela_inicio <= agora.hour < janela_fim):
+                return
 
-                user_mention = await obter_credito_repost()
+            cursor.execute('''
+                SELECT * FROM fila_publico
+                WHERE processado = 0
+                AND horario_disparo IS NOT NULL
+                AND horario_disparo != ''
+                AND horario_disparo <= ?
+                ORDER BY horario_disparo ASC LIMIT 1
+            ''', (agora.strftime("%Y-%m-%d %H:%M:%S"),))
 
-                legenda_final = legenda_repost_publico(user_mention, nome_produto, link_shopee, legenda_original)
+            video_alvo = cursor.fetchone()
 
-                # Última checagem da pausa: o config lido no topo pode ter até 2 minutos, e o
-                # upload ainda leva alguns segundos.
-                config_agora = ler_submissao_config()
-                if not config_agora.get("ativo") or config_agora.get("repost_pausado", False):
-                    logger.info("⏸️ [Motor Público] Pausa detetada. Publicação abortada.")
-                    conexao.close()
-                    return
+            if video_alvo:
+                id_unico = video_alvo["id_unico"]
+                legenda_original = video_alvo["legenda"] or ""
+                caminho = dict(video_alvo).get("caminho_arquivo") or ""
 
-                try:
-                    # O message_id da mensagem publicada monta o link "(Destino)" no relatório.
-                    msg_publicada = await bot.send_video(
-                        chat_id=grupo_id,
-                        video=FSInputFile(caminho),
-                        caption=legenda_final,
-                        parse_mode="HTML",
-                        message_thread_id=int(topico_destino) if topico_destino else None
-                    )
-                    logger.info(f"✅ [Motor Público] Vídeo '{nome_produto}' publicado no Grupo Público.")
-
-                    # O vídeo já está no grupo: se o processado = 1 não gravar, o ciclo seguinte
-                    # escolhe o MESMO item e publica de novo ("database is locked" é comum). Por isso
-                    # insiste.
-                    marcou = False
-                    for tentativa in range(1, 7):
-                        try:
-                            cursor.execute(
-                                "UPDATE fila_publico SET processado = 1, data_postagem = ?, horario_disparo = ?, msg_postada_id = ? WHERE id_unico = ?",
-                                (agora.strftime("%Y-%m-%d %H:%M:%S"), agora.strftime("%Y-%m-%d %H:%M:%S"),
-                                 getattr(msg_publicada, "message_id", None), id_unico)
-                            )
-                            conexao.commit()
-                            marcou = True
-                            break
-                        except Exception as erro_marca:
-                            logger.warning(f"⏳ [Motor Público] Tentativa {tentativa}/6 de marcar {id_unico} "
-                                           f"como postado falhou: {erro_marca}")
-                            await asyncio.sleep(2 * tentativa)
-
-                    if not marcou:
-                        # Não deu para registrar. Apaga o arquivo: sem ele, os ciclos seguintes caem
-                        # na trava "sem arquivo" (adiam o item) em vez de publicar o vídeo de novo.
-                        # O item sai da fila pela tolerância de dias. Melhor um vídeo preso na
-                        # fila do que vinte cópias no grupo.
-                        try: os.remove(caminho)
-                        except Exception: pass
-                        logger.error(f"🛑 [Motor Público] {id_unico} foi PUBLICADO mas não foi possível marcar "
-                                     "no banco. Arquivo apagado para não republicar. Verifique o SQLite.")
-                        conexao.close()
-                        return
-
-                    registrar_ultimo_post(grupo_id, "video")  # para a intercalação
-
-                    # O arquivo cumpriu o papel: sai do disco na hora.
-                    try: os.remove(caminho)
-                    except Exception: pass
-
-                except Exception as e:
-                    logger.error(f"❌ [Motor Público] Falha ao publicar: {e} "
-                                 f"| destino={grupo_id!r} topico={topico_destino!r} arquivo={caminho!r}")
-                    # Falhou: adia 30 min em vez de deixar o item parado no topo da fila.
+                # Quem baixa o arquivo é o userbot (Correio Público, no espelhador): o canal de
+                # origem não é nosso e o bot não consegue lê-lo. Aqui o bot só publica do disco.
+                if not caminho or not os.path.exists(caminho):
+                    # Repete a cada 10 min enquanto o Correio não baixa: o aviso sai uma vez a cada
+                    # 6 h por vídeo, e as outras voltas ficam no DEBUG.
+                    ultimo_aviso = _avisos_sem_arquivo_publico.get(id_unico)
+                    if not ultimo_aviso or agora - ultimo_aviso >= timedelta(hours=6):
+                        _avisos_sem_arquivo_publico[id_unico] = agora
+                        logger.warning(f"⏳ [Motor Público] Vídeo {id_unico} ainda sem arquivo no disco. "
+                                       "O correio do userbot não baixou. Nova tentativa a cada 10 min.")
+                    else:
+                        logger.debug(f"⏳ [Motor Público] Vídeo {id_unico} continua sem arquivo no disco.")
                     cursor.execute(
                         "UPDATE fila_publico SET horario_disparo = ? WHERE id_unico = ?",
-                        ((agora + timedelta(minutes=30)).strftime("%Y-%m-%d %H:%M:%S"), id_unico)
+                        ((agora + timedelta(minutes=10)).strftime("%Y-%m-%d %H:%M:%S"), id_unico)
                     )
                     conexao.commit()
+                elif os.path.getsize(caminho) > LIMITE_UPLOAD_BOT_MB * 1024 * 1024:
+                    # Rede de segurança: o Correio já barra arquivo grande antes de baixar; se um
+                    # escapar, sai da fila em vez de ser recusado para sempre.
+                    logger.warning(f"🚫 [Motor Público] Vídeo {id_unico} tem "
+                                   f"{os.path.getsize(caminho) / (1024**2):.1f} MB, acima do teto de "
+                                   f"{LIMITE_UPLOAD_BOT_MB} MB da Bot API. Item descartado.")
+                    cursor.execute("DELETE FROM fila_publico WHERE id_unico = ?", (id_unico,))
+                    conexao.commit()
+                    try: os.remove(caminho)
+                    except Exception: pass
+                else:
+                    logger.info("🚀 [Motor Público] Vídeo elegível detetado. A iniciar a repostagem...")
+                    import re
+
+                    link_shopee = links_shopee.primeiro_link(legenda_original) or "https://shopee.com.br"
+
+                    match_item = re.search(r'📦\s*Item:\s*([^\n<]+)', legenda_original)
+                    nome_produto = match_item.group(1).strip() if match_item else "Produto Exclusivo"
+
+                    user_mention = await obter_credito_repost()
+
+                    legenda_final = legenda_repost_publico(user_mention, nome_produto, link_shopee, legenda_original)
+
+                    # Última checagem da pausa: o config lido no topo pode ter até 2 minutos, e o
+                    # upload ainda leva alguns segundos.
+                    config_agora = ler_submissao_config()
+                    if not config_agora.get("ativo") or config_agora.get("repost_pausado", False):
+                        logger.info("⏸️ [Motor Público] Pausa detetada. Publicação abortada.")
+                        return
+
+                    try:
+                        # O message_id da mensagem publicada monta o link "(Destino)" no relatório.
+                        msg_publicada = await bot.send_video(
+                            chat_id=grupo_id,
+                            video=FSInputFile(caminho),
+                            caption=legenda_final,
+                            parse_mode="HTML",
+                            message_thread_id=int(topico_destino) if topico_destino else None
+                        )
+                        logger.info(f"✅ [Motor Público] Vídeo '{nome_produto}' publicado no Grupo Público.")
+
+                        # O vídeo já está no grupo: se o processado = 1 não gravar, o ciclo seguinte
+                        # escolhe o MESMO item e publica de novo ("database is locked" é comum). Por isso
+                        # insiste.
+                        marcou = False
+                        for tentativa in range(1, 7):
+                            try:
+                                cursor.execute(
+                                    "UPDATE fila_publico SET processado = 1, data_postagem = ?, horario_disparo = ?, msg_postada_id = ? WHERE id_unico = ?",
+                                    (agora.strftime("%Y-%m-%d %H:%M:%S"), agora.strftime("%Y-%m-%d %H:%M:%S"),
+                                     getattr(msg_publicada, "message_id", None), id_unico)
+                                )
+                                conexao.commit()
+                                marcou = True
+                                break
+                            except Exception as erro_marca:
+                                logger.warning(f"⏳ [Motor Público] Tentativa {tentativa}/6 de marcar {id_unico} "
+                                               f"como postado falhou: {erro_marca}")
+                                await asyncio.sleep(2 * tentativa)
+
+                        if not marcou:
+                            # Não deu para registrar. Apaga o arquivo: sem ele, os ciclos seguintes caem
+                            # na trava "sem arquivo" (adiam o item) em vez de publicar o vídeo de novo.
+                            # O item sai da fila pela tolerância de dias. Melhor um vídeo preso na
+                            # fila do que vinte cópias no grupo.
+                            try: os.remove(caminho)
+                            except Exception: pass
+                            logger.error(f"🛑 [Motor Público] {id_unico} foi PUBLICADO mas não foi possível marcar "
+                                         "no banco. Arquivo apagado para não republicar. Verifique o SQLite.")
+                            return
+
+                        registrar_ultimo_post(grupo_id, "video")  # para a intercalação
+
+                        # O arquivo cumpriu o papel: sai do disco na hora.
+                        try: os.remove(caminho)
+                        except Exception: pass
+
+                    except Exception as e:
+                        logger.error(f"❌ [Motor Público] Falha ao publicar: {e} "
+                                     f"| destino={grupo_id!r} topico={topico_destino!r} arquivo={caminho!r}")
+                        # Falhou: adia 30 min em vez de deixar o item parado no topo da fila.
+                        cursor.execute(
+                            "UPDATE fila_publico SET horario_disparo = ? WHERE id_unico = ?",
+                            ((agora + timedelta(minutes=30)).strftime("%Y-%m-%d %H:%M:%S"), id_unico)
+                        )
+                        conexao.commit()
         
-        conexao.close()
     except Exception as e:
         logger.error(f"❌ [Motor Público] Erro estrutural crítico: {e}")
 
@@ -4755,11 +4698,10 @@ teclado_submenu_retorno = montar_teclado([
 def calcular_dias_restantes_autorais():
     """Dias até a data-alvo mais próxima da fila de retorno; None se já chegou ou não há fila."""
     try:
-        conexao = db.conectar()
-        cursor = conexao.cursor()
-        cursor.execute("SELECT MIN(data_alvo) FROM fila_autorais")
-        resultado = cursor.fetchone()
-        conexao.close()
+        with db.conexao() as conexao:
+            cursor = conexao.cursor()
+            cursor.execute("SELECT MIN(data_alvo) FROM fila_autorais")
+            resultado = cursor.fetchone()
 
         if resultado and resultado[0]:
             data_alvo_str = resultado[0]
@@ -6443,11 +6385,10 @@ def salvar_achadinhos_config(dados):
 def achadinho_ja_enviado(item_id):
     """Se o produto já foi publicado alguma vez (memória permanente, sem limite de tamanho)."""
     try:
-        conexao = db.conectar()
-        cursor = conexao.cursor()
-        cursor.execute("SELECT 1 FROM achadinhos_enviados WHERE item_id = ?", (str(item_id),))
-        achou = cursor.fetchone() is not None
-        conexao.close()
+        with db.conexao() as conexao:
+            cursor = conexao.cursor()
+            cursor.execute("SELECT 1 FROM achadinhos_enviados WHERE item_id = ?", (str(item_id),))
+            achou = cursor.fetchone() is not None
         return achou
     except Exception as e:
         logger.error(f"❌ [Achadinhos] Erro ao consultar histórico: {e}")
@@ -6456,12 +6397,10 @@ def achadinho_ja_enviado(item_id):
 def registrar_achadinho_enviado(item_id, nicho=""):
     """Guarda o produto na memória de publicados."""
     try:
-        conexao = db.conectar()
-        cursor = conexao.cursor()
-        cursor.execute("INSERT OR IGNORE INTO achadinhos_enviados (item_id, data_envio, nicho) VALUES (?, ?, ?)",
-                       (str(item_id), datetime.now(fuso_horario).strftime("%Y-%m-%d %H:%M:%S"), nicho))
-        conexao.commit()
-        conexao.close()
+        with db.conexao() as conexao:
+            cursor = conexao.cursor()
+            cursor.execute("INSERT OR IGNORE INTO achadinhos_enviados (item_id, data_envio, nicho) VALUES (?, ?, ?)",
+                           (str(item_id), datetime.now(fuso_horario).strftime("%Y-%m-%d %H:%M:%S"), nicho))
     except Exception as e:
         logger.error(f"❌ [Achadinhos] Erro ao registrar envio: {e}")
 
@@ -6473,12 +6412,10 @@ def limpar_achadinhos_antigos():
     """Apaga da memória os produtos publicados há mais de ANOS_RETENCAO_ACHADINHOS anos."""
     try:
         corte = (datetime.now(fuso_horario) - timedelta(days=ANOS_RETENCAO_ACHADINHOS * 365)).strftime("%Y-%m-%d %H:%M:%S")
-        conexao = db.conectar()
-        cursor = conexao.cursor()
-        cursor.execute("DELETE FROM achadinhos_enviados WHERE data_envio < ?", (corte,))
-        removidos = cursor.rowcount
-        conexao.commit()
-        conexao.close()
+        with db.conexao() as conexao:
+            cursor = conexao.cursor()
+            cursor.execute("DELETE FROM achadinhos_enviados WHERE data_envio < ?", (corte,))
+            removidos = cursor.rowcount
         if removidos > 0:
             logger.info(f"🧹 [Achadinhos] {removidos} produto(s) com mais de {ANOS_RETENCAO_ACHADINHOS} anos removidos da memória.")
     except Exception as e:
@@ -6486,11 +6423,10 @@ def limpar_achadinhos_antigos():
 
 def total_achadinhos_enviados():
     try:
-        conexao = db.conectar()
-        cursor = conexao.cursor()
-        cursor.execute("SELECT COUNT(*) FROM achadinhos_enviados")
-        total = cursor.fetchone()[0]
-        conexao.close()
+        with db.conexao() as conexao:
+            cursor = conexao.cursor()
+            cursor.execute("SELECT COUNT(*) FROM achadinhos_enviados")
+            total = cursor.fetchone()[0]
         return total
     except Exception:
         return 0
@@ -7566,16 +7502,14 @@ async def relatorio_fila_publico(message: types.Message, state: FSMContext):
     display_origem = cache_nomes.get(origem_base, origem_base or "Origem não definida")
 
     try:
-        conexao = db.conectar()
-        conexao.row_factory = sqlite3.Row
-        cursor = conexao.cursor()
-        cursor.execute("""
-            SELECT * FROM fila_publico
-            WHERE processado = 0 OR data_postagem LIKE ?
-            ORDER BY data_alvo ASC
-        """, (f"{hoje_str}%",))
-        linhas = cursor.fetchall()
-        conexao.close()
+        with db.conexao(linhas_por_nome=True) as conexao:
+            cursor = conexao.cursor()
+            cursor.execute("""
+                SELECT * FROM fila_publico
+                WHERE processado = 0 OR data_postagem LIKE ?
+                ORDER BY data_alvo ASC
+            """, (f"{hoje_str}%",))
+            linhas = cursor.fetchall()
     except Exception as e:
         logger.error(f"❌ Erro ao ler a fila do Grupo Público: {e}")
         await message.answer(f"❌ Erro interno ao ler o banco de dados: {e}")
@@ -7730,16 +7664,14 @@ async def relatorio_filas_unificado(message: types.Message, state: FSMContext):
         fila = fila_data.get("fila", [])
     elif tipo_fila == "Autorais":
         try:
-            conexao = db.conectar()
-            conexao.row_factory = sqlite3.Row
-            cursor = conexao.cursor()
-            # O retorno autoral é publicado no grupo de ORIGEM: é ele o destino do link no relatório.
-            _cfg_aut = db.ler_config("autorais_config", {})
-            _destino_retorno = str(_cfg_aut.get("origem") or "").split(":")[0].strip()
+            with db.conexao(linhas_por_nome=True) as conexao:
+                cursor = conexao.cursor()
+                # O retorno autoral é publicado no grupo de ORIGEM: é ele o destino do link no relatório.
+                _cfg_aut = db.ler_config("autorais_config", {})
+                _destino_retorno = str(_cfg_aut.get("origem") or "").split(":")[0].strip()
 
-            cursor.execute("SELECT * FROM fila_autorais ORDER BY data_alvo ASC, horario_disparo ASC")
-            linhas = cursor.fetchall()
-            conexao.close()
+                cursor.execute("SELECT * FROM fila_autorais ORDER BY data_alvo ASC, horario_disparo ASC")
+                linhas = cursor.fetchall()
             
             fila = []
             for linha in linhas:
@@ -7841,28 +7773,27 @@ async def relatorio_filas_unificado(message: types.Message, state: FSMContext):
         houve_alteracao = False
         
         try:
-            conexao = db.conectar()
-            cursor = conexao.cursor()
+            with db.conexao() as conexao:
+                cursor = conexao.cursor()
             
-            for item in fila:
-                if item.get("processado", False) or item.get("processado") == 1:
-                    horario_disp = item.get("horario_disparo", "")
+                for item in fila:
+                    if item.get("processado", False) or item.get("processado") == 1:
+                        horario_disp = item.get("horario_disparo", "")
                     
-                    # Publicado hoje: fica na tela.
-                    if horario_disp and horario_disp.startswith(hoje_str):
-                        logger.info(f"👁️ Pente Fino (Relatório): Mantendo o vídeo autoral postado hoje ({item.get('id')}) no visual da fila.")
-                        fila_limpa.append(item)
-                    else:
-                        # Publicado em outro dia: sai do banco, para não acumular.
-                        cursor.execute("DELETE FROM fila_autorais WHERE id_unico = ?", (item["id"],))
-                        houve_alteracao = True
-                    continue
+                        # Publicado hoje: fica na tela.
+                        if horario_disp and horario_disp.startswith(hoje_str):
+                            logger.info(f"👁️ Pente Fino (Relatório): Mantendo o vídeo autoral postado hoje ({item.get('id')}) no visual da fila.")
+                            fila_limpa.append(item)
+                        else:
+                            # Publicado em outro dia: sai do banco, para não acumular.
+                            cursor.execute("DELETE FROM fila_autorais WHERE id_unico = ?", (item["id"],))
+                            houve_alteracao = True
+                        continue
                 
-                fila_limpa.append(item)
+                    fila_limpa.append(item)
                 
-            if houve_alteracao:
-                conexao.commit()
-            conexao.close()
+                if houve_alteracao:
+                    conexao.commit()
         except Exception as e:
             logger.error(f"❌ Erro no pente fino da fila_autorais: {e}")
             
@@ -8743,17 +8674,15 @@ async def gerar_relatorio_logs(message: types.Message, state: FSMContext):
     logger.info("🚀 A iniciar a auditoria da tabela erros_logs...")
     
     try:
-        conexao = db.conectar()
-        conexao.row_factory = sqlite3.Row
-        cursor = conexao.cursor()
+        with db.conexao(linhas_por_nome=True) as conexao:
+            cursor = conexao.cursor()
         
-        # Os 5 erros mais recentes
-        cursor.execute("SELECT * FROM erros_logs ORDER BY id DESC LIMIT 5")
-        erros_db = cursor.fetchall()
+            # Os 5 erros mais recentes
+            cursor.execute("SELECT * FROM erros_logs ORDER BY id DESC LIMIT 5")
+            erros_db = cursor.fetchall()
         
-        cursor.execute("SELECT COUNT(*) FROM erros_logs")
-        total_erros = cursor.fetchone()[0]
-        conexao.close()
+            cursor.execute("SELECT COUNT(*) FROM erros_logs")
+            total_erros = cursor.fetchone()[0]
         
         if total_erros == 0:
             logger.info("✅ A tabela de logs está vazia. Sistema limpo.")
@@ -8796,11 +8725,9 @@ async def limpar_historico_erros(callback: CallbackQuery):
     logger.info("🧹 Pedido de exclusão do histórico de erros recebido via botão interativo.")
     
     try:
-        conexao = db.conectar()
-        cursor = conexao.cursor()
-        cursor.execute("DELETE FROM erros_logs")
-        conexao.commit()
-        conexao.close()
+        with db.conexao() as conexao:
+            cursor = conexao.cursor()
+            cursor.execute("DELETE FROM erros_logs")
         
         # Trava que silencia o registro de erros até o próximo deploy (o divulgacao_canal a apaga ao subir).
         with open("trava_manutencao.txt", "w") as f:
@@ -9290,14 +9217,12 @@ async def manual_repost_autoral(message: types.Message):
     msg_status = await message.answer("♻️ Extraindo um vídeo legível do Canal Autoral...", parse_mode="HTML")
     
     try:
-        conexao = db.conectar()
-        conexao.row_factory = sqlite3.Row
-        cursor = conexao.cursor()
-        
         # Só vídeo que ainda não foi para o Público, nem por outro item com o mesmo vídeo
         # (a origem postou de novo): DECISOES.md, Grupo Público e Achadinhos.
-        cursor.execute("SELECT * FROM fila_autorais WHERE processado = 1 AND repostado_publico = 0 ORDER BY id_unico DESC LIMIT 30")
-        autorais_recentes = [v for v in cursor.fetchall()
+        with db.conexao(linhas_por_nome=True) as conexao:
+            recentes = conexao.execute("SELECT * FROM fila_autorais WHERE processado = 1 AND repostado_publico = 0 "
+                                       "ORDER BY id_unico DESC LIMIT 30").fetchall()
+        autorais_recentes = [v for v in recentes
                              if not repetidos_publico.ja_foi(repetidos_publico.chaves_da_coluna(dict(v).get("chaves_video")))]
     except Exception as e:
         await msg_status.edit_text(f"❌ Erro ao ler banco de autorais: {e}")
@@ -9305,7 +9230,6 @@ async def manual_repost_autoral(message: types.Message):
         
     if not autorais_recentes:
         await msg_status.edit_text("❌ Não há vídeos recentes ou disponíveis que ainda não tenham sido postados no Público.")
-        conexao.close()
         return
         
     import random
@@ -9315,7 +9239,6 @@ async def manual_repost_autoral(message: types.Message):
     
     if not file_id:
         await msg_status.edit_text("❌ Erro: O vídeo sorteado não tem um File ID válido na nuvem.")
-        conexao.close()
         return
         
     user_mention = await obter_credito_repost()
@@ -9355,8 +9278,9 @@ async def manual_repost_autoral(message: types.Message):
         
         # Marca como repostado no Público.
         agora_str = datetime.now(fuso_horario).strftime("%Y-%m-%d %H:%M:%S")
-        cursor.execute("UPDATE fila_autorais SET repostado_publico = 1, data_repost_publico = ? WHERE id_unico = ?", (agora_str, id_unico))
-        conexao.commit()
+        with db.conexao() as conexao:
+            conexao.execute("UPDATE fila_autorais SET repostado_publico = 1, data_repost_publico = ? WHERE id_unico = ?",
+                            (agora_str, id_unico))
         repetidos_publico.registrar(repetidos_publico.chaves_da_coluna(dict(video_sorteado).get("chaves_video")), id_unico)
         
         await msg_status.edit_text("✅ <b>Repost Autoral realizado!</b>\nUm vídeo foi puxado e enviado formatado para o Tópico de Postagem do Grupo Público.", parse_mode="HTML")
@@ -9364,8 +9288,6 @@ async def manual_repost_autoral(message: types.Message):
     except Exception as e:
         logger.error(f"❌ Erro ao dar copy_message no repost manual: {e}")
         await msg_status.edit_text(f"❌ Erro técnico ao tentar enviar o vídeo: {e}")
-        
-    conexao.close()
 
 @dp.message(F.text == "Cancelar ❌", StateFilter("*"))
 async def cancelar_fluxo_global(message: types.Message, state: FSMContext):
@@ -9982,21 +9904,19 @@ async def finalizar_postagem(message: types.Message, state: FSMContext):
         id_unico = f"{int(datetime.now().timestamp())}_{random.randint(1000, 9999)}"
         
         try:
-            conexao = db.conectar()
-            cursor = conexao.cursor()
+            with db.conexao() as conexao:
+                cursor = conexao.cursor()
             
-            # Próxima posição dentro do dia.
-            cursor.execute("SELECT MAX(prioridade) FROM fila_postagens WHERE data_alvo = ?", (data_agendamento_base,))
-            resultado = cursor.fetchone()[0]
-            proxima_prioridade = (resultado if resultado else 0) + 1
+                # Próxima posição dentro do dia.
+                cursor.execute("SELECT MAX(prioridade) FROM fila_postagens WHERE data_alvo = ?", (data_agendamento_base,))
+                resultado = cursor.fetchone()[0]
+                proxima_prioridade = (resultado if resultado else 0) + 1
             
-            cursor.execute('''
-                INSERT INTO fila_postagens (id_unico, caminho_video, video_id, legenda, data_alvo, prioridade)
-                VALUES (?, ?, ?, ?, ?, ?)
-            ''', (id_unico, caminho_vid, vid_id, caption, data_agendamento_base, proxima_prioridade))
+                cursor.execute('''
+                    INSERT INTO fila_postagens (id_unico, caminho_video, video_id, legenda, data_alvo, prioridade)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                ''', (id_unico, caminho_vid, vid_id, caption, data_agendamento_base, proxima_prioridade))
             
-            conexao.commit()
-            conexao.close()
             logger.info(f"✅ Vídeo blindado no SQLite com prioridade {proxima_prioridade}.")
         except Exception as e:
             logger.error(f"❌ Erro grave ao inserir vídeo direto no banco: {e}")
@@ -10052,11 +9972,10 @@ async def finalizar_postagem(message: types.Message, state: FSMContext):
 
     # Quantos já estão na fila desse dia (contando os que acabaram de entrar).
     try:
-        conexao = db.conectar()
-        cursor = conexao.cursor()
-        cursor.execute("SELECT COUNT(*) FROM fila_postagens WHERE data_alvo = ?", (data_agendamento_base,))
-        na_fila_do_dia = int(cursor.fetchone()[0] or 0)
-        conexao.close()
+        with db.conexao() as conexao:
+            cursor = conexao.cursor()
+            cursor.execute("SELECT COUNT(*) FROM fila_postagens WHERE data_alvo = ?", (data_agendamento_base,))
+            na_fila_do_dia = int(cursor.fetchone()[0] or 0)
     except Exception:
         na_fila_do_dia = 0
 
@@ -10258,14 +10177,13 @@ async def resetar_expediente(message: types.Message, state: FSMContext):
                 nome_video = f"Vídeo {id_unico[:4]}"
                 try:
                     import re
-                    conexao = db.conectar()
-                    cursor = conexao.cursor()
-                    cursor.execute("SELECT legenda FROM fila_postagens WHERE id_unico = ?", (id_unico,))
-                    res = cursor.fetchone()
-                    if res:
-                        match = re.search(r'(?i)Vídeo\s+\d+', res[0])
-                        if match: nome_video = match.group(0).title()
-                    conexao.close()
+                    with db.conexao() as conexao:
+                        cursor = conexao.cursor()
+                        cursor.execute("SELECT legenda FROM fila_postagens WHERE id_unico = ?", (id_unico,))
+                        res = cursor.fetchone()
+                        if res:
+                            match = re.search(r'(?i)Vídeo\s+\d+', res[0])
+                            if match: nome_video = match.group(0).title()
                 except: pass
                 
                 mudancas_videos.append((hora_nova, f"📦 <b>{nome_video}:</b> {marcador_tempo}"))
@@ -10411,18 +10329,16 @@ async def processar_zerar_filas_tarefas(message: types.Message, state: FSMContex
     # 3. Autorais: tira os pendentes da fila de retorno e apaga os arquivos
     if limpar_autorais:
         try:
-            conexao = db.conectar()
-            cursor = conexao.cursor()
+            with db.conexao() as conexao:
+                cursor = conexao.cursor()
             
-            cursor.execute("SELECT caminho_arquivo FROM fila_autorais WHERE processado = 0")
-            para_apagar = cursor.fetchall()
-            for item in para_apagar:
-                apagar_arquivo(item[0])
-                relatorio["autorais"] += 1
+                cursor.execute("SELECT caminho_arquivo FROM fila_autorais WHERE processado = 0")
+                para_apagar = cursor.fetchall()
+                for item in para_apagar:
+                    apagar_arquivo(item[0])
+                    relatorio["autorais"] += 1
                 
-            cursor.execute("DELETE FROM fila_autorais WHERE processado = 0")
-            conexao.commit()
-            conexao.close()
+                cursor.execute("DELETE FROM fila_autorais WHERE processado = 0")
         except Exception:
             pass
 
@@ -13855,42 +13771,39 @@ async def aplicar_renumeracao_e_salvar(fila_ids_ordenada, message, state, numero
     logger.info("🔄 Reorganizando prioridades e numeração no SQLite...")
     
     try:
-        conexao = db.conectar()
-        conexao.row_factory = sqlite3.Row
-        cursor = conexao.cursor()
+        with db.conexao(linhas_por_nome=True) as conexao:
+            cursor = conexao.cursor()
 
-        if numero_base is not None:
-            menor_numero = numero_base
-        else:
-            menor_numero = float('inf')
-            for id_item in fila_ids_ordenada:
+            if numero_base is not None:
+                menor_numero = numero_base
+            else:
+                menor_numero = float('inf')
+                for id_item in fila_ids_ordenada:
+                    cursor.execute("SELECT legenda FROM fila_postagens WHERE id_unico = ?", (id_item,))
+                    resultado = cursor.fetchone()
+                    if resultado:
+                        match = re.search(r'(?i)Vídeo\s+(\d+)', resultado["legenda"])
+                        if match:
+                            num = int(match.group(1))
+                            if num < menor_numero:
+                                menor_numero = num
+                if menor_numero == float('inf'):
+                    async with _lock_contador:
+                        menor_numero = ler_contador()
+
+            numero_atual_cascata = menor_numero
+
+            for i, id_item in enumerate(fila_ids_ordenada):
                 cursor.execute("SELECT legenda FROM fila_postagens WHERE id_unico = ?", (id_item,))
                 resultado = cursor.fetchone()
                 if resultado:
-                    match = re.search(r'(?i)Vídeo\s+(\d+)', resultado["legenda"])
-                    if match:
-                        num = int(match.group(1))
-                        if num < menor_numero:
-                            menor_numero = num
-            if menor_numero == float('inf'):
-                async with _lock_contador:
-                    menor_numero = ler_contador()
+                    legenda_antiga = resultado["legenda"]
+                    nova_legenda = re.sub(r'(?i)(Vídeo\s+)\d+', rf'\g<1>{numero_atual_cascata}', legenda_antiga, count=1)
+                    nova_prioridade = i + 1
 
-        numero_atual_cascata = menor_numero
+                    cursor.execute("UPDATE fila_postagens SET legenda = ?, prioridade = ? WHERE id_unico = ?", (nova_legenda, nova_prioridade, id_item))
+                    numero_atual_cascata += 1
 
-        for i, id_item in enumerate(fila_ids_ordenada):
-            cursor.execute("SELECT legenda FROM fila_postagens WHERE id_unico = ?", (id_item,))
-            resultado = cursor.fetchone()
-            if resultado:
-                legenda_antiga = resultado["legenda"]
-                nova_legenda = re.sub(r'(?i)(Vídeo\s+)\d+', rf'\g<1>{numero_atual_cascata}', legenda_antiga, count=1)
-                nova_prioridade = i + 1
-
-                cursor.execute("UPDATE fila_postagens SET legenda = ?, prioridade = ? WHERE id_unico = ?", (nova_legenda, nova_prioridade, id_item))
-                numero_atual_cascata += 1
-
-        conexao.commit()
-        conexao.close()
 
         async with _lock_contador:
             # O contador passa a ser o próximo da sequência, maior ou menor que o atual:
@@ -14008,11 +13921,9 @@ async def processar_exclusao_fila(message: types.Message, state: FSMContext):
         caminho_video = item_removido.get("caminho_video")
         
         try:
-            conexao = db.conectar()
-            cursor = conexao.cursor()
-            cursor.execute("DELETE FROM fila_postagens WHERE id_unico = ?", (id_remover,))
-            conexao.commit()
-            conexao.close()
+            with db.conexao() as conexao:
+                cursor = conexao.cursor()
+                cursor.execute("DELETE FROM fila_postagens WHERE id_unico = ?", (id_remover,))
         except Exception as e:
             logger.error(f"❌ Erro ao apagar do banco: {e}")
 
@@ -14071,11 +13982,9 @@ async def salvar_nova_legenda_fila(message: types.Message, state: FSMContext):
     if 0 <= posicao < len(fila):
         id_item = fila[posicao]["id"]
         try:
-            conexao = db.conectar()
-            cursor = conexao.cursor()
-            cursor.execute("UPDATE fila_postagens SET legenda = ? WHERE id_unico = ?", (nova_legenda, id_item))
-            conexao.commit()
-            conexao.close()
+            with db.conexao() as conexao:
+                cursor = conexao.cursor()
+                cursor.execute("UPDATE fila_postagens SET legenda = ? WHERE id_unico = ?", (nova_legenda, id_item))
             logger.info(f"✏️ Fila: Legenda do vídeo {id_item} atualizada no SQLite.")
         except Exception as e:
             logger.error(f"❌ Erro ao editar legenda: {e}")
@@ -14415,11 +14324,9 @@ async def processar_confirmacao_reordenar(message: types.Message, state: FSMCont
         
         id_movido = item_movido.get("id")
         try:
-            conexao = db.conectar()
-            cursor = conexao.cursor()
-            cursor.execute("UPDATE fila_postagens SET data_alvo = ? WHERE id_unico = ?", (nova_data_adicao, id_movido))
-            conexao.commit()
-            conexao.close()
+            with db.conexao() as conexao:
+                cursor = conexao.cursor()
+                cursor.execute("UPDATE fila_postagens SET data_alvo = ? WHERE id_unico = ?", (nova_data_adicao, id_movido))
             
             # Foi para depois de hoje: sai o job que o publicaria hoje
             agora = datetime.now(fuso_horario)
@@ -14607,16 +14514,14 @@ async def processar_publicacao_imediata(message: types.Message, state: FSMContex
             id_unico = item["id"]
             
             try:
-                conexao = db.conectar()
-                cursor = conexao.cursor()
-                cursor.execute("UPDATE fila_postagens SET status = 'CONCLUIDO', data_postagem = ?, horario_postagem = ? WHERE id_unico = ?", 
-                               (agora_manual.strftime("%Y-%m-%d"), agora_manual.strftime("%H:%M"), id_unico))
+                with db.conexao() as conexao:
+                    cursor = conexao.cursor()
+                    cursor.execute("UPDATE fila_postagens SET status = 'CONCLUIDO', data_postagem = ?, horario_postagem = ? WHERE id_unico = ?", 
+                                   (agora_manual.strftime("%Y-%m-%d"), agora_manual.strftime("%H:%M"), id_unico))
                                
-                if novo_file_id:
-                    cursor.execute("UPDATE fila_postagens SET video_id = ?, caminho_video = NULL WHERE caminho_video = ? AND id_unico != ?", 
-                                   (novo_file_id, caminho_video, id_unico))
-                conexao.commit()
-                conexao.close()
+                    if novo_file_id:
+                        cursor.execute("UPDATE fila_postagens SET video_id = ?, caminho_video = NULL WHERE caminho_video = ? AND id_unico != ?", 
+                                       (novo_file_id, caminho_video, id_unico))
             except Exception as e:
                 logger.error(f"❌ Erro ao atualizar status manual no DB: {e}")
             
@@ -15686,17 +15591,15 @@ BUSCA_MINUTOS_APAGAR_FALHA = 3  # busca que não deu em nada some junto com a pe
 def _iniciar_tabela_buscas():
     """Cria a tabela do limite diário de buscas por membro."""
     try:
-        conexao = db.conectar()
-        conexao.execute("""
-            CREATE TABLE IF NOT EXISTS buscas_diarias (
-                user_id INTEGER,
-                data TEXT,
-                total INTEGER DEFAULT 0,
-                PRIMARY KEY (user_id, data)
-            )
-        """)
-        conexao.commit()
-        conexao.close()
+        with db.conexao() as conexao:
+            conexao.execute("""
+                CREATE TABLE IF NOT EXISTS buscas_diarias (
+                    user_id INTEGER,
+                    data TEXT,
+                    total INTEGER DEFAULT 0,
+                    PRIMARY KEY (user_id, data)
+                )
+            """)
     except Exception as e:
         logger.error(f"❌ [Busca] Falha ao criar tabela: {e}")
 
@@ -15705,11 +15608,10 @@ def contar_buscas_hoje(user_id):
     """Buscas do membro hoje (0 se der erro)."""
     try:
         hoje = datetime.now(fuso_horario).strftime("%Y-%m-%d")
-        conexao = db.conectar()
-        cursor = conexao.cursor()
-        cursor.execute("SELECT total FROM buscas_diarias WHERE user_id = ? AND data = ?", (user_id, hoje))
-        r = cursor.fetchone()
-        conexao.close()
+        with db.conexao() as conexao:
+            cursor = conexao.cursor()
+            cursor.execute("SELECT total FROM buscas_diarias WHERE user_id = ? AND data = ?", (user_id, hoje))
+            r = cursor.fetchone()
         return r[0] if r else 0
     except Exception:
         return 0
@@ -15719,13 +15621,11 @@ def registrar_busca(user_id):
     """Soma uma busca ao membro no dia."""
     try:
         hoje = datetime.now(fuso_horario).strftime("%Y-%m-%d")
-        conexao = db.conectar()
-        conexao.execute("""
-            INSERT INTO buscas_diarias (user_id, data, total) VALUES (?, ?, 1)
-            ON CONFLICT(user_id, data) DO UPDATE SET total = total + 1
-        """, (user_id, hoje))
-        conexao.commit()
-        conexao.close()
+        with db.conexao() as conexao:
+            conexao.execute("""
+                INSERT INTO buscas_diarias (user_id, data, total) VALUES (?, ?, 1)
+                ON CONFLICT(user_id, data) DO UPDATE SET total = total + 1
+            """, (user_id, hoje))
     except Exception as e:
         logger.error(f"❌ [Busca] Falha ao registrar: {e}")
 
@@ -16944,9 +16844,8 @@ def contar_erros_recentes(horas=1):
     """Erros gravados pelo registrar_erro_json (tabela erros_logs) nas últimas horas."""
     corte = (datetime.now(fuso_horario) - timedelta(hours=horas)).strftime("%Y-%m-%d %H:%M:%S")
     try:
-        conexao = db.conectar()
-        total = conexao.execute("SELECT COUNT(*) FROM erros_logs WHERE timestamp >= ?", (corte,)).fetchone()[0]
-        conexao.close()
+        with db.conexao() as conexao:
+            total = conexao.execute("SELECT COUNT(*) FROM erros_logs WHERE timestamp >= ?", (corte,)).fetchone()[0]
         return total
     except sqlite3.Error:
         return 0
@@ -17034,10 +16933,9 @@ def montar_status():
                   + (" ⚠️" if sem_marca else " ✅"))
     linhas.append(f"\n🐛 Erros na última hora: <b>{contar_erros_recentes(1)}</b>")
     try:
-        conexao = db.conectar()
-        ultimos = conexao.execute(
-            "SELECT timestamp, origem, erro FROM erros_logs ORDER BY id DESC LIMIT 5").fetchall()
-        conexao.close()
+        with db.conexao() as conexao:
+            ultimos = conexao.execute(
+                "SELECT timestamp, origem, erro FROM erros_logs ORDER BY id DESC LIMIT 5").fetchall()
     except sqlite3.Error:
         ultimos = []
     for quando, origem, erro in ultimos:
