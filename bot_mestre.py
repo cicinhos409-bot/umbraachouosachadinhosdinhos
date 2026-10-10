@@ -48,6 +48,7 @@ from api_gemini import gerar_texto_gemini, analisar_video_gemini, MODELOS_CASCAT
 from api_shopee import converter_link_shopee, buscar_ofertas_shopee, testar_chaves_afiliado, ORIGEM_SEM_CONVERSAO
 import links_shopee  # achar links da Shopee do mesmo jeito em todos os robôs
 import legendas  # legenda dos posts e pedido de nome e hashtags à IA, iguais em todos os robôs
+from teclados import montar_teclado, teclado_com_cancelar, teclado_cancelar, teclado_aprovar_cancelar, teclado_janela_dia_todo
 import fila_espelhador  # a fila do Espelhador, no banco
 from motor_filas import calcular_horarios_distribuicao, aplicar_limite_diario_fila, ler_faixa_limite, sortear_teto_do_dia, faixa_de_config, recompactar_horarios
 
@@ -529,19 +530,9 @@ dp.include_router(painel_acessos.router)
 painel_acessos.configurar_dependencias(bot, ADMIN_ID)
 
 # --- Teclados ---
-def montar_teclado(linhas):
-    """Teclado fixo embaixo da conversa, no padrão de todos os painéis do bot."""
-    return ReplyKeyboardMarkup(keyboard=linhas, resize_keyboard=True, is_persistent=True)
-
-
-def teclado_com_cancelar(texto_botao):
-    """Um botão de confirmar (texto_botao) ao lado do Cancelar ❌."""
-    return montar_teclado([[KeyboardButton(text=texto_botao), KeyboardButton(text="Cancelar ❌")]])
-
-
-# Teclados que vários painéis usam iguais: um só, para o texto de um botão mudar em todos.
-teclado_aprovar_cancelar = montar_teclado([[KeyboardButton(text="Aprovar ✅"), KeyboardButton(text="Cancelar ❌")]])
-teclado_janela_dia_todo = montar_teclado([[KeyboardButton(text="Dia Todo (24h) 🕛")], [KeyboardButton(text="Cancelar ❌")]])
+# O padrão (montar_teclado) e os teclados que vários painéis usam iguais
+# (teclado_cancelar, teclado_aprovar_cancelar, teclado_janela_dia_todo) vêm do
+# teclados.py, o mesmo dos painéis em arquivo próprio.
 teclado_lista_negra = montar_teclado([
     [KeyboardButton(text="➕ Add à Blacklist"), KeyboardButton(text="🗑️ Remover da Blacklist")],
     [KeyboardButton(text="Cancelar ❌")],
@@ -553,8 +544,6 @@ teclado_plataforma = montar_teclado([
     [KeyboardButton(text="Apenas Shopee 🛒"), KeyboardButton(text="Apenas TikTok 🎵")],
     [KeyboardButton(text="Cancelar ❌")]
 ])
-
-teclado_cancelar = montar_teclado([[KeyboardButton(text="Cancelar ❌")]])
 
 # Cancelar só da tela de alvos do Grupo Público. O texto é próprio de propósito: o
 # handler usa StateFilter("*") e continua funcionando depois de um restart, quando o

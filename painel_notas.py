@@ -34,7 +34,8 @@ from dotenv import load_dotenv
 from aiogram import Router, Bot, types, F
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
-from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
+from aiogram.types import KeyboardButton
+from teclados import montar_teclado
 from aiogram.filters import StateFilter
 
 load_dotenv()
@@ -136,22 +137,14 @@ class PainelNotasFluxo(StatesGroup):
 
 def obter_teclado_menu_notas():
     status_filtro = "LIGADO 🟢" if FILTRO_ANTI_DUPLICIDADE else "DESLIGADO 🔴"
-    return ReplyKeyboardMarkup(
-        keyboard=[
-            [KeyboardButton(text="Iniciar Envios 🚀")],
-            [KeyboardButton(text=f"Filtro Anti-Duplicidade: {status_filtro}")],
-            [KeyboardButton(text="Informações de Acesso ℹ️")],
-            [KeyboardButton(text="Voltar aos Relatórios 🔙")]
-        ],
-        resize_keyboard=True,
-        is_persistent=True
-    )
+    return montar_teclado([
+        [KeyboardButton(text="Iniciar Envios 🚀")],
+        [KeyboardButton(text=f"Filtro Anti-Duplicidade: {status_filtro}")],
+        [KeyboardButton(text="Informações de Acesso ℹ️")],
+        [KeyboardButton(text="Voltar aos Relatórios 🔙")]
+    ])
 
-teclado_notas_cancelar = ReplyKeyboardMarkup(
-    keyboard=[[KeyboardButton(text="Abortar ❌")]],
-    resize_keyboard=True,
-    is_persistent=True
-)
+teclado_notas_cancelar = montar_teclado([[KeyboardButton(text="Abortar ❌")]])
 
 PASTA_TEMP = "temp/notas_fiscais"
 os.makedirs(PASTA_TEMP, exist_ok=True)
@@ -197,16 +190,12 @@ async def _liberar_painel(chat_id):
     """Devolve o teclado de Relatórios, que a aprovação tira da tela durante o envio."""
     if not bot_instance:
         return
-    teclado_outros = ReplyKeyboardMarkup(
-        keyboard=[
-            [KeyboardButton(text="Relatório Financeiro 💰"), KeyboardButton(text="Diagnóstico de IA 🧠")],
-            [KeyboardButton(text="Relatórios de Filas 📋"), KeyboardButton(text="Logs de Erros ⚠️")],
-            [KeyboardButton(text="Disparador de Notas 🧾")],
-            [KeyboardButton(text="Voltar ao Início 🔙")]
-        ],
-        resize_keyboard=True,
-        is_persistent=True
-    )
+    teclado_outros = montar_teclado([
+        [KeyboardButton(text="Relatório Financeiro 💰"), KeyboardButton(text="Diagnóstico de IA 🧠")],
+        [KeyboardButton(text="Relatórios de Filas 📋"), KeyboardButton(text="Logs de Erros ⚠️")],
+        [KeyboardButton(text="Disparador de Notas 🧾")],
+        [KeyboardButton(text="Voltar ao Início 🔙")]
+    ])
     try:
         await bot_instance.send_message(chat_id, "O painel principal está liberado.", reply_markup=teclado_outros)
     except Exception: pass
@@ -559,14 +548,10 @@ async def processar_menu_notas(message: types.Message, state: FSMContext):
         logger.info("🔙 Retornando à gaveta de Relatórios de forma isolada.")
         
         # Volta para o submenu de Relatórios do bot_mestre.
-        teclado_relatorios = ReplyKeyboardMarkup(
-            keyboard=[
-                [KeyboardButton(text="Disparador de Notas 🧾")],
-                [KeyboardButton(text="Voltar ao Início 🔙")]
-            ],
-            resize_keyboard=True,
-            is_persistent=True
-        )
+        teclado_relatorios = montar_teclado([
+            [KeyboardButton(text="Disparador de Notas 🧾")],
+            [KeyboardButton(text="Voltar ao Início 🔙")]
+        ])
         await message.answer("Retornando aos Relatórios...", reply_markup=teclado_relatorios)
         await state.clear()
         
@@ -780,11 +765,7 @@ async def enviar_proxima_similaridade(message: types.Message, state: FSMContext)
         f"Arquivo PDF: <b>{par_atual['pdf']}</b>\n\n"
         "Deseja associar estes dois?"
     )
-    teclado = ReplyKeyboardMarkup(
-        keyboard=[[KeyboardButton(text="Sim ✅"), KeyboardButton(text="Não ❌")]],
-        resize_keyboard=True,
-        is_persistent=True
-    )
+    teclado = montar_teclado([[KeyboardButton(text="Sim ✅"), KeyboardButton(text="Não ❌")]])
     await message.answer(texto, reply_markup=teclado, parse_mode="HTML")
     await state.set_state(PainelNotasFluxo.revisando_similares)
 
@@ -837,14 +818,10 @@ async def enviar_lista_manual(message: types.Message, state: FSMContext):
     texto += "\n👉 <b>Digite a LETRA</b> correspondente ao PDF desta loja.\n"
     texto += "🔎 <i>Dica: Para visualizar um PDF antes de associar, clique em <b>Ver PDF 👁️</b>.</i>"
     
-    teclado = ReplyKeyboardMarkup(
-        keyboard=[
-            [KeyboardButton(text="Pular Loja ⏭️"), KeyboardButton(text="Encerrar e Ir para o Resumo ⏭️")],
-            [KeyboardButton(text="Ver PDF 👁️"), KeyboardButton(text="Abortar ❌")]
-        ],
-        resize_keyboard=True,
-        is_persistent=True
-    )
+    teclado = montar_teclado([
+        [KeyboardButton(text="Pular Loja ⏭️"), KeyboardButton(text="Encerrar e Ir para o Resumo ⏭️")],
+        [KeyboardButton(text="Ver PDF 👁️"), KeyboardButton(text="Abortar ❌")]
+    ])
     
     if len(texto) > 3900:
         await message.answer(texto[:3900] + "\n[Lista truncada...]", reply_markup=teclado, parse_mode="HTML")
@@ -1032,14 +1009,10 @@ async def gerar_resumo_final_notas(message: types.Message, state: FSMContext):
         resumo += resumo_tabela
         resumo += "\nDeseja aprovar e iniciar os envios agora?"
         
-        teclado_aprovacao = ReplyKeyboardMarkup(
-            keyboard=[
-                [KeyboardButton(text="Aprovar Envio ✅"), KeyboardButton(text="Abortar ❌")],
-                [KeyboardButton(text="Ver PDF 👁️")]
-            ],
-            resize_keyboard=True,
-            is_persistent=True
-        )
+        teclado_aprovacao = montar_teclado([
+            [KeyboardButton(text="Aprovar Envio ✅"), KeyboardButton(text="Abortar ❌")],
+            [KeyboardButton(text="Ver PDF 👁️")]
+        ])
         
         if len(resumo) > 3900:
             await message.answer(resumo[:3900] + "\n\n[...Lista truncada devido ao limite de texto...]", parse_mode="HTML", reply_markup=teclado_aprovacao)
@@ -1149,13 +1122,9 @@ async def processar_inspecao_final(message: types.Message, state: FSMContext):
         await message.answer("⚠️ Por favor, digite apenas o <b>NÚMERO</b> correspondente à nota (Ex: 1, 2).", parse_mode="HTML")
         return  # continua no modo de visualização
 
-    teclado_aprovacao = ReplyKeyboardMarkup(
-        keyboard=[
-            [KeyboardButton(text="Aprovar Envio ✅"), KeyboardButton(text="Abortar ❌")],
-            [KeyboardButton(text="Ver PDF 👁️")]
-        ],
-        resize_keyboard=True,
-        is_persistent=True
-    )
+    teclado_aprovacao = montar_teclado([
+        [KeyboardButton(text="Aprovar Envio ✅"), KeyboardButton(text="Abortar ❌")],
+        [KeyboardButton(text="Ver PDF 👁️")]
+    ])
     await message.answer("✅ <b>Visualização concluída.</b>\n\nDeseja aprovar e iniciar os envios agora?", reply_markup=teclado_aprovacao, parse_mode="HTML")
     await state.set_state(PainelNotasFluxo.aguardando_aprovacao)
