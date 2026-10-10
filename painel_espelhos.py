@@ -23,6 +23,7 @@ from aiogram import Router, Bot, types, F
 from aiogram.fsm.context import FSMContext
 import fila_espelhador
 import rotas_espelhador
+from links_grupos import nome_clicavel  # nome do grupo como atalho para abri-lo
 from aiogram.fsm.state import StatesGroup, State
 from aiogram.types import KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
 from teclados import montar_teclado
@@ -244,7 +245,7 @@ async def listar_erros_espelhador(message: types.Message, state: FSMContext):
         if info.get("status") == "erro":
             nome = info.get("nome") or cache_nomes.get(str(o), str(o))
             canais_com_erro.append(str(o))
-            texto += f"<b>{i}.</b> ❌ {nome} (<code>{o}</code>)\n"
+            texto += f"<b>{i}.</b> ❌ {nome_clicavel(nome, o)} (<code>{o}</code>)\n"
             
     if not canais_com_erro:
         await message.answer("✅ <b>Tudo limpo!</b>\nNão há nenhum canal com erro de acesso nesta rota.", parse_mode="HTML")
@@ -370,7 +371,7 @@ async def painel_espelhador(message: types.Message, state: FSMContext):
             
             status_destino_ico = "❌" if info_d.get("status") == "erro" else "✅"
             nome_d = info_d.get("nome") or cache_nomes.get(str(destino_rota), str(destino_rota))
-            display_d = f"{nome_d} (<code>{destino_rota}</code>)" if nome_d != str(destino_rota) else f"<code>{destino_rota}</code>"
+            display_d = f"{nome_clicavel(nome_d, destino_rota)} (<code>{destino_rota}</code>)" if nome_d != str(destino_rota) else f"<code>{destino_rota}</code>"
             
             texto += f"🎯 <b>Canal de Destino:</b> {status_destino_ico} {display_d}\n\n"
 
@@ -387,7 +388,7 @@ async def painel_espelhador(message: types.Message, state: FSMContext):
                 
                 status_ico = "❌" if info_o.get("status") == "erro" else "✅"
                 nome_o = info_o.get("nome") or cache_nomes.get(str(o), str(o))
-                display_o = f"{nome_o} (<code>{o}</code>)" if nome_o != str(o) else f"<code>{o}</code>"
+                display_o = f"{nome_clicavel(nome_o, o)} (<code>{o}</code>)" if nome_o != str(o) else f"<code>{o}</code>"
                 
                 linhas_origem.append({
                     "texto": f"<code>{idx + 1:02d}.</code> {status_ico} {display_o}\n",
@@ -897,7 +898,7 @@ async def selecionar_acao_edicao(message: types.Message, state: FSMContext):
         
         status_destino_ico = "❌" if info_d.get("status") == "erro" else "✅"
         nome_d = info_d.get("nome") or cache_nomes.get(str(destino_rota), str(destino_rota))
-        display_d = f"{nome_d} (<code>{destino_rota}</code>)" if nome_d != str(destino_rota) else f"<code>{destino_rota}</code>"
+        display_d = f"{nome_clicavel(nome_d, destino_rota)} (<code>{destino_rota}</code>)" if nome_d != str(destino_rota) else f"<code>{destino_rota}</code>"
         
         texto += f"\n🎯 <b>Canal de Destino:</b> {status_destino_ico} {display_d}\n\n"
 
@@ -914,7 +915,7 @@ async def selecionar_acao_edicao(message: types.Message, state: FSMContext):
             
             status_ico = "❌" if info_o.get("status") == "erro" else "✅"
             nome_o = info_o.get("nome") or cache_nomes.get(str(o), str(o))
-            display_o = f"{nome_o} (<code>{o}</code>)" if nome_o != str(o) else f"<code>{o}</code>"
+            display_o = f"{nome_clicavel(nome_o, o)} (<code>{o}</code>)" if nome_o != str(o) else f"<code>{o}</code>"
             
             linhas_origem.append({
                 "texto": f"<code>{idx + 1:02d}.</code> {status_ico} {display_o}\n",
@@ -1080,7 +1081,7 @@ async def processar_acao_origem(message: types.Message, state: FSMContext):
         if bl:
             for i, b in enumerate(bl, 1):
                 nome = cache_nomes.get(str(b), str(b))
-                txt += f"{i}. {nome} (<code>{b}</code>)\n"
+                txt += f"{i}. {nome_clicavel(nome, b)} (<code>{b}</code>)\n"
         else: 
             txt += "<i>Nenhuma restrição cadastrada.</i>\n"
         await message.answer(txt, reply_markup=teclado_espelhador_lista_negra, parse_mode="HTML")
@@ -1142,7 +1143,7 @@ async def listar_todos_espelhador(message: types.Message, state: FSMContext):
         
         status_ico = "❌" if info.get("status") == "erro" else "✅"
         nome = info.get("nome") or cache_nomes.get(str(o), str(o))
-        linha = f"<b>{i}.</b> {status_ico} {nome} (<code>{o}</code>)\n"
+        linha = f"<b>{i}.</b> {status_ico} {nome_clicavel(nome, o)} (<code>{o}</code>)\n"
         
         if len(texto_lista) + len(linha) > 3800:
             mensagens.append(texto_lista)
@@ -1220,7 +1221,7 @@ async def verificar_duplicados_espelhador(message: types.Message, state: FSMCont
         
     texto_resp = "⚠️ <b>Aviso: Possíveis Duplicados Detectados</b>\n\n"
     for A, B, motivo in duplicados:
-        texto_resp += f"🔹 <b>{A['nome']}</b>\n"
+        texto_resp += f"🔹 <b>{nome_clicavel(A['nome'], A['original'])}</b>\n"
         texto_resp += f"   ├ <b>{A['index']}.</b> {A['status_ico']} <code>{A['original']}</code>\n"
         texto_resp += f"   └ <b>{B['index']}.</b> {B['status_ico']} <code>{B['original']}</code>\n"
         texto_resp += f"   <i>(Motivo: {motivo})</i>\n\n"
@@ -1608,7 +1609,7 @@ async def confirmar_nova_origem(message: types.Message, state: FSMContext):
     if origens_validas:
         texto_resumo += f"✅ <b>{len(origens_validas)} NOVO(S) canal(is) validado(s):</b>\n"
         for o in origens_validas:
-            texto_resumo += f"🔹 {o['nome']} (<code>{o['id']}</code>)\n"
+            texto_resumo += f"🔹 {nome_clicavel(o['nome'], o['id'])} (<code>{o['id']}</code>)\n"
         texto_resumo += "\n"
 
     if origens_em_loop:
@@ -1930,7 +1931,7 @@ async def salvar_bl_add_espelhador(message: types.Message, state: FSMContext):
         )
         for c in conflitos:
              nome_conflito = cache_nomes.get(str(c), str(c))
-             texto_aviso += f"🗑️ {nome_conflito} (<code>{c}</code>)\n"
+             texto_aviso += f"🗑️ {nome_clicavel(nome_conflito, c)} (<code>{c}</code>)\n"
 
         texto_aviso += "\nDeseja aprovar a adição à Lista Negra e a exclusão destes canais da escuta da rota?"
         await message.answer(texto_aviso, reply_markup=teclado_espelhador_confirmacao, parse_mode="HTML")
@@ -1952,7 +1953,7 @@ async def salvar_bl_add_espelhador(message: types.Message, state: FSMContext):
         txt_lista = f"⛔ <b>Lista Negra da Rota '{rota_atual['nome']}'</b>\n"
         for i, b in enumerate(blacklist, 1):
             nome = cache_nomes.get(str(b), str(b))
-            txt_lista += f"{i}. {nome} (<code>{b}</code>)\n"
+            txt_lista += f"{i}. {nome_clicavel(nome, b)} (<code>{b}</code>)\n"
             
         texto_final = f"✅ <b>{len(novos_blacklist)} canal(is) bloqueado(s) com sucesso!</b>\n\n{txt_lista}"
         await message.answer(texto_final, parse_mode="HTML", reply_markup=teclado_espelhador_lista_negra)
@@ -1996,7 +1997,7 @@ async def confirmar_blacklist_conflito_espelhador(message: types.Message, state:
     txt_lista = "\n⛔ <b>Lista Negra Atualizada:</b>\n"
     for i, b in enumerate(blacklist, 1):
         nome = cache_nomes.get(str(b), str(b))
-        txt_lista += f"{i}. {nome} (<code>{b}</code>)\n"
+        txt_lista += f"{i}. {nome_clicavel(nome, b)} (<code>{b}</code>)\n"
 
     texto_final = f"✅ <b>Sucesso!</b>\n⛔ {len(novos_blacklist)} adicionado(s).\n🗑️ {len(alvos_para_remover)} removido(s) da escuta.\n{txt_lista}"
     await message.answer(texto_final, parse_mode="HTML", reply_markup=teclado_espelhador_lista_negra)
@@ -2026,7 +2027,7 @@ async def salvar_bl_rem_espelhador(message: types.Message, state: FSMContext):
     if nova_blacklist:
         for i, b in enumerate(nova_blacklist, 1):
             nome = cache_nomes.get(str(b), str(b))
-            txt_lista += f"{i}. {nome} (<code>{b}</code>)\n"
+            txt_lista += f"{i}. {nome_clicavel(nome, b)} (<code>{b}</code>)\n"
     else:
         txt_lista += "<i>Nenhuma restrição cadastrada.</i>\n"
 

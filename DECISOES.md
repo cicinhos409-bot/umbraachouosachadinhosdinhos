@@ -265,3 +265,9 @@ As regras de PR, CI, merge e avisos estão no `CLAUDE.md`, em "Como trabalhamos"
   - Resposta do Rafael (10/10/2026): os cinco teclados que podiam se recolher no ícone de teclado (lista negra do Espelhador, Voltar/Cancelar do cadastro de parceiro, Confirmar da edição de nicho dos Achadinhos e os dois de confirmar a pausa programada) passam a ficar fixos embaixo, como todos os outros. Nenhum teclado é montado fora do `teclados.py`.
   - c) As rotas do Espelhador saem do `espelhos_config.json` e vão para o banco (`rotas_espelhador.py`), como a fila. O motor grava só o que é dele (o "Esvaziar agora" atendido e o que o auditor conferiu em cada canal) sobre as rotas de agora: a rota criada ou editada no painel enquanto o motor publicava ou conferia os canais não some mais. O `motor_userbot` passa o arquivo para o banco ao ligar, depois do deploy.
   - d) Resposta do Rafael (10/10/2026): fica a regra de 06/10. Um painel sai do `bot_mestre` para o próprio arquivo só junto com a próxima mudança que ele precisar, nunca como tarefa à parte: mudar o painel de arquivo muda a ordem em que o bot reconhece os botões, sem ganho no uso.
+- **10/10/2026:** pedido do Rafael: em todo painel que cita um grupo ou canal, o nome é um atalho que abre o grupo no Telegram (`links_grupos.py`). O link, do melhor para o pior:
+  - o @ do grupo: quando o alvo foi salvo pelo número, os robôs perguntam o @ ao Telegram (ao ligar, todo dia e quando conferem os alvos) e guardam;
+  - o link de convite de grupo comum em que a conta do robô é admin (lido, nunca criado);
+  - supergrupo ou canal privado: t.me/c com a última mensagem, que abre para quem é membro;
+  - com tópico, o link abre o tópico;
+  - grupo comum sem convite fica só com o nome, sem aviso (resposta do Rafael em 10/10/2026): o Telegram não dá @ nem link a esse tipo de grupo. O atalho aparece sozinho se a conta do robô virar admin do grupo ou se o grupo virar supergrupo.

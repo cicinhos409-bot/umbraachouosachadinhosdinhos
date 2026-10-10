@@ -48,6 +48,7 @@ from api_gemini import gerar_texto_gemini, analisar_video_gemini, MODELOS_CASCAT
 from api_shopee import converter_link_shopee, buscar_ofertas_shopee, testar_chaves_afiliado, ORIGEM_SEM_CONVERSAO
 import links_shopee  # achar links da Shopee do mesmo jeito em todos os robôs
 import legendas  # legenda dos posts e pedido de nome e hashtags à IA, iguais em todos os robôs
+from links_grupos import nome_clicavel  # nome do grupo como atalho para abri-lo
 from teclados import montar_teclado, teclado_com_cancelar, teclado_cancelar, teclado_aprovar_cancelar, teclado_janela_dia_todo
 import fila_espelhador  # a fila do Espelhador, no banco
 from motor_filas import calcular_horarios_distribuicao, aplicar_limite_diario_fila, ler_faixa_limite, sortear_teto_do_dia, faixa_de_config, recompactar_horarios
@@ -716,7 +717,7 @@ async def listar_erros_espiao(message: types.Message, state: FSMContext):
         if info.get("status") == "erro":
             nome = formatar_nome_alvo(alvo, cache_nomes, info.get("nome"))
             canais_com_erro.append(str(alvo))
-            texto += f"<b>{i}.</b> ❌ {nome} (<code>{alvo}</code>)\n"
+            texto += f"<b>{i}.</b> ❌ {nome_clicavel(nome, alvo)} (<code>{alvo}</code>)\n"
             
     if not canais_com_erro:
         await message.answer("✅ <b>Tudo limpo!</b>\nNão há nenhum canal com erro de acesso no Espião.", parse_mode="HTML")
@@ -2868,7 +2869,7 @@ async def painel_submissoes(message: types.Message, state: FSMContext):
     if not topico_escuta_str:
         display_escuta = "    ❌ <i>Não definido</i>"
     else:
-        display_escuta = f"    {icone_escuta} {nome_escuta} (<code>{chave_escuta}</code>)"
+        display_escuta = f"    {icone_escuta} {nome_clicavel(nome_escuta, chave_escuta)} (<code>{chave_escuta}</code>)"
 
     # Tópico de postagem (onde o moderador publica)
     topico_vitrine_str = str(topico_vitrine) if topico_vitrine else ""
@@ -2882,7 +2883,7 @@ async def painel_submissoes(message: types.Message, state: FSMContext):
     if not topico_vitrine_str:
         display_vitrine = "    ❌ <i>Não definido</i>"
     else:
-        display_vitrine = f"    {icone_vitrine} {nome_vitrine} (<code>{chave_vitrine}</code>)"
+        display_vitrine = f"    {icone_vitrine} {nome_clicavel(nome_vitrine, chave_vitrine)} (<code>{chave_vitrine}</code>)"
 
     # Tópicos que recebem as rotinas
     topicos_rotina = config.get("topicos_rotina", [])
@@ -2913,7 +2914,7 @@ async def painel_submissoes(message: types.Message, state: FSMContext):
         for t in topicos_rotina:
             id_completo_topico = f"{grupo_id_str}_{t}"
             nome_t, icone_t = resolver_nome_topico(t)
-            lista_exibicao.append(f"    {icone_t} {nome_t} (<code>{id_completo_topico}</code>)")
+            lista_exibicao.append(f"    {icone_t} {nome_clicavel(nome_t, id_completo_topico)} (<code>{id_completo_topico}</code>)")
         display_rotinas = "\n" + "\n".join(lista_exibicao)
     else:
         display_rotinas = "\n    ✅ <i>Chat Geral (Padrão)</i>"
@@ -2928,14 +2929,14 @@ async def painel_submissoes(message: types.Message, state: FSMContext):
         repost_origem_base = str(repost_origem).split(":")[0].strip()
         nome_repost_origem = cache_nomes.get(repost_origem_base, str(repost_origem_base))
         icone_rep_orig = "✅" if repost_origem_base in cache_nomes else "⏳"
-        display_repost_origem = f"    {icone_rep_orig} {nome_repost_origem} (<code>{str(repost_origem).replace(':', '_')}</code>)"
+        display_repost_origem = f"    {icone_rep_orig} {nome_clicavel(nome_repost_origem, repost_origem)} (<code>{str(repost_origem).replace(':', '_')}</code>)"
     else:
         config_aut = db.ler_config("autorais_config", {})
         dest_aut = config_aut.get("destino", "Não definido")
         dest_aut_base = str(dest_aut).split(":")[0].strip()
         nome_aut = cache_nomes.get(dest_aut_base, str(dest_aut_base))
         icone_rep_orig = "✅" if dest_aut_base in cache_nomes else "⏳"
-        display_repost_origem = f"    {icone_rep_orig} {nome_aut} (<code>{str(dest_aut).replace(':', '_')}</code>) [Padrão]"
+        display_repost_origem = f"    {icone_rep_orig} {nome_clicavel(nome_aut, dest_aut)} (<code>{str(dest_aut).replace(':', '_')}</code>) [Padrão]"
 
     # Destino do repostador: o configurado ou, sem ele, o tópico de postagem.
     repost_destino = config.get("repost_destino")
@@ -2943,7 +2944,7 @@ async def painel_submissoes(message: types.Message, state: FSMContext):
         repost_dest_base = str(repost_destino).split(":")[0].strip()
         nome_repost_dest = cache_nomes.get(repost_dest_base, str(repost_dest_base))
         icone_rep_dest = "✅" if repost_dest_base in cache_nomes else "⏳"
-        display_repost_destino = f"\n    {icone_rep_dest} {nome_repost_dest} (<code>{str(repost_destino).replace(':', '_')}</code>)"
+        display_repost_destino = f"\n    {icone_rep_dest} {nome_clicavel(nome_repost_dest, repost_destino)} (<code>{str(repost_destino).replace(':', '_')}</code>)"
     else:
         display_repost_destino = f"\n{display_vitrine} [Padrão]"
 
@@ -3972,7 +3973,7 @@ async def parceiro_receber_destino(message: types.Message, state: FSMContext):
         return
 
     salvar_nome_grupo(str(id_final).split(":")[0], nome_chat)
-    await message.answer(f"✅ Destino validado: <b>{nome_chat}</b>", parse_mode="HTML")
+    await message.answer(f"✅ Destino validado: <b>{nome_clicavel(nome_chat, id_final)}</b>", parse_mode="HTML")
     await state.update_data(canal_destino=id_final)
     await voltar_passo_parceiro(message, state, "dias")
 
@@ -4152,7 +4153,7 @@ def rotulo_alvo(valor):
         return "<i>não definido (usando o padrão)</i>"
     base = str(valor).split(":")[0].strip()
     nome = ler_cache_nomes_grupos().get(base)
-    return f"<b>{nome}</b> (<code>{str(valor).replace(':', '_')}</code>)" if nome else f"<code>{str(valor).replace(':', '_')}</code>"
+    return f"<b>{nome_clicavel(nome, valor)}</b> (<code>{str(valor).replace(':', '_')}</code>)" if nome else f"<code>{str(valor).replace(':', '_')}</code>"
 
 async def pedir_confirmacao_destino(message, state: FSMContext, chave, rotulo, id_novo, nome_novo=None):
     """Mostra o antes e o depois de origem/destino do repostador e espera a aprovação."""
@@ -4239,7 +4240,7 @@ async def salvar_origem_repost_publico(message: types.Message, state: FSMContext
     await msg_status.delete()
 
     if sucesso:
-        await message.answer(f"✅ Origem validada e encontrada: <b>{nome_chat}</b>", parse_mode="HTML")
+        await message.answer(f"✅ Origem validada e encontrada: <b>{nome_clicavel(nome_chat, id_final)}</b>", parse_mode="HTML")
         salvar_nome_grupo(str(id_final), nome_chat)
     else:
         import re
@@ -4760,13 +4761,13 @@ async def painel_autorais(message: types.Message, state: FSMContext):
     
     if str(origem) != "Não definida":
         if str(origem) in cache_nomes:
-            nome_origem = f"{cache_nomes[str(origem)]} (<code>{origem}{topico_str}</code>)"
+            nome_origem = f"{nome_clicavel(cache_nomes[str(origem)], f'{origem}{topico_str}')} (<code>{origem}{topico_str}</code>)"
             icone_origem = "✅"
         else:
             try:
                 chat_obj = await bot.get_chat(origem)
                 nome = chat_obj.title or chat_obj.full_name
-                nome_origem = f"{nome} (<code>{origem}{topico_str}</code>)"
+                nome_origem = f"{nome_clicavel(nome, f'{origem}{topico_str}')} (<code>{origem}{topico_str}</code>)"
                 salvar_nome_grupo(str(origem), nome)
                 icone_origem = "✅"
             except Exception:
@@ -4777,7 +4778,7 @@ async def painel_autorais(message: types.Message, state: FSMContext):
                     for alvo_id, dados_alvo in status_alvos.items():
                             if str(dados_alvo.get("id")) == str(origem) or str(dados_alvo.get("id")).replace("-100", "") == str(origem).replace("-100", ""):
                                 nome = dados_alvo.get("nome", "Desconhecido")
-                                nome_origem = f"{nome} (<code>{origem}{topico_str}</code>)"
+                                nome_origem = f"{nome_clicavel(nome, f'{origem}{topico_str}')} (<code>{origem}{topico_str}</code>)"
                                 salvar_nome_grupo(str(origem), nome)
                                 icone_origem = "✅"
                                 nome_encontrado_no_espiao = True
@@ -4793,13 +4794,13 @@ async def painel_autorais(message: types.Message, state: FSMContext):
     icone_destino = "⏳"
     if str(destino) != "Não definido":
         if str(destino) in cache_nomes:
-            nome_destino = f"{cache_nomes[str(destino)]} (<code>{destino}{destino_topico_str}</code>)"
+            nome_destino = f"{nome_clicavel(cache_nomes[str(destino)], f'{destino}{destino_topico_str}')} (<code>{destino}{destino_topico_str}</code>)"
             icone_destino = "✅"
         else:
             try:
                 chat_obj = await bot.get_chat(destino)
                 nome = chat_obj.title or chat_obj.full_name
-                nome_destino = f"{nome} (<code>{destino}{destino_topico_str}</code>)"
+                nome_destino = f"{nome_clicavel(nome, f'{destino}{destino_topico_str}')} (<code>{destino}{destino_topico_str}</code>)"
                 salvar_nome_grupo(str(destino), nome)
                 icone_destino = "✅"
             except Exception:
@@ -5846,7 +5847,7 @@ async def pedir_topico_autorais(message: types.Message, state: FSMContext):
         if str(nome_chat).strip() == id_base_exibicao:
             cache_nomes = ler_cache_nomes_grupos()
             nome_chat = cache_nomes.get(id_base_exibicao, nome_chat)
-        await message.answer(f"✅ Origem validada e encontrada: <b>{nome_chat}</b>", parse_mode="HTML")
+        await message.answer(f"✅ Origem validada e encontrada: <b>{nome_clicavel(nome_chat, id_final)}</b>", parse_mode="HTML")
         salvar_nome_grupo(id_base_exibicao, nome_chat)
     else:
         import re
@@ -5987,7 +5988,7 @@ async def salvar_destino_autorais(message: types.Message, state: FSMContext):
         if str(nome_chat).strip() == id_base_exibicao:
             cache_nomes = ler_cache_nomes_grupos()
             nome_chat = cache_nomes.get(id_base_exibicao, nome_chat)
-        await message.answer(f"✅ Destino validado: <b>{nome_chat}</b>", parse_mode="HTML")
+        await message.answer(f"✅ Destino validado: <b>{nome_clicavel(nome_chat, id_final)}</b>", parse_mode="HTML")
         salvar_nome_grupo(id_base_exibicao, nome_chat)
     else:
         import re
@@ -9035,7 +9036,7 @@ async def pedir_alvos_rotina_publico(message: types.Message, state: FSMContext):
         for t in topicos_rotina:
             chave = f"{grupo_id_str}_{t}"
             nome = cache_nomes.get(chave) or ("Geral" if str(t) == "1" else f"Tópico {t}")
-            linhas.append(f"   ✅ {nome} (<code>{chave}</code>)")
+            linhas.append(f"   ✅ {nome_clicavel(nome, chave)} (<code>{chave}</code>)")
         atual = "\n".join(linhas)
     else:
         atual = "   ✅ <i>Chat Geral (Padrão)</i>"
@@ -10442,9 +10443,9 @@ async def painel_achadinhos(message: types.Message, state: FSMContext):
                 nome_grupo, nome_topico = nome_completo, None
 
             texto += f"\n🎯 <b>{i}. {nicho.get('nome')}</b>\n"
-            texto += f"   └ Publica em: {nome_grupo}\n"
+            texto += f"   └ Publica em: {nome_clicavel(nome_grupo, destino)}\n"
             if nome_topico:
-                texto += f"   └ Tópico: {nome_topico}\n"
+                texto += f"   └ Tópico: {nome_clicavel(nome_topico, alvo)}\n"
             texto += f"   └ ID: <code>{alvo}</code>\n"
             texto += f"   └ Termos Rastreados: {', '.join(nicho.get('keywords', []))}\n"
             
@@ -10929,7 +10930,7 @@ async def menu_espiao_principal(message: types.Message, state: FSMContext):
             cache_nomes = ler_cache_nomes_grupos()
             nome_dest = cache_nomes.get(str(canal_destino), str(canal_destino))
         
-        display_destino = f"{nome_dest} (<code>{canal_destino}</code>)" if nome_dest != str(canal_destino) else f"<code>{canal_destino}</code>"
+        display_destino = f"{nome_clicavel(nome_dest, canal_destino)} (<code>{canal_destino}</code>)" if nome_dest != str(canal_destino) else f"<code>{canal_destino}</code>"
 
     # Janela, atraso e modo do Espião
     inicio_e = dados_espiao.get("inicio", 10)
@@ -11040,7 +11041,7 @@ async def menu_grupos_vigiados(message: types.Message, state: FSMContext):
     if destino != "Não definido":
         nome_dest = status_destino.get("nome", str(destino))
         icone_dest = "❌" if status_destino.get("status") == "erro" else "✅" if status_destino.get("status") == "ok" else "⏳"
-        display_destino = f"{icone_dest} {nome_dest} (<code>{destino}</code>)" if nome_dest != str(destino) else f"{icone_dest} <code>{destino}</code>"
+        display_destino = f"{icone_dest} {nome_clicavel(nome_dest, destino)} (<code>{destino}</code>)" if nome_dest != str(destino) else f"{icone_dest} <code>{destino}</code>"
     else:
         display_destino = "<i>Não definido</i>"
         
@@ -11058,13 +11059,13 @@ async def menu_grupos_vigiados(message: types.Message, state: FSMContext):
             info = status_alvos.get(alvo, {})
             status_ico = "⏳"
             nome_cache = formatar_nome_alvo(alvo, cache_nomes_vigiados)
-            detalhe = f"{nome_cache} <code>({alvo})</code>" if nome_cache else alvo
+            detalhe = f"{nome_clicavel(nome_cache, alvo)} <code>({alvo})</code>" if nome_cache else alvo
             
             if info.get("status") == "ok":
                 status_ico = "✅"
                 # info['nome'] traz só o nome do grupo: recompõe com o tópico.
                 nome_ok = formatar_nome_alvo(alvo, cache_nomes_vigiados, info.get("nome"))
-                detalhe = f"{nome_ok} <code>({alvo})</code>"
+                detalhe = f"{nome_clicavel(nome_ok, alvo)} <code>({alvo})</code>"
             elif info.get("status") == "erro":
                 status_ico = "❌"
                 detalhe = f"<code>{alvo}</code> - <i>Acesso negado/Link inválido</i>"
@@ -11143,7 +11144,7 @@ async def listar_todos_espiao(message: types.Message, state: FSMContext):
         status_ico = "❌" if info.get("status") == "erro" else "✅"
         
         nome = formatar_nome_alvo(alvo, cache_nomes, info.get("nome"))
-        linha = f"<b>{i}.</b> {status_ico} {nome} (<code>{alvo}</code>)\n"
+        linha = f"<b>{i}.</b> {status_ico} {nome_clicavel(nome, alvo)} (<code>{alvo}</code>)\n"
         
         # Limite de 4096 caracteres do Telegram: corta em várias mensagens
         if len(texto) + len(linha) > 3800:
@@ -11212,7 +11213,7 @@ async def verificar_duplicados_espiao(message: types.Message, state: FSMContext)
         
     texto = "⚠️ <b>Aviso: Possíveis Duplicados Detectados</b>\n\n"
     for A, B, motivo in duplicados:
-        texto += f"🔹 <b>{A['nome']}</b>\n"
+        texto += f"🔹 <b>{nome_clicavel(A['nome'], A['original'])}</b>\n"
         texto += f"   ├ <b>{A['index']}.</b> {A['status_ico']} <code>{A['original']}</code>\n"
         texto += f"   └ <b>{B['index']}.</b> {B['status_ico']} <code>{B['original']}</code>\n"
         texto += f"   <i>(Motivo: {motivo})</i>\n\n"
@@ -11317,7 +11318,7 @@ async def processar_novo_alvo_espiao(message: types.Message, state: FSMContext):
         if blacklist:
             for i, b in enumerate(blacklist, 1): 
                 nome = formatar_nome_alvo(b, cache_nomes)
-                texto_bl += f"{i}. {nome} (<code>{b}</code>)\n"
+                texto_bl += f"{i}. {nome_clicavel(nome, b)} (<code>{b}</code>)\n"
         else: 
             texto_bl += "<i>A lista negra está vazia.</i>\n"
         
@@ -11389,7 +11390,7 @@ async def processar_novo_alvo_espiao(message: types.Message, state: FSMContext):
     if alvos_novos_para_adicionar:
         texto_resposta += f"✅ <b>{len(alvos_novos_para_adicionar)} NOVO(S) alvo(s) válido(s):</b>\n"
         for av in alvos_novos_para_adicionar[:15]:
-            texto_resposta += f"🔹 {av['nome']} (<code>{av['id']}</code>)\n"
+            texto_resposta += f"🔹 {nome_clicavel(av['nome'], av['id'])} (<code>{av['id']}</code>)\n"
         if len(alvos_novos_para_adicionar) > 15:
             texto_resposta += f"<i>... e mais {len(alvos_novos_para_adicionar) - 15} alvos.</i>\n"
         texto_resposta += "\n"
@@ -11531,7 +11532,7 @@ async def processar_add_blacklist_espiao(message: types.Message, state: FSMConte
         )
         for c in conflitos:
             nome_conflito = formatar_nome_alvo(c, cache_nomes)
-            texto_aviso += f"🗑️ {nome_conflito} (<code>{c}</code>)\n"
+            texto_aviso += f"🗑️ {nome_clicavel(nome_conflito, c)} (<code>{c}</code>)\n"
 
         texto_aviso += "\nDeseja aprovar a adição à Lista Negra e a exclusão destes canais da escuta simultaneamente?"
 
@@ -11548,7 +11549,7 @@ async def processar_add_blacklist_espiao(message: types.Message, state: FSMConte
         txt_lista = "⛔ <b>Lista Negra do Espião</b>\n"
         for i, b in enumerate(blacklist, 1):
             nome = formatar_nome_alvo(b, cache_nomes)
-            txt_lista += f"{i}. {nome} (<code>{b}</code>)\n"
+            txt_lista += f"{i}. {nome_clicavel(nome, b)} (<code>{b}</code>)\n"
             
         texto_final = f"✅ <b>{len(novos_blacklist)} canal(is) bloqueado(s) com sucesso!</b>\n\n{txt_lista}"
 
@@ -11586,7 +11587,7 @@ async def confirmar_blacklist_conflito_espiao(message: types.Message, state: FSM
     txt_lista = "\n⛔ <b>Lista Negra Atualizada:</b>\n"
     for i, b in enumerate(blacklist, 1):
         nome = formatar_nome_alvo(b, cache_nomes)
-        txt_lista += f"{i}. {nome} (<code>{b}</code>)\n"
+        txt_lista += f"{i}. {nome_clicavel(nome, b)} (<code>{b}</code>)\n"
 
     texto_final = f"✅ <b>Sucesso!</b>\n⛔ {len(novos_blacklist)} adicionado(s).\n🗑️ {len(alvos_para_remover)} removido(s) da escuta.\n{txt_lista}"
 
@@ -11613,7 +11614,7 @@ async def processar_rem_blacklist_espiao(message: types.Message, state: FSMConte
     if nova_blacklist:
         for i, b in enumerate(nova_blacklist, 1):
             nome = formatar_nome_alvo(b, cache_nomes)
-            txt_lista += f"{i}. {nome} (<code>{b}</code>)\n"
+            txt_lista += f"{i}. {nome_clicavel(nome, b)} (<code>{b}</code>)\n"
     else:
         txt_lista += "<i>Nenhuma restrição cadastrada.</i>\n"
 
@@ -11737,7 +11738,7 @@ async def confirmar_destino_espiao(message: types.Message, state: FSMContext):
     
     teclado_confirmacao = teclado_aprovar_cancelar
     
-    nome_exibicao = f"{nome} (<code>{destino_id}</code>)" if nome != destino_id else f"<code>{destino_id}</code>"
+    nome_exibicao = f"{nome_clicavel(nome, destino_id)} (<code>{destino_id}</code>)" if nome != destino_id else f"<code>{destino_id}</code>"
     
     await message.answer(f"Os vídeos clonados serão enviados automaticamente para o canal:\n\n<b>{nome_exibicao}</b>\n\nConfirma essa alteração?", reply_markup=teclado_confirmacao, parse_mode="HTML")
     await state.set_state(EspiaoFluxo.aguardando_confirmacao_destino)
@@ -12473,7 +12474,7 @@ async def avisar_alvos_sem_acesso():
             return
         import html
         cache_nomes = ler_cache_nomes_grupos()
-        linhas = [f"• <b>{html.escape(formatar_nome_alvo(alvo, cache_nomes))}</b> (<code>{html.escape(alvo)}</code>)"
+        linhas = [f"• <b>{nome_clicavel(formatar_nome_alvo(alvo, cache_nomes), alvo)}</b> (<code>{html.escape(alvo)}</code>)"
                   for alvo in pendentes]
         texto = ("🔒 <b>Divulgação: a conta perdeu o acesso</b>\n\n" + "\n".join(linhas) +
                  "\n\nA conta foi removida, banida ou o grupo ficou privado. Parei os envios "
@@ -14999,7 +15000,7 @@ async def gerenciar_rotina_publico(message: types.Message, state: FSMContext):
         for t in topicos_rotina:
             id_completo_topico = f"{grupo_id_str}_{t}"
             nome_t, icone_t = resolver_nome_topico(t)
-            lista_exibicao.append(f"   {icone_t} {nome_t} (<code>{id_completo_topico}</code>)")
+            lista_exibicao.append(f"   {icone_t} {nome_clicavel(nome_t, id_completo_topico)} (<code>{id_completo_topico}</code>)")
         display_rotinas = "\n" + "\n".join(lista_exibicao)
     else:
         display_rotinas = "\n   ✅ <i>Chat Geral (Padrão)</i>"
