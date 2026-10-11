@@ -2642,12 +2642,66 @@ def agendar_tarefas_diarias(escopo="todos"):
                                 f"{horario_campanha.strftime('%d/%m às %H:%M')}.")
                 break
 
+# O cronômetro dos 15 min fica no APScheduler, que é memória: um restart (deploy) o
+# apagava, e o menu aberto antes dele ficava na tela até o Rafael tocar em algo. A
+# contagem vai também para o banco, e o main() a rearma ao ligar.
+CHAVE_INATIVIDADE = "inatividade_painel_admin"
+
+
+async def guardar_contagem_inatividade(estado, chat_id, user_id, thread_id, limite):
+    """Guarda a contagem do painel, já com a marca que o handler deixou (Painel Inicial ou não)."""
+    na_raiz = False
+    if estado is not None:
+        na_raiz = (await estado.get_data()).get("painel_atual") == "raiz"
+    db.salvar_config(CHAVE_INATIVIDADE, {"chat_id": chat_id, "user_id": user_id, "thread_id": thread_id,
+                                         "limite": limite.isoformat(), "na_raiz": na_raiz})
+
+
+def concluir_contagem_inatividade():
+    """O painel voltou ao Painel Inicial: um restart não precisa mais devolvê-lo."""
+    agora = datetime.now(fuso_horario)
+
+    def _concluir(contagem):
+        # Uma contagem nova (toque durante a volta) fica para o restart rearmar.
+        try:
+            vencida = datetime.fromisoformat(contagem["limite"]) <= agora
+        except (KeyError, TypeError, ValueError):
+            vencida = True
+        if vencida:
+            contagem["na_raiz"] = True
+
+    db.atualizar_config(CHAVE_INATIVIDADE, _concluir)
+
+
+def rearmar_inatividade_apos_reinicio():
+    """
+    Ao ligar: se o Rafael estava fora do Painel Inicial quando o robô parou, a volta fica
+    para o fim dos 15 min contados antes do restart, ou logo após ligar, se já passaram.
+    """
+    contagem = db.ler_config(CHAVE_INATIVIDADE, {})
+    if not contagem or contagem.get("na_raiz", True):
+        return
+    try:
+        limite = datetime.fromisoformat(contagem["limite"])
+        user_id = int(contagem["user_id"])
+        chat_id = int(contagem["chat_id"])
+    except (KeyError, TypeError, ValueError):
+        return
+    quando = max(limite, datetime.now(fuso_horario) + timedelta(seconds=10))
+    scheduler.add_job(resetar_sessao_inatividade, 'date', run_date=quando,
+                      args=[chat_id, user_id, contagem.get("thread_id")],
+                      id=f"job_inatividade_{user_id}", replace_existing=True)
+    logger.info(f"⏰ Contagem de inatividade do painel rearmada depois do restart "
+                f"(volta ao Painel Inicial às {quando.strftime('%H:%M')}).")
+
+
 async def resetar_sessao_inatividade(chat_id: int, user_id: int, thread_id: int = None):
     """Fim dos 15 min sem atividade no painel: limpa o estado (FSM) e devolve o menu inicial."""
     state = FSMContext(storage=dp.storage, key=StorageKey(bot_id=bot.id, chat_id=chat_id, user_id=user_id, thread_id=thread_id))
     estado_atual = await state.get_state()
     data = await state.get_data()
-    
+    concluir_contagem_inatividade()
+
     # Já está na raiz: nada a fazer.
     if not estado_atual and data.get("painel_atual") == "raiz":
         return
@@ -2713,14 +2767,18 @@ class InatividadeMiddleware(BaseMiddleware):
             logger.info(f"⏰ Contagem de inatividade rearmada por {origem} no painel admin.")
 
             scheduler.add_job(
-                resetar_sessao_inatividade, 
-                'date', 
-                run_date=novo_limite, 
-                args=[chat.id, event.from_user.id, thread_id], 
+                resetar_sessao_inatividade,
+                'date',
+                run_date=novo_limite,
+                args=[chat.id, event.from_user.id, thread_id],
                 id=job_id,
                 replace_existing=True
             )
-            
+            try:
+                return await handler(event, data)
+            finally:
+                await guardar_contagem_inatividade(estado, chat.id, event.from_user.id, thread_id, novo_limite)
+
         return await handler(event, data)
 
 class BloqueioAdminMiddleware(BaseMiddleware):
@@ -17012,7 +17070,10 @@ async def main():
     
     # Grade de hoje já na subida
     agendar_tarefas_diarias()
-    
+
+    # Menu que estava aberto quando o robô parou volta ao Painel Inicial no horário certo
+    rearmar_inatividade_apos_reinicio()
+
     scheduler.start()
     logger.info("🔍 Verificando status de pausa programada na inicialização...")
     dados_pausa = ler_pausa_programada()

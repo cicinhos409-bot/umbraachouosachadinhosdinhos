@@ -93,6 +93,7 @@ arquivo cresce: `grep -n "^# --- " bot_mestre.py`. Os blocos grandes usam
 - Os jobs do APScheduler e o FSM do aiogram ficam em memória.
   - Um restart refaz a grade do dia em `main()`. O deploy só reinicia o robô cujo código mudou.
   - Também derruba os fluxos de painel que estavam abertos.
+  - A contagem dos 15 min que devolve o Painel Inicial fica também no banco (chave `inatividade_painel_admin`), e o `main()` a rearma ao ligar.
 - aiogram: ganha o primeiro handler registrado que casar. Num fluxo FSM, o handler de "Cancelar ❌" tem de vir antes do handler que lê texto livre.
 - `validar_deploy.py` exige que o 1º parâmetro de um handler se chame `message`, `callback`, `event`, `query`, `msg` ou `callback_query`.
 - Uma sessão Telethon não pode ser usada por dois processos ao mesmo tempo.

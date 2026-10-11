@@ -158,3 +158,71 @@ def test_painel_inicial_volta_depois_de_15_min_em_qualquer_menu(bm, monkeypatch)
         assert "🏠 Painel Inicial restaurado." in enviadas
 
     rodar(cenario())
+
+
+def test_painel_inicial_volta_mesmo_com_restart_no_meio_dos_15_min(bm, monkeypatch):
+    # O Rafael notou em 11/10: o Espelhador aberto às 17:03 seguia na tela à meia-noite. O
+    # deploy reiniciou o bot às 17:15, e o cronômetro, que só existia na memória, sumiu.
+    from aiogram.fsm.context import FSMContext
+    from aiogram.fsm.storage.base import StorageKey
+
+    enviadas = []
+
+    async def send_message(chat_id, texto, **k):
+        enviadas.append(texto)
+        return SimpleNamespace(message_id=len(enviadas))
+
+    async def delete_message(**k):
+        return True
+
+    monkeypatch.setattr(bm.bot, "send_message", send_message)
+    monkeypatch.setattr(bm.bot, "delete_message", delete_message)
+    dormir = asyncio.sleep
+    monkeypatch.setattr(bm.asyncio, "sleep", lambda *_: dormir(0))
+    estado = FSMContext(storage=bm.dp.storage, key=StorageKey(bot_id=bm.bot.id, chat_id=bm.ADMIN_ID,
+                                                              user_id=bm.ADMIN_ID, thread_id=None))
+    middleware = bm.InatividadeMiddleware()
+    job_id = f"job_inatividade_{bm.ADMIN_ID}"
+
+    async def menu_sem_fluxo(evento, dados):
+        return None
+
+    async def mostra_o_painel_inicial(evento, dados):
+        await dados["state"].update_data(painel_atual="raiz")
+
+    async def tocar(texto, handler):
+        await middleware(handler, _admin_no_privado(bm, texto), {"state": estado})
+
+    async def reiniciar():
+        # O que um restart apaga: o cronômetro e o estado do painel.
+        while bm.scheduler.get_job(job_id):   # parado, o scheduler guarda cada add_job
+            bm.scheduler.remove_job(job_id)
+        await estado.clear()
+        bm.rearmar_inatividade_apos_reinicio()
+        return bm.scheduler.get_job(job_id)
+
+    async def cenario():
+        await estado.clear()
+        await tocar("Espelhador de Canais 🔄", menu_sem_fluxo)
+        limite = bm.scheduler.get_job(job_id).trigger.run_date
+        job = await reiniciar()
+        assert job is not None and job.trigger.run_date == limite   # os mesmos 15 min de antes
+        await bm.resetar_sessao_inatividade(*job.args)
+        assert enviadas[-1] == "🏠 Painel Inicial restaurado."
+
+        # Robô parado além dos 15 min: volta logo depois de ligar, e só uma vez.
+        enviadas.clear()
+        await tocar("Outros Canais 🗂️", menu_sem_fluxo)
+        contagem = bm.db.ler_config(bm.CHAVE_INATIVIDADE)
+        bm.db.salvar_config(bm.CHAVE_INATIVIDADE, {**contagem, "limite": (limite - bm.timedelta(hours=1)).isoformat()})
+        job = await reiniciar()
+        assert job.trigger.run_date > bm.datetime.now(bm.fuso_horario)
+        await bm.resetar_sessao_inatividade(*job.args)
+        assert enviadas[-1] == "🏠 Painel Inicial restaurado."
+        assert await reiniciar() is None
+
+        # Já estava no Painel Inicial quando o robô parou: nada a devolver.
+        await tocar("Voltar ao Início 🔙", mostra_o_painel_inicial)
+        assert await reiniciar() is None
+
+    rodar(cenario())
