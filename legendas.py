@@ -2,8 +2,9 @@
 Legenda dos posts de vídeo com link de afiliado e o pedido à IA de nome e hashtags do
 produto, iguais em todos os robôs que postam: Espião (motor_userbot na análise
 antecipada e bot_mestre no disparo), Espelhador (motor_userbot), Autorais
-(espelhador_videos_autorais) e Parceiros (bot_mestre). O assistente da Shopee Vídeo lê
-o nome do produto de volta da legenda (nome_da_legenda).
+(espelhador_videos_autorais) e Parceiros (bot_mestre). O Grupo Público tem o padrão
+próprio (legenda_grupo_publico), usado pelo bot_mestre em todo vídeo que vai para lá.
+O assistente da Shopee Vídeo lê o nome do produto de volta da legenda (nome_da_legenda).
 
 Um lugar só para que mudar o formato ou uma categoria valha para todos os canais
 (DECISOES.md, Código e manutenção).
@@ -60,6 +61,29 @@ def montar_legenda(nome, link, hashtags=""):
     if hashtags:
         legenda += f"\n\n<i>{html.escape(hashtags)}</i>"
     return legenda
+
+
+def legenda_grupo_publico(credito, nome, link_shopee=None, link_tiktok=None, hashtags=""):
+    """
+    O padrão dos vídeos do Grupo Público, igual para quem posta (o membro pelo painel, o
+    Rafael nos reposts dos Autorais e o parceiro): o crédito de quem postou, o nome do
+    produto, um bloco por plataforma com o rótulo (Shopee primeiro, TikTok depois) e as
+    hashtags. A parte que falta (sem crédito, sem nome, sem um dos links) não aparece.
+    O crédito já vem em HTML (o @ ou o nome clicável); nome e hashtags são escapados.
+    Decisão do Rafael: DECISOES.md, Grupo Público e Achadinhos.
+    """
+    partes = []
+    if credito:
+        partes.append(f"👤 Vídeo enviado por: {credito}")
+    if nome:
+        partes.append(f"<b>{html.escape(nome)}</b>")
+    if link_shopee:
+        partes.append(f"🔶 <b>SHOPEE</b> 🔶\n🔗 Link do Produto:\n{link_shopee}")
+    if link_tiktok:
+        partes.append(f"⬛ <b>TIKTOK</b> ⬛\n🔗 Link do Produto:\n{link_tiktok}")
+    if hashtags:
+        partes.append(f"<i>{html.escape(hashtags)}</i>")
+    return "\n\n".join(partes)
 
 
 def legenda_da_ia(texto_ia, link):

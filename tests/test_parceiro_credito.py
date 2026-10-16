@@ -1,4 +1,4 @@
-"""Vídeo de parceiro na Vídeos da Comunidade do Grupo Público: "👤 Vídeo enviado por: @parceiro"."""
+"""Vídeo de parceiro no Grupo Público: o padrão do grupo, com "👤 Vídeo enviado por: @parceiro"."""
 from datetime import datetime, timedelta
 from types import SimpleNamespace
 
@@ -67,20 +67,29 @@ def test_parceiro_na_comunidade_sai_com_o_arroba_dele(bm, monkeypatch, relogio):
     # "Vídeo enviado por", e nos do parceiro vai o @ dele.
     relogio("15:00")
     legenda = _publicar_um_video(bm, monkeypatch, f"{GRUPO_PUBLICO}:{TOPICO_COMUNIDADE}", "@loja_da_ana")
-    assert legenda.startswith("👤 Vídeo enviado por: @loja_da_ana\n\n<b>Tênis Casual Feminino 👟</b>")
-    assert "https://s.shopee.com.br/afiliado" in legenda
+    assert legenda == ("👤 Vídeo enviado por: @loja_da_ana\n\n<b>Tênis Casual Feminino 👟</b>\n\n"
+                       "🔶 <b>SHOPEE</b> 🔶\n🔗 Link do Produto:\nhttps://s.shopee.com.br/afiliado\n\n"
+                       "<i>#SapatosFemininos</i>")
 
 
 def test_parceiro_sem_arroba_sai_sem_a_linha_do_credito(bm, monkeypatch, relogio):
     relogio("15:00")
     legenda = _publicar_um_video(bm, monkeypatch, f"{GRUPO_PUBLICO}:{TOPICO_COMUNIDADE}", "")
-    assert legenda.startswith("<b>Tênis Casual Feminino 👟</b>")
+    assert legenda.startswith("<b>Tênis Casual Feminino 👟</b>\n\n🔶 <b>SHOPEE</b> 🔶")
+
+
+def test_padrao_vale_para_o_grupo_publico_inteiro(bm, monkeypatch, relogio):
+    # "O padrão para esse grupo, o grupo público" (Rafael, 16/10): em qualquer tópico dele.
+    relogio("15:00")
+    legenda = _publicar_um_video(bm, monkeypatch, f"{GRUPO_PUBLICO}:99", "@loja_da_ana")
+    assert legenda.startswith("👤 Vídeo enviado por: @loja_da_ana\n\n") and "🔶 <b>SHOPEE</b> 🔶" in legenda
 
 
 def test_parceiro_em_outro_destino_nao_ganha_a_linha_do_credito(bm, monkeypatch, relogio):
     relogio("15:00")
     legenda = _publicar_um_video(bm, monkeypatch, "-1009999999999", "@loja_da_ana")
-    assert "Vídeo enviado por" not in legenda
+    assert legenda == ("<b>Tênis Casual Feminino 👟</b>\n\n🔗 <b>Link do Produto:</b>\n"
+                       "https://s.shopee.com.br/afiliado\n\n<i>#SapatosFemininos</i>")
 
 
 def test_arroba_cadastrado_e_editado_pelo_painel(bm, Msg, Est):

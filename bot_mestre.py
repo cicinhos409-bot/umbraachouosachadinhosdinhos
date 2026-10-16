@@ -1115,19 +1115,12 @@ async def obter_credito_repost():
 def legenda_repost_publico(user_mention, nome_produto, link, legenda_original):
     """
     A legenda do vídeo dos Autorais repostado no Grupo Público (automático e Disparar
-    Repost Autoral): o crédito, o nome, o link e as hashtags de categoria que a IA
-    escolheu para o vídeo nos Autorais. Sem hashtags na legenda original, sai sem.
-    Decisão do Rafael: DECISOES.md, Grupo Público e Achadinhos.
+    Repost Autoral), no padrão do grupo: o crédito, o nome, o bloco da Shopee e as
+    hashtags de categoria que a IA escolheu para o vídeo nos Autorais. Sem hashtags na
+    legenda original, sai sem. Decisão do Rafael: DECISOES.md, Grupo Público e Achadinhos.
     """
-    legenda = (
-        f"👤 Vídeo enviado por: {user_mention}\n\n"
-        f"<b>{nome_produto}</b>\n\n"
-        f"🔗 <b>Link do Produto:</b>\n{link}"
-    )
-    hashtags = legendas.hashtags_da_legenda(legenda_original)
-    if hashtags:
-        legenda += f"\n\n<i>{html_escape(hashtags)}</i>"
-    return legenda
+    return legendas.legenda_grupo_publico(user_mention, nome_produto, link_shopee=link,
+                                          hashtags=legendas.hashtags_da_legenda(legenda_original))
 
 # --- Pausa programada ---
 def ler_pausa_programada():
@@ -3155,26 +3148,26 @@ def normalizar_arroba(texto):
     valor = re.sub(r"^(?:https?://)?(?:www\.)?t(?:elegram)?\.me/", "", valor).lstrip("@").strip("/")
     return f"@{valor}" if _PADRAO_ARROBA.match(valor) else None
 
-def destino_e_comunidade_publico(destino):
-    """O destino ("chat:tópico") é o tópico de postagem do Grupo Público (Vídeos da Comunidade)?"""
-    config = ler_submissao_config()
-    grupo, topico = config.get("grupo_id"), config.get("topico_destino")
-    if not grupo or topico in (None, "") or ":" not in str(destino or ""):
+def destino_no_grupo_publico(destino):
+    """O destino ("chat" ou "chat:tópico") fica no Grupo Público da submissão?"""
+    grupo = ler_submissao_config().get("grupo_id")
+    chat = str(destino or "").split(":")[0].strip()
+    if not grupo or not chat:
         return False
-    chat, thread = str(destino).split(":", 1)
-    mesmo_grupo = chat.strip().replace("-100", "", 1) == str(grupo).strip().replace("-100", "", 1)
-    return mesmo_grupo and thread.strip() == str(topico).strip()
+    return chat.replace("-100", "", 1) == str(grupo).strip().replace("-100", "", 1)
 
-def legenda_parceiro_com_credito(p, legenda):
+def legenda_do_parceiro(p, texto_ia, link_final):
     """
-    No Vídeos da Comunidade do Grupo Público, o vídeo do parceiro leva "👤 Vídeo enviado
-    por: @parceiro" no topo, como os dos membros. Sem @ cadastrado, ou em outro destino,
-    a legenda fica como está. Decisão do Rafael: DECISOES.md, Parceiros.
+    A legenda do vídeo do parceiro. No Grupo Público, o padrão do grupo com "👤 Vídeo
+    enviado por: @parceiro" (sem @ cadastrado, sem a linha) e o bloco da Shopee. Nos
+    outros destinos, a legenda dos outros robôs; sem a IA, só o link de afiliado.
+    Decisão do Rafael: DECISOES.md, Parceiros.
     """
-    arroba = (p.get("arroba") or "").strip()
-    if not arroba or not destino_e_comunidade_publico(p.get("canal_destino")):
-        return legenda
-    return f"👤 Vídeo enviado por: {arroba}\n\n{legenda}"
+    if destino_no_grupo_publico(p.get("canal_destino")):
+        nome, hashtags = legendas.separar_nome_e_hashtags(texto_ia) if texto_ia else ("", "")
+        return legendas.legenda_grupo_publico((p.get("arroba") or "").strip(), nome,
+                                              link_shopee=link_final, hashtags=hashtags)
+    return legendas.legenda_da_ia(texto_ia, link_final) if texto_ia else link_final
 
 def mascarar_segredo(valor):
     """Mostra só o começo e o fim da chave — nunca o segredo inteiro na tela."""
@@ -3441,10 +3434,7 @@ async def motor_parceiros_step():
             nome_produto = ""
             if texto_ia:
                 nome_produto, _ = legendas.separar_nome_e_hashtags(texto_ia)
-                legenda = legendas.legenda_da_ia(texto_ia, link_final)
-            else:
-                legenda = link_final  # sem IA: só o link de afiliado do parceiro
-            legenda = legenda_parceiro_com_credito(p, legenda)
+            legenda = legenda_do_parceiro(p, texto_ia, link_final)
 
             destino_raw = str(p.get("canal_destino") or "")
             chat_destino = destino_raw.split(":")[0].strip()
@@ -16233,7 +16223,7 @@ def montar_mencao_usuario(user):
     if getattr(user, "username", None):
         return f"@{user.username}"
     nome = getattr(user, "first_name", None) or "Membro"
-    return f"<a href='tg://user?id={user.id}'>{nome}</a>"
+    return f"<a href='tg://user?id={user.id}'>{html_escape(nome)}</a>"
 
 def montar_texto_painel(data):
     """Monta o texto do painel a partir do que já foi enviado."""
@@ -16677,10 +16667,8 @@ async def wizard_publicar_oferta(callback: types.CallbackQuery, state: FSMContex
         user_obj = callback.from_user if callback else None
         if mencao_forcada:
             user_mention = mencao_forcada
-        elif user_obj and user_obj.username:
-            user_mention = f"@{user_obj.username}"
         elif user_obj:
-            user_mention = f"<a href='tg://user?id={user_obj.id}'>{user_obj.first_name}</a>"
+            user_mention = montar_mencao_usuario(user_obj)
         else:
             user_mention = "um membro"
 
@@ -16688,24 +16676,8 @@ async def wizard_publicar_oferta(callback: types.CallbackQuery, state: FSMContex
             nome_produto = linhas[1].strip() if len(linhas) > 1 else "Oferta Exclusiva 🛍️"
             hashtags_ia = linhas[2].strip() if len(linhas) > 2 else ""
 
-            # Mesmo visual do canal principal: um bloco por plataforma, sem linha divisória
-            # (caractere repetido quebra o layout no celular).
-            legenda_final = (
-                f"👤 Vídeo enviado por: {user_mention}\n\n"
-                f"<b>{nome_produto}</b>\n\n"
-            )
-            if link_shopee:
-                legenda_final += (
-                    "🔶 <b>SHOPEE</b> 🔶\n"
-                    f"🔗 Link do Produto:\n{link_shopee}\n\n"
-                )
-            if link_tiktok:
-                legenda_final += (
-                    "⬛ <b>TIKTOK</b> ⬛\n"
-                    f"🔗 Link do Produto:\n{link_tiktok}\n\n"
-                )
-            if hashtags_ia:
-                legenda_final += f"<i>{hashtags_ia}</i>"
+            legenda_final = legendas.legenda_grupo_publico(user_mention, nome_produto, link_shopee,
+                                                           link_tiktok, hashtags_ia)
 
             await bot.send_video(
                 chat_id=message.chat.id, video=video_id, caption=legenda_final,
