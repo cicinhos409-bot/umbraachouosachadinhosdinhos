@@ -15506,10 +15506,7 @@ async def cronometro_sessao_wizard(chat_id, message_id, thread_id, state: FSMCon
 
     # Expirou sem material suficiente: limpa a sessão, apaga o painel e avisa (o aviso some sozinho)
     await state.clear()
-    try:
-        await bot.delete_message(chat_id, message_id)
-    except Exception:
-        pass
+    await apagar_painel(chat_id, message_id)
 
     mencao = data.get("mencao_wizard") or "membro"
     try:
@@ -16255,6 +16252,26 @@ def registrar_painel_aberto(chat_id, message_id):
     except Exception as e:
         logger.error(f"❌ Erro ao registrar painel aberto: {e}")
 
+def desregistrar_painel(chat_id, message_id):
+    """Tira do registro o painel que já saiu do grupo: a varredura fica só com os órfãos."""
+    try:
+        abertos = db.ler_config("paineis_wizard_abertos", [])
+        restantes = [p for p in abertos
+                     if not (str(p.get("chat_id")) == str(chat_id) and p.get("message_id") == message_id)]
+        if len(restantes) != len(abertos):
+            db.salvar_config("paineis_wizard_abertos", restantes)
+    except Exception as e:
+        logger.error(f"❌ Erro ao tirar painel do registro: {e}")
+
+async def apagar_painel(chat_id, message_id):
+    """Apaga o painel do grupo e, se saiu, do registro anti-órfão."""
+    try:
+        await bot.delete_message(chat_id, message_id)
+    except Exception:
+        return False
+    desregistrar_painel(chat_id, message_id)
+    return True
+
 async def limpar_paineis_orfaos():
     """
     Apaga na subida todo painel de submissão registrado.
@@ -16312,12 +16329,50 @@ async def limpar_paineis_orfaos():
     except Exception as e:
         logger.error(f"❌ [Anti-Órfão] Erro na varredura de painéis: {e}")
 
+# Um painel por membro. O botão "Iniciar Postagem" fica sempre à mão na barra da
+# mensagem fixada, e o painel novo nasce no fim do tópico, fora da vista: o membro toca
+# de novo achando que não abriu. O anterior não pode ficar na tela com o cronômetro parado.
+_travas_painel_membro = {}
+
+def _trava_painel_membro(chat_id, user_id):
+    """A trava de abertura de painel daquele membro naquele grupo."""
+    return _travas_painel_membro.setdefault((str(chat_id), user_id), asyncio.Lock())
+
+async def painel_aberto(state: FSMContext):
+    """O ID do painel em uso pelo membro, ou None se ele não tem sessão aberta."""
+    if await state.get_state() != SubmissaoUsuarioInterativa.painel.state:
+        return None
+    return (await state.get_data()).get("msg_wizard_id")
+
 async def criar_painel_submissao(chat_id, thread_id, user, state: FSMContext, video_id=None, link_shopee=None, link_tiktok=None):
     """
     Cria o painel do zero, já podendo vir pré-preenchido.
     Usada tanto pelo botão quanto pela abertura automática (quando o membro
     manda o vídeo ou o link sem clicar em nada).
+
+    Se o membro já tem um painel aberto, o novo toma o lugar dele e o anterior sai do
+    grupo. Vídeo ou link que chega enquanto outro envio do mesmo membro está abrindo o
+    painel (encaminhou os dois juntos) entra no painel aberto, como qualquer envio.
     """
+    async with _trava_painel_membro(chat_id, user.id):
+        anterior = await painel_aberto(state)
+        if anterior and (video_id or link_shopee or link_tiktok):
+            novos = {"video_file_id": video_id, "link_shopee": link_shopee, "link_tiktok": link_tiktok}
+            await state.update_data(aguardando_wizard=None, **{k: v for k, v in novos.items() if v})
+            await renderizar_painel(chat_id, thread_id, state)
+            return None
+
+        msg_painel = await _abrir_painel_novo(chat_id, thread_id, user, state, video_id, link_shopee, link_tiktok)
+
+        # Só depois do novo no ar e da sessão trocada: o cronômetro do anterior para
+        # sozinho e não tenta editar a mensagem que saiu.
+        if anterior and anterior != msg_painel.message_id:
+            await apagar_painel(chat_id, anterior)
+            logger.info(f"🔁 [Wizard] Painel {anterior} de {user.id} trocado pelo novo {msg_painel.message_id}.")
+        return msg_painel
+
+async def _abrir_painel_novo(chat_id, thread_id, user, state: FSMContext, video_id, link_shopee, link_tiktok):
+    """Manda o painel ao tópico, registra no anti-órfão e abre a sessão com o cronômetro."""
     dono_id = user.id
     mencao = montar_mencao_usuario(user)
     dados = {
@@ -16612,8 +16667,7 @@ async def wizard_publicar_oferta(callback: types.CallbackQuery, state: FSMContex
         except: pass
 
     await asyncio.sleep(15)
-    try: await bot.delete_message(message.chat.id, msg_wizard_id)
-    except: pass
+    await apagar_painel(message.chat.id, msg_wizard_id)
 
     await reenviar_botao_ofertas()
 
@@ -16634,8 +16688,7 @@ async def wizard_cancelar(callback: types.CallbackQuery, state: FSMContext):
 
     await asyncio.sleep(3)
     if msg_wizard_id:
-        try: await bot.delete_message(callback.message.chat.id, msg_wizard_id)
-        except: pass
+        await apagar_painel(callback.message.chat.id, msg_wizard_id)
     else:
         try: await callback.message.delete()
         except: pass
