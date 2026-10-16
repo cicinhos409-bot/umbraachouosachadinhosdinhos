@@ -66,6 +66,7 @@ import blacklist_captura  # de quem os userbots nunca capturam
 import repetidos_publico  # vídeo que já foi ao Grupo Público não vai de novo
 import alvos_sem_acesso  # alvos da divulgação a que a conta perdeu o acesso
 import backup_dados  # backup diário do banco, sessões e .env em ~/backups
+import faxina_viral  # o resumo da faxina do Acervo Viral, que roda no motor_userbot
 from utils import registrar_erro_json, ler_cache_nomes_grupos, salvar_nome_grupo, validar_e_formatar_alvo
 
 logger = configurar_logs(__name__)
@@ -1774,8 +1775,11 @@ def gerar_fato_prova(canal):
         if x and x >= 15:
             return f"{x} vídeos publicados nos últimos 7 dias"
 
-        # 7. Acervo acumulado
+        # 7. Acervo acumulado. No Viral, a faxina tira os vídeos velhos: vale o que está
+        #    no canal de fato, e não tudo o que já foi postado.
         x = ler_metrica(chave_posts_total, 0)
+        if canal == "viral" and faxina_viral.videos_no_canal() is not None:
+            x = faxina_viral.videos_no_canal()
         if x and x >= 30:
             return f"{x} vídeos já disponíveis no acervo"
 
@@ -16968,6 +16972,14 @@ async def monitor_saude():
         except Exception:
             pass
 
+        # 9. Faxina do Acervo Viral sem poder apagar (a conta do Espião precisa ser admin).
+        try:
+            problema = faxina_viral.problema_de_permissao()
+            if problema and not _ja_alertou("faxina_viral"):
+                alertas.append(problema)
+        except Exception:
+            pass
+
         if alertas:
             texto = "🩺 <b>ALERTA DE SAÚDE DO SISTEMA</b>\n\n" + "\n\n".join(alertas)
             await bot.send_message(ADMIN_ID, texto, parse_mode="HTML")
@@ -17072,6 +17084,11 @@ def montar_status():
             saude = pool_contas.avaliar_saude(contas, pool_contas.ler_ocupacao(), pool_contas.ler_atividade())
             ok = sum(1 for p in saude["postos"] if p["ok"])
             linhas.append(f"👥 Contas dos Autorais: {ok}/{len(saude['postos'])} ✅ (detalhes em Vídeos Autorais → Contas 👥)")
+    except Exception:
+        pass
+
+    try:
+        linhas.append(html.escape(faxina_viral.linha_status()))
     except Exception:
         pass
 
