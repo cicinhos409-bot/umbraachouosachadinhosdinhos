@@ -189,11 +189,13 @@ def inicializar_banco_sqlite():
             )
         ''')
 
-        # Parceiros: acesso do userbot ao canal de origem e janela de publicação própria
-        # (0 a 24 = dia todo).
+        # Parceiros: acesso do userbot ao canal de origem, janela de publicação própria
+        # (0 a 24 = dia todo) e o @ do parceiro, que credita os vídeos dele na Vídeos da
+        # Comunidade do Grupo Público.
         for coluna, tipo in [("origem_ok", "INTEGER DEFAULT 0"), ("origem_erro", "TEXT"),
                              ("janela_inicio", "INTEGER DEFAULT 0"), ("janela_fim", "INTEGER DEFAULT 24"),
-                             ("limite_min", "INTEGER DEFAULT 0"), ("limite_max", "INTEGER DEFAULT 0")]:
+                             ("limite_min", "INTEGER DEFAULT 0"), ("limite_max", "INTEGER DEFAULT 0"),
+                             ("arroba", "TEXT DEFAULT ''")]:
             try:
                 cursor.execute(f"ALTER TABLE parceiros ADD COLUMN {coluna} {tipo}")
             except sqlite3.OperationalError:
@@ -439,8 +441,9 @@ class SubmissaoAdminFluxo(StatesGroup):
     aguardando_repost_destino = State()
     aguardando_confirmacao_destino = State()  # confirma troca de origem/destino
 
-    # Cadastro de parceiros (7 passos + confirmação)
+    # Cadastro de parceiros (8 passos + confirmação)
     parceiro_nome = State()
+    parceiro_arroba = State()
     parceiro_app_id = State()
     parceiro_app_secret = State()
     parceiro_origem = State()
@@ -3080,13 +3083,13 @@ def salvar_parceiro(dados):
             cursor = conexao.cursor()
             cursor.execute('''
                 INSERT INTO parceiros (nome, app_id, app_secret, canal_origem, canal_destino,
-                                       dias_atraso, limite_diario, ativo, data_cadastro)
-                VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?)
+                                       dias_atraso, limite_diario, ativo, data_cadastro, arroba)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
             ''', (
                 dados.get("nome"), dados.get("app_id"), dados.get("app_secret"),
                 dados.get("canal_origem"), dados.get("canal_destino"),
                 int(dados.get("dias_atraso", 30)), int(dados.get("limite_diario", 6)),
-                datetime.now(fuso_horario).strftime("%Y-%m-%d %H:%M:%S")
+                datetime.now(fuso_horario).strftime("%Y-%m-%d %H:%M:%S"), dados.get("arroba") or ""
             ))
             conexao.commit()
             novo_id = cursor.lastrowid
@@ -3099,7 +3102,7 @@ def atualizar_parceiro(parceiro_id, campo, valor):
     """Atualiza UM campo. A lista branca impede injeção pelo nome da coluna."""
     if campo not in ("canal_origem", "canal_destino", "dias_atraso", "limite_diario", "ativo",
                      "origem_ok", "origem_erro", "janela_inicio", "janela_fim",
-                     "limite_min", "limite_max"):
+                     "limite_min", "limite_max", "arroba"):
         return False
     try:
         with db.conexao() as conexao:
@@ -3137,6 +3140,41 @@ def buscar_parceiro(parceiro_id):
         if str(p.get("id")) == str(parceiro_id):
             return p
     return None
+
+# O @ do parceiro no Telegram: 4 a 32 letras, números ou "_", começando por letra.
+_PADRAO_ARROBA = re.compile(r"^[A-Za-z][A-Za-z0-9_]{3,31}$")
+
+def normalizar_arroba(texto):
+    """
+    "@joao_silva", "joao_silva" ou "t.me/joao_silva" viram "@joao_silva"; "-" vira ""
+    (parceiro sem @). Devolve None quando o texto não é um @ válido.
+    """
+    valor = (texto or "").strip()
+    if valor == "-":
+        return ""
+    valor = re.sub(r"^(?:https?://)?(?:www\.)?t(?:elegram)?\.me/", "", valor).lstrip("@").strip("/")
+    return f"@{valor}" if _PADRAO_ARROBA.match(valor) else None
+
+def destino_e_comunidade_publico(destino):
+    """O destino ("chat:tópico") é o tópico de postagem do Grupo Público (Vídeos da Comunidade)?"""
+    config = ler_submissao_config()
+    grupo, topico = config.get("grupo_id"), config.get("topico_destino")
+    if not grupo or topico in (None, "") or ":" not in str(destino or ""):
+        return False
+    chat, thread = str(destino).split(":", 1)
+    mesmo_grupo = chat.strip().replace("-100", "", 1) == str(grupo).strip().replace("-100", "", 1)
+    return mesmo_grupo and thread.strip() == str(topico).strip()
+
+def legenda_parceiro_com_credito(p, legenda):
+    """
+    No Vídeos da Comunidade do Grupo Público, o vídeo do parceiro leva "👤 Vídeo enviado
+    por: @parceiro" no topo, como os dos membros. Sem @ cadastrado, ou em outro destino,
+    a legenda fica como está. Decisão do Rafael: DECISOES.md, Parceiros.
+    """
+    arroba = (p.get("arroba") or "").strip()
+    if not arroba or not destino_e_comunidade_publico(p.get("canal_destino")):
+        return legenda
+    return f"👤 Vídeo enviado por: {arroba}\n\n{legenda}"
 
 def mascarar_segredo(valor):
     """Mostra só o começo e o fim da chave — nunca o segredo inteiro na tela."""
@@ -3406,6 +3444,7 @@ async def motor_parceiros_step():
                 legenda = legendas.legenda_da_ia(texto_ia, link_final)
             else:
                 legenda = link_final  # sem IA: só o link de afiliado do parceiro
+            legenda = legenda_parceiro_com_credito(p, legenda)
 
             destino_raw = str(p.get("canal_destino") or "")
             chat_destino = destino_raw.split(":")[0].strip()
@@ -3521,7 +3560,7 @@ def teclado_gerenciar_parceiro(p):
         [KeyboardButton(text=acao)],
         [KeyboardButton(text="Editar Origem 📥"), KeyboardButton(text="Editar Destino 📤")],
         [KeyboardButton(text="Editar Dias ⏳"), KeyboardButton(text="Editar Cota 📦")],
-        [KeyboardButton(text="Editar Janela 🕒")],
+        [KeyboardButton(text="Editar Janela 🕒"), KeyboardButton(text="Editar @ do Parceiro 👤")],
         [KeyboardButton(text="Excluir Parceiro 🗑️")],
         [KeyboardButton(text="Voltar aos Parceiros 🔙")]
     ])
@@ -3544,6 +3583,7 @@ async def mostrar_parceiro(message, state: FSMContext, parceiro_id):
         f"🔑 App ID: <code>{mascarar_segredo(p.get('app_id'))}</code>\n"
         f"📥 Origem: {rotulo_alvo(p.get('canal_origem'))}\n"
         f"📤 Destino: {rotulo_alvo(p.get('canal_destino'))}\n"
+        f"👤 @ no Telegram: {p.get('arroba') or 'não cadastrado'}\n"
         f"⏳ Oculto por: <b>{p.get('dias_atraso')} dias</b>\n"
         f"📦 Cota Diária: <b>{rotulo_cota_parceiro(p)}</b>\n"
         f"🕒 Janela de Postagem: <b>{p.get('janela_inicio', 0) or 0}h às {p.get('janela_fim', 24) or 24}h</b>\n"
@@ -3662,6 +3702,10 @@ async def acoes_parceiro(message: types.Message, state: FSMContext):
             "• Faixa: <code>4-8</code> — cada dia sorteia um número entre 4 e 8 (média 6)\n"
             "• Fixo: <code>6</code> — sempre 6 por dia\n\n"
             "<i>A faixa existe para a quantidade não ser sempre igual, que é o que denuncia robô.</i>"),
+        "Editar @ do Parceiro 👤": ("arroba",
+            "✏️ Envie o <b>@ do parceiro no Telegram</b> (ex.: <code>@joaosilva</code>).\n\n"
+            "<i>Ele aparece em \"👤 Vídeo enviado por\" nos vídeos deste parceiro que vão para a "
+            "Vídeos da Comunidade do Grupo Público. Envie <code>-</code> para tirar o @.</i>"),
         "Editar Janela 🕒":  ("janela",
             "Em que horário este parceiro pode publicar?\n\n"
             "• Formato <code>Inicio-Fim</code> — Exemplo: <code>8-23</code>\n"
@@ -3732,6 +3776,19 @@ async def salvar_edicao_parceiro(message: types.Message, state: FSMContext):
         if atualizar_parceiro(pid, "janela_inicio", ini) and atualizar_parceiro(pid, "janela_fim", fim):
             logger.info(f"👥 [Parceiros] #{pid}: janela de publicação definida para {ini}h-{fim}h.")
             await message.answer(f"✅ <b>Janela atualizada:</b> {ini}h às {fim}h.", parse_mode="HTML")
+        else:
+            await message.answer("❌ Não foi possível atualizar.")
+        await mostrar_parceiro(message, state, pid)
+        return
+
+    if campo == "arroba":
+        arroba = normalizar_arroba(valor)
+        if arroba is None:
+            await message.answer("⚠️ Esse @ não é válido. Envie no formato <code>@joaosilva</code> "
+                                 "ou <code>-</code> para tirar.", parse_mode="HTML"); return
+        if atualizar_parceiro(pid, "arroba", arroba):
+            logger.info(f"👥 [Parceiros] #{pid}: @ {'definido' if arroba else 'removido'}.")
+            await message.answer(f"✅ <b>@ atualizado:</b> {arroba or 'sem @'}.", parse_mode="HTML")
         else:
             await message.answer("❌ Não foi possível atualizar.")
         await mostrar_parceiro(message, state, pid)
@@ -3862,12 +3919,13 @@ async def testar_credenciais_shopee(app_id, app_secret):
 async def voltar_passo_parceiro(message, state: FSMContext, destino):
     """Mostra a pergunta do passo do cadastro, sem perder o que já foi digitado."""
     passos = {
-        "nome":       ("👤 <b>PASSO 1 de 7 — Nome do parceiro</b>\n\nComo você quer identificar este afiliado? (ex: <i>João Silva</i>)", SubmissaoAdminFluxo.parceiro_nome),
-        "app_id":     ("🔑 <b>PASSO 2 de 7 — App ID da Shopee</b>\n\nCole o <b>App ID</b> da conta de afiliado deste parceiro.", SubmissaoAdminFluxo.parceiro_app_id),
-        "app_secret": ("🔐 <b>PASSO 3 de 7 — App Secret</b>\n\nCole o <b>App Secret</b> deste parceiro.\n<i>⚠️ Dado sensível: apague a mensagem do chat depois de enviar.</i>", SubmissaoAdminFluxo.parceiro_app_secret),
-        "origem":     ("📥 <b>PASSO 4 de 7 — Canal de ORIGEM</b>\n\nDe onde este parceiro vai pegar os vídeos?\nEnvie o <b>ID, @username ou link</b> do canal.", SubmissaoAdminFluxo.parceiro_origem),
-        "destino":    ("📤 <b>PASSO 5 de 7 — Canal de DESTINO</b>\n\nOnde este parceiro vai publicar os vídeos?", SubmissaoAdminFluxo.parceiro_destino),
-        "dias":       ("⏳ <b>PASSO 6 de 7 — Dias de atraso (D+X)</b>\n\nQuantos dias o vídeo fica guardado antes de ser repostado?\n<i>Envie apenas o número. Exemplo: 30</i>", SubmissaoAdminFluxo.parceiro_dias),
+        "nome":       ("👤 <b>PASSO 1 de 8 — Nome do parceiro</b>\n\nComo você quer identificar este afiliado? (ex: <i>João Silva</i>)", SubmissaoAdminFluxo.parceiro_nome),
+        "arroba":     ("📣 <b>PASSO 2 de 8 — @ do parceiro no Telegram</b>\n\nEnvie o @ dele (ex: <code>@joaosilva</code>). Ele aparece em \"👤 Vídeo enviado por\" nos vídeos deste parceiro que vão para a Vídeos da Comunidade do Grupo Público.\n<i>Sem @? Envie <code>-</code> (os vídeos saem sem a linha do crédito).</i>", SubmissaoAdminFluxo.parceiro_arroba),
+        "app_id":     ("🔑 <b>PASSO 3 de 8 — App ID da Shopee</b>\n\nCole o <b>App ID</b> da conta de afiliado deste parceiro.", SubmissaoAdminFluxo.parceiro_app_id),
+        "app_secret": ("🔐 <b>PASSO 4 de 8 — App Secret</b>\n\nCole o <b>App Secret</b> deste parceiro.\n<i>⚠️ Dado sensível: apague a mensagem do chat depois de enviar.</i>", SubmissaoAdminFluxo.parceiro_app_secret),
+        "origem":     ("📥 <b>PASSO 5 de 8 — Canal de ORIGEM</b>\n\nDe onde este parceiro vai pegar os vídeos?\nEnvie o <b>ID, @username ou link</b> do canal.", SubmissaoAdminFluxo.parceiro_origem),
+        "destino":    ("📤 <b>PASSO 6 de 8 — Canal de DESTINO</b>\n\nOnde este parceiro vai publicar os vídeos?", SubmissaoAdminFluxo.parceiro_destino),
+        "dias":       ("⏳ <b>PASSO 7 de 8 — Dias de atraso (D+X)</b>\n\nQuantos dias o vídeo fica guardado antes de ser repostado?\n<i>Envie apenas o número. Exemplo: 30</i>", SubmissaoAdminFluxo.parceiro_dias),
     }
     texto, novo_estado = passos[destino]
     await message.answer(texto, parse_mode="HTML", reply_markup=teclado_wizard_nav)
@@ -3888,6 +3946,24 @@ async def parceiro_receber_nome(message: types.Message, state: FSMContext):
         await message.answer("⚠️ O nome precisa ter pelo menos 2 caracteres. Tente de novo:", parse_mode="HTML"); return
 
     await state.update_data(nome=nome)
+    await voltar_passo_parceiro(message, state, "arroba")
+
+@dp.message(SubmissaoAdminFluxo.parceiro_arroba)
+async def parceiro_receber_arroba(message: types.Message, state: FSMContext):
+    if message.text == "Cancelar ❌":
+        await painel_parceiros(message, state); return
+    if message.text == "Voltar ⬅️":
+        await voltar_passo_parceiro(message, state, "nome"); return
+
+    arroba = normalizar_arroba(message.text)
+    if arroba is None:
+        await message.answer(
+            "⚠️ Esse @ não é válido. Envie no formato <code>@joaosilva</code> ou <code>-</code> se ele não tiver.",
+            parse_mode="HTML", reply_markup=teclado_wizard_nav
+        )
+        return
+
+    await state.update_data(arroba=arroba)
     await voltar_passo_parceiro(message, state, "app_id")
 
 @dp.message(SubmissaoAdminFluxo.parceiro_app_id)
@@ -3895,7 +3971,7 @@ async def parceiro_receber_app_id(message: types.Message, state: FSMContext):
     if message.text == "Cancelar ❌":
         await painel_parceiros(message, state); return
     if message.text == "Voltar ⬅️":
-        await voltar_passo_parceiro(message, state, "nome"); return
+        await voltar_passo_parceiro(message, state, "arroba"); return
 
     app_id = (message.text or "").strip()
     # Checagem barata de formato. A prova real vem no passo seguinte, contra a API.
@@ -4056,7 +4132,7 @@ async def parceiro_receber_dias(message: types.Message, state: FSMContext):
 
     await state.update_data(dias_atraso=int(valor))
     await message.answer(
-        "📦 <b>PASSO 7 de 7 — Cota diária</b>\n\n"
+        "📦 <b>PASSO 8 de 8 — Cota diária</b>\n\n"
         "Quantos vídeos por dia este parceiro pode publicar?\n"
         "<i>Envie apenas o número. Exemplo: 6</i>",
         parse_mode="HTML", reply_markup=teclado_wizard_nav
@@ -4080,6 +4156,7 @@ async def parceiro_receber_limite(message: types.Message, state: FSMContext):
     await message.answer(
         "📋 <b>CONFIRA O CADASTRO</b>\n\n"
         f"👤 <b>Nome:</b> {d.get('nome')}\n"
+        f"📣 <b>@ no Telegram:</b> {d.get('arroba') or 'sem @'}\n"
         f"🔑 <b>App ID:</b> <code>{mascarar_segredo(d.get('app_id'))}</code>  ✅ testado\n"
         f"🔐 <b>Secret:</b> <code>{mascarar_segredo(d.get('app_secret'))}</code>  ✅ testado\n"
         f"📥 <b>Origem:</b> {rotulo_alvo(d.get('canal_origem'))}\n"
