@@ -57,6 +57,7 @@ from videos import verificar_e_otimizar_video, calcular_hash_video
 import fila_espelhador
 import rotas_espelhador
 import links_grupos  # atalhos dos grupos nos painéis
+import faxina_viral  # vídeos que já não servem saem do Acervo Viral
 
 LIMITE_REGISTROS_HASH = 1000  # hashes de vídeo guardados por contexto na anti-duplicata
 
@@ -1355,6 +1356,7 @@ async def main():
     asyncio.create_task(monitorar_status_espelhos())
     asyncio.create_task(atualizar_links_todo_dia())
     asyncio.create_task(monitorar_topicos_submissao())
+    asyncio.create_task(faxina_viral.loop_faxina(client))
     
     await client.run_until_disconnected()
 

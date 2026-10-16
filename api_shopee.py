@@ -338,6 +338,35 @@ async def buscar_ofertas_shopee(keyword, limite=10, app_id=None, app_secret=None
         logger.error(f"❌ [API Shopee] Erro crítico na prospecção de ofertas: {e}")
     return []
 
+async def produto_a_venda(loja, item):
+    """
+    O produto (loja/item) ainda está à venda pela API de afiliado? True se ela acha,
+    False se não acha (saiu de linha ou a loja tirou do ar) e None se a consulta não
+    deu certo (rede, chave, limite): quem chama não conta a falha como produto fora.
+    Usado pela faxina do Acervo Viral (faxina_viral).
+    """
+    if not (SHOPEE_APP_ID and SHOPEE_APP_SECRET):
+        return None
+    # Números direto na consulta: declarar a variável como Int64 dá "wrong type".
+    payload = {"query": f"query {{ productOfferV2(shopId: {int(loja)}, itemId: {int(item)}, limit: 1) "
+                        f"{{ nodes {{ itemId }} }} }}"}
+    headers, corpo = gerar_headers_e_payload(payload)
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post("https://open-api.affiliate.shopee.com.br/graphql",
+                                    headers=headers, data=corpo) as resposta:
+                if resposta.status != 200:
+                    return None
+                dados = await resposta.json(content_type=None)
+    except Exception as e:
+        logger.warning(f"⚠️ [API Shopee] Consulta de produto falhou: {type(e).__name__}")
+        return None
+    if dados.get("errors"):
+        return None
+    nos = ((dados.get("data") or {}).get("productOfferV2") or {}).get("nodes") or []
+    return bool(nos)
+
+
 async def testar_chaves_afiliado(link_teste, app_id, app_secret):
     """
     Testa um par App ID + Secret convertendo `link_teste` e devolve (ok, motivo).
