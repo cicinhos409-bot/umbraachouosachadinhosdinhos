@@ -109,3 +109,58 @@ def test_painel_cancelado_sai_do_registro_anti_orfao(bm, monkeypatch):
         assert _registro(bm) == []
 
     rodar(cenario())
+
+
+def _publicar_oferta(bm, monkeypatch, membro):
+    """Membro conclui a oferta pelo painel; devolve a legenda publicada na Vídeos da Comunidade."""
+    _, _, estado = _preparar(bm, monkeypatch)
+    bm.salvar_submissao_config({**bm.ler_submissao_config(), "grupo_id": GRUPO, "topico_envio": TOPICO,
+                                "topico_destino": 5})
+    legendas = []
+
+    async def get_file(file_id):
+        return SimpleNamespace(file_path="videos/oferta.mp4")
+
+    async def download_file(caminho, destination=None):
+        with open(destination, "wb") as arquivo:
+            arquivo.write(b"video")
+
+    async def analisar(*a, **k):
+        return "[APROVADO]\nTênis Casual Feminino 👟\n#SapatosFemininos"
+
+    async def send_video(chat_id=None, video=None, caption=None, **k):
+        legendas.append(caption)
+        return SimpleNamespace(message_id=50)
+
+    async def nada(*a, **k):
+        return None
+
+    monkeypatch.setattr(bm.bot, "get_file", get_file)
+    monkeypatch.setattr(bm.bot, "download_file", download_file)
+    monkeypatch.setattr(bm.bot, "send_video", send_video)
+    monkeypatch.setattr(bm, "analisar_video_gemini", analisar)
+    monkeypatch.setattr(bm, "reenviar_botao_ofertas", nada)
+
+    async def cenario():
+        await estado.clear()
+        await bm.criar_painel_submissao(GRUPO, TOPICO, membro, estado, video_id="video_1",
+                                        link_shopee="https://s.shopee.com.br/AbCdEf123")
+        clique = _clique(f"wz_concluir:{membro.id}")
+        clique.from_user = membro
+        await bm.wizard_publicar_oferta(clique, estado)
+
+    rodar(cenario())
+    assert len(legendas) == 1
+    return legendas[0]
+
+
+def test_oferta_do_membro_sai_com_o_arroba_de_quem_postou(bm, monkeypatch):
+    # Regra do Rafael (16/10): na Vídeos da Comunidade aparece o @ de quem postou.
+    legenda = _publicar_oferta(bm, monkeypatch, NAY)
+    assert legenda.startswith("👤 Vídeo enviado por: @nay\n\n<b>Tênis Casual Feminino 👟</b>")
+
+
+def test_membro_sem_arroba_sai_com_o_nome_clicavel(bm, monkeypatch):
+    mari = SimpleNamespace(id=777, username=None, first_name="Mari")
+    legenda = _publicar_oferta(bm, monkeypatch, mari)
+    assert legenda.startswith("👤 Vídeo enviado por: <a href='tg://user?id=777'>Mari</a>\n\n")
