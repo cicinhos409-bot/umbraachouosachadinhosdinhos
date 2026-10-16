@@ -30,6 +30,7 @@ from api_gemini import gerar_texto_gemini
 import alvos_sem_acesso
 import faxina_baixador
 import faxina_viral  # vídeos que já não servem saem do Acervo Viral
+import registro_admins  # quem administra os grupos e canais do Rafael, conferido todo dia
 
 # Importar fuso já trava o processo no horário de Brasília.
 from fuso import configurar_logs
@@ -616,6 +617,11 @@ async def main():
 
     asyncio.create_task(faxina_baixador.faxina_loop(client))
     asyncio.create_task(faxina_viral.loop_faxina(client))
+
+    # Registro dos administradores: todo dia de madrugada e, ao subir, se a última conferência é velha.
+    scheduler.add_job(registro_admins.conferir, 'cron', hour=registro_admins.HORA_CONFERENCIA[0],
+                      minute=registro_admins.HORA_CONFERENCIA[1], args=[client])
+    asyncio.create_task(registro_admins.conferir_se_atrasado(client))
     
     scheduler.start()
     logger.info("🤖 Sistema automático rodando. Pressione Ctrl+C para parar.")

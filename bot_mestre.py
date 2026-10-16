@@ -61,6 +61,7 @@ import painel_espelhos
 import painel_notas
 import painel_shopee_video  # painel do robô da Shopee Vídeo (Outros Canais)
 import painel_acessos  # Acessos do Servidor: Tailscale e Oracle (Opções do Servidor)
+import painel_admins  # Administradores dos grupos e canais (Opções do Servidor)
 import pool_contas  # contas dos userbots (quem espelha, quem reposta)
 import blacklist_captura  # de quem os userbots nunca capturam
 import repetidos_publico  # vídeo que já foi ao Grupo Público não vai de novo
@@ -534,6 +535,9 @@ painel_shopee_video.configurar_dependencias(bot, scheduler, ADMIN_ID)
 dp.include_router(painel_acessos.router)
 painel_acessos.configurar_dependencias(bot, ADMIN_ID)
 
+dp.include_router(painel_admins.router)
+painel_admins.configurar_dependencias(bot, ADMIN_ID)
+
 # --- Teclados ---
 # O padrão (montar_teclado) e os teclados que vários painéis usam iguais
 # (teclado_cancelar, teclado_aprovar_cancelar, teclado_janela_dia_todo) vêm do
@@ -653,6 +657,7 @@ def obter_teclado_opcoes_servidor():
     botoes = [
         [KeyboardButton(text="Monitorar Servidor 🖥️"), KeyboardButton(text="Zerar Filas e Tarefas 🧹")],
         [KeyboardButton(text="Reiniciar Robôs 🔄"), KeyboardButton(text="Acessos do Servidor 🔐")],
+        [KeyboardButton(text=painel_admins.BOTAO)],
         [KeyboardButton(text="Voltar ao Início 🔙")]
     ]
     return montar_teclado(botoes)
@@ -17148,6 +17153,8 @@ async def main():
 
     # Divulgação: avisa no privado o alvo que o userbot pausou por falta de acesso
     scheduler.add_job(avisar_alvos_sem_acesso, 'interval', minutes=2, id='alvos_sem_acesso_loop', replace_existing=True)
+    # O registro dos administradores é montado pelo divulgacao_canal; o aviso sai daqui.
+    scheduler.add_job(painel_admins.avisar_mudancas, 'interval', minutes=15, id='admins_mudancas_loop', replace_existing=True)
 
     # Motor de publicação dos parceiros
     scheduler.add_job(motor_parceiros_step, 'interval', minutes=2, id='motor_parceiros_loop', replace_existing=True)
