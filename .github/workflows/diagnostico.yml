@@ -93,4 +93,16 @@ jobs:
             echo "Links sem a marcação de afiliado:${JANELAS%|}"
             sqlite3 -readonly -separator ' · ' banco_dados.db "SELECT json_extract(contexto, '\$.robo'), json_extract(contexto, '\$.tipo') || ' ' || json_extract(contexto, '\$.detalhe'), COUNT(*) || ' link(s)' FROM erros_logs WHERE origem = '$ORIGEM' AND timestamp >= '$DESDE' GROUP BY 1, 2 ORDER BY COUNT(*) DESC" 2>/dev/null | sed 's/^/   /'
 
+            # Faxina do Acervo Viral e registro dos administradores: só estados e números.
+            # O nome da conta e os nomes dos admins não saem daqui (o log é público).
+            echo ""
+            echo "== Faxina do Acervo Viral"
+            R=$(sqlite3 -readonly -separator ' | ' banco_dados.db "SELECT 'situação: ' || COALESCE(json_extract(valor, '\$.situacao'), '?'), 'última rodada: ' || COALESCE(json_extract(valor, '\$.quando'), '?'), 'vídeos no canal: ' || COALESCE(json_extract(valor, '\$.videos_no_canal'), '?'), 'hoje por idade: ' || COALESCE(json_extract(valor, '\$.apagados_idade_dia'), 0), 'hoje por produto: ' || COALESCE(json_extract(valor, '\$.apagados_produto_dia'), 0), 'antigos na fila: ' || COALESCE(json_extract(valor, '\$.antigos_pendentes'), 0), 'API estranha: ' || COALESCE(json_extract(valor, '\$.api_suspeita'), 0) FROM configuracoes WHERE chave = 'faxina_viral'" 2>/dev/null)
+            echo "${R:-ainda não rodou}"
+            echo "== Registro dos administradores"
+            R=$(sqlite3 -readonly -separator ' | ' banco_dados.db "SELECT 'última conferência: ' || COALESCE(json_extract(valor, '\$.ultima'), '?'), 'grupos e canais: ' || COALESCE(json_extract(valor, '\$.grupos'), '?'), 'admins: ' || COALESCE(json_extract(valor, '\$.admins'), '?') FROM configuracoes WHERE chave = 'registro_admins'" 2>/dev/null)
+            echo "${R:-ainda não rodou}"
+            N=$(sqlite3 -readonly banco_dados.db "SELECT COUNT(*) FROM admins_mudancas WHERE avisado = 0" 2>/dev/null || echo "?")
+            echo "Mudanças de admins esperando aviso: $N"
+
             exit $ALERTA
