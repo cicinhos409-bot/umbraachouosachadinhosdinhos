@@ -111,7 +111,7 @@ def test_painel_cancelado_sai_do_registro_anti_orfao(bm, monkeypatch):
     rodar(cenario())
 
 
-def _publicar_oferta(bm, monkeypatch, membro):
+def _publicar_oferta(bm, monkeypatch, membro, link_tiktok=None):
     """Membro conclui a oferta pelo painel; devolve a legenda publicada na Vídeos da Comunidade."""
     _, _, estado = _preparar(bm, monkeypatch)
     bm.salvar_submissao_config({**bm.ler_submissao_config(), "grupo_id": GRUPO, "topico_envio": TOPICO,
@@ -144,7 +144,8 @@ def _publicar_oferta(bm, monkeypatch, membro):
     async def cenario():
         await estado.clear()
         await bm.criar_painel_submissao(GRUPO, TOPICO, membro, estado, video_id="video_1",
-                                        link_shopee="https://s.shopee.com.br/AbCdEf123")
+                                        link_shopee="https://s.shopee.com.br/AbCdEf123",
+                                        link_tiktok=link_tiktok)
         clique = _clique(f"wz_concluir:{membro.id}")
         clique.from_user = membro
         await bm.wizard_publicar_oferta(clique, estado)
@@ -156,11 +157,14 @@ def _publicar_oferta(bm, monkeypatch, membro):
 
 def test_oferta_do_membro_sai_com_o_arroba_de_quem_postou(bm, monkeypatch):
     # Regra do Rafael (16/10): na Vídeos da Comunidade aparece o @ de quem postou.
-    legenda = _publicar_oferta(bm, monkeypatch, NAY)
-    assert legenda.startswith("👤 Vídeo enviado por: @nay\n\n<b>Tênis Casual Feminino 👟</b>")
+    legenda = _publicar_oferta(bm, monkeypatch, NAY, link_tiktok="https://vm.tiktok.com/ZMabc123/")
+    assert legenda == ("👤 Vídeo enviado por: @nay\n\n<b>Tênis Casual Feminino 👟</b>\n\n"
+                       "🔶 <b>SHOPEE</b> 🔶\n🔗 Link do Produto:\nhttps://s.shopee.com.br/AbCdEf123\n\n"
+                       "⬛ <b>TIKTOK</b> ⬛\n🔗 Link do Produto:\nhttps://vm.tiktok.com/ZMabc123/\n\n"
+                       "<i>#SapatosFemininos</i>")
 
 
 def test_membro_sem_arroba_sai_com_o_nome_clicavel(bm, monkeypatch):
-    mari = SimpleNamespace(id=777, username=None, first_name="Mari")
+    mari = SimpleNamespace(id=777, username=None, first_name="Mari & Cia")
     legenda = _publicar_oferta(bm, monkeypatch, mari)
-    assert legenda.startswith("👤 Vídeo enviado por: <a href='tg://user?id=777'>Mari</a>\n\n")
+    assert legenda.startswith("👤 Vídeo enviado por: <a href='tg://user?id=777'>Mari &amp; Cia</a>\n\n")

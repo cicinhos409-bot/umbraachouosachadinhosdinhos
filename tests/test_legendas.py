@@ -53,10 +53,23 @@ def test_repost_dos_autorais_no_publico_leva_as_hashtags_do_video(bm):
     autoral = "📦 Item: Kit Soul Care 🧴\n\n" + legendas.legenda_da_ia("Kit Soul Care 🧴\n#Beleza #Saude", LINK)
     legenda = bm.legenda_repost_publico("@Rafaelnm", "Kit Soul Care 🧴", LINK, autoral)
     assert legenda == (f"👤 Vídeo enviado por: @Rafaelnm\n\n<b>Kit Soul Care 🧴</b>\n\n"
-                       f"🔗 <b>Link do Produto:</b>\n{LINK}\n\n<i>#Beleza #Saude</i>")
+                       f"🔶 <b>SHOPEE</b> 🔶\n🔗 Link do Produto:\n{LINK}\n\n<i>#Beleza #Saude</i>")
     sem = bm.legenda_repost_publico("@Rafaelnm", "Kit", LINK, legendas.legenda_sem_nome(LINK))
     assert sem.endswith(LINK) and "#" not in sem
     assert "#Recomendado" not in open(os.path.join(PASTA, "bot_mestre.py"), encoding="utf-8").read()
+
+
+def test_padrao_do_grupo_publico_tem_credito_nome_um_bloco_por_plataforma_e_hashtags():
+    # O padrão que o Rafael mostrou em 16/10 (os posts da Ana, da Mariana): quem postou,
+    # o nome, "SHOPEE" e "TIKTOK" com o link de cada um, e as hashtags.
+    tiktok = "https://vm.tiktok.com/ZMabc123/"
+    assert legendas.legenda_grupo_publico("@ana", "Copo & Cia 🥤", LINK, tiktok, "#CasaEDecoracao") == (
+        "👤 Vídeo enviado por: @ana\n\n<b>Copo &amp; Cia 🥤</b>\n\n"
+        f"🔶 <b>SHOPEE</b> 🔶\n🔗 Link do Produto:\n{LINK}\n\n"
+        f"⬛ <b>TIKTOK</b> ⬛\n🔗 Link do Produto:\n{tiktok}\n\n<i>#CasaEDecoracao</i>")
+    # Só TikTok, sem crédito e sem hashtags: as partes que faltam não aparecem.
+    assert legendas.legenda_grupo_publico("", "Copo 🥤", link_tiktok=tiktok) == (
+        f"<b>Copo 🥤</b>\n\n⬛ <b>TIKTOK</b> ⬛\n🔗 Link do Produto:\n{tiktok}")
 
 
 def test_prompt_pede_o_emoji_no_fim_e_traz_todas_as_hashtags():
@@ -98,7 +111,7 @@ def test_nenhum_arquivo_tem_a_propria_copia_do_prompt_ou_da_legenda():
         if os.path.basename(arquivo) == "legendas.py":
             continue
         texto = open(arquivo, encoding="utf-8").read()
-        for receita in ("#JogosEConsoles", "produto demonstrado", "linhas_ia"):
+        for receita in ("#JogosEConsoles", "produto demonstrado", "linhas_ia", "🔶 <b>SHOPEE</b> 🔶"):
             if receita in texto:
                 copias.append((os.path.basename(arquivo), receita))
     assert copias == []
