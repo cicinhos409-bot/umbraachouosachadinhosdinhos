@@ -29,6 +29,7 @@ from utils import registrar_erro_json, salvar_nome_grupo
 from api_gemini import gerar_texto_gemini
 import alvos_sem_acesso
 import faxina_baixador
+import faxina_viral  # vídeos que já não servem saem do Acervo Viral
 
 # Importar fuso já trava o processo no horário de Brasília.
 from fuso import configurar_logs
@@ -614,6 +615,7 @@ async def main():
     asyncio.create_task(sincronizar_nomes_topicos())
 
     asyncio.create_task(faxina_baixador.faxina_loop(client))
+    asyncio.create_task(faxina_viral.loop_faxina(client))
     
     scheduler.start()
     logger.info("🤖 Sistema automático rodando. Pressione Ctrl+C para parar.")

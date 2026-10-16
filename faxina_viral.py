@@ -1,8 +1,8 @@
 """
 Faxina do Acervo Viral: tira do canal os vídeos que já não servem. Roda no
-motor_userbot (loop_faxina), com a conta do Espião (sessao_espiao). Ela precisa ser
-administradora do Acervo Viral com permissão de apagar mensagens: o bot só apaga
-mensagem com até 48 h, e a conta de usuário administradora não tem esse limite.
+divulgacao_canal (loop_faxina), com a conta principal do Rafael (sessao_divulgacao),
+dona do canal: o bot só apaga mensagem com até 48 h, e a conta de usuário
+administradora não tem esse limite. É o mesmo arranjo da faxina do Baixador.
 
 Regras do Rafael (DECISOES.md, Canal Viral):
 - vídeo com mais de IDADE_MAXIMA sai;
@@ -115,9 +115,9 @@ async def _nome_da_conta(client):
         eu = await client.get_me()
         nome = " ".join(p for p in (getattr(eu, "first_name", None), getattr(eu, "last_name", None)) if p)
         usuario = getattr(eu, "username", None)
-        return f"{nome} (@{usuario})" if usuario else (nome or "conta do Espião")
+        return f"{nome} (@{usuario})" if usuario else (nome or "conta principal")
     except Exception:
-        return "conta do Espião"
+        return "conta principal"
 
 
 async def rodada(client, agora=None):
@@ -244,7 +244,7 @@ def linha_status():
     situacao = resumo.get("situacao")
     if not situacao:
         return "🧹 Faxina do Acervo Viral: ainda não rodou"
-    conta = resumo.get("conta") or "conta do Espião"
+    conta = resumo.get("conta") or "conta principal"
     if situacao == "sem_acesso":
         return f"🧹 Faxina do Acervo Viral: ❌ a {conta} não está no canal (precisa ser administradora)"
     if situacao == "sem_permissao":
@@ -264,6 +264,6 @@ def problema_de_permissao():
     resumo = db.ler_config(CHAVE_RESUMO, {}) or {}
     if resumo.get("situacao") not in ("sem_acesso", "sem_permissao"):
         return None
-    conta = resumo.get("conta") or "conta do Espião"
+    conta = resumo.get("conta") or "conta principal"
     return (f"🧹 <b>Faxina do Acervo Viral parada</b>\nA {conta} precisa ser administradora do Acervo "
             "Viral com a permissão \"Apagar mensagens\". Sem isso, nenhum vídeo antigo sai do canal.")

@@ -66,7 +66,7 @@ import blacklist_captura  # de quem os userbots nunca capturam
 import repetidos_publico  # vídeo que já foi ao Grupo Público não vai de novo
 import alvos_sem_acesso  # alvos da divulgação a que a conta perdeu o acesso
 import backup_dados  # backup diário do banco, sessões e .env em ~/backups
-import faxina_viral  # o resumo da faxina do Acervo Viral, que roda no motor_userbot
+import faxina_viral  # o resumo da faxina do Acervo Viral, que roda no divulgacao_canal
 from utils import registrar_erro_json, ler_cache_nomes_grupos, salvar_nome_grupo, validar_e_formatar_alvo
 
 logger = configurar_logs(__name__)
@@ -16972,7 +16972,7 @@ async def monitor_saude():
         except Exception:
             pass
 
-        # 9. Faxina do Acervo Viral sem poder apagar (a conta do Espião precisa ser admin).
+        # 9. Faxina do Acervo Viral sem poder apagar (a conta principal precisa ser admin do canal).
         try:
             problema = faxina_viral.problema_de_permissao()
             if problema and not _ja_alertou("faxina_viral"):
