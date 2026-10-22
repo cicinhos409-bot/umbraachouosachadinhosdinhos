@@ -1,0 +1,339 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Shopee Vídeo - Painel</title>
+<meta name="description" content="Painel web da Shopee Vídeo (modo assistente): as mesmas configurações do painel do Telegram.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23ee4d2d'/%3E%3Cpath d='M26 20l20 12-20 12z' fill='%23fff'/%3E%3C/svg%3E">
+<style>
+  :root {
+    --bg: #0f1115;
+    --card: #181b22;
+    --card-2: #20242d;
+    --line: #272b35;
+    --text: #eef0f4;
+    --muted: #9aa1b0;
+    --accent: #ee4d2d;
+    --accent-2: #ffb199;
+    --ok: #4cc38a;
+    --warn: #f2b84b;
+    --danger: #7d1f1f;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg: #f7f7f9;
+      --card: #ffffff;
+      --card-2: #f0f1f4;
+      --line: #e3e5ea;
+      --text: #1b1d23;
+      --muted: #5d6472;
+      --accent: #d93a1c;
+      --accent-2: #b3361d;
+      --ok: #1c8a58;
+      --warn: #9a6a00;
+      --danger: #b3261e;
+    }
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  .wrap { max-width: 760px; margin: 0 auto; padding: 0 16px 48px; }
+  nav { display: flex; gap: 8px; padding: 16px 0; }
+  nav a { color: var(--muted); text-decoration: none; font-size: 14px; padding: 6px 12px; border: 1px solid var(--line); border-radius: 999px; background: var(--card); }
+  nav a[aria-current="page"] { color: var(--text); border-color: var(--accent); }
+  .banner { background: var(--card); border: 1px solid var(--warn); border-radius: 12px; padding: 12px 16px; font-size: 14px; color: var(--muted); }
+  .banner b { color: var(--warn); }
+  h1 { font-size: clamp(26px, 5vw, 36px); line-height: 1.15; margin: 24px 0 8px; letter-spacing: -0.02em; }
+  .lead { color: var(--muted); margin: 0 0 20px; }
+  h2 { font-size: 18px; margin: 32px 0 12px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px; }
+  dl.status { margin: 0; display: grid; grid-template-columns: 1fr; gap: 10px; }
+  dl.status div { display: flex; justify-content: space-between; gap: 16px; border-bottom: 1px solid var(--line); padding-bottom: 10px; }
+  dl.status div:last-child { border-bottom: 0; padding-bottom: 0; }
+  dt { color: var(--muted); }
+  dd { margin: 0; text-align: right; font-weight: 600; }
+  .pill { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 14px; }
+  .pill.pausado { background: color-mix(in srgb, var(--warn) 18%, transparent); color: var(--warn); }
+  .pill.ativo { background: color-mix(in srgb, var(--ok) 18%, transparent); color: var(--ok); }
+  .hint { color: var(--muted); font-size: 13.5px; margin: 6px 0 0; font-weight: 400; }
+  .actions { display: grid; gap: 10px; grid-template-columns: 1fr 1fr; margin-top: 12px; }
+  .actions .full { grid-column: 1 / -1; }
+  button, .btn { font: inherit; color: var(--text); background: var(--card-2); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; cursor: pointer; min-height: 48px; }
+  button:hover { border-color: var(--accent); }
+  button:focus-visible, input:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button.danger { background: var(--danger); border-color: var(--danger); color: #fff; }
+  label { display: block; font-size: 14px; margin-bottom: 6px; color: var(--muted); }
+  input[type="text"] { width: 100%; font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 12px; min-height: 48px; }
+  .row { display: flex; gap: 10px; }
+  .row input { flex: 1; }
+  .err { color: var(--danger); font-size: 14px; min-height: 20px; margin: 6px 0 0; }
+  fieldset { border: 0; padding: 0; margin: 0; display: grid; gap: 8px; }
+  .opt { display: flex; gap: 12px; align-items: flex-start; background: var(--card-2); border: 1px solid var(--line); border-radius: 12px; padding: 12px; cursor: pointer; }
+  .opt:has(input:checked) { border-color: var(--accent); }
+  .opt input { margin-top: 4px; accent-color: var(--accent); }
+  .opt b { display: block; }
+  .opt span { color: var(--muted); font-size: 14px; }
+  details.card summary { cursor: pointer; font-weight: 600; }
+  details.card ol { padding-left: 20px; margin: 12px 0 0; }
+  details.card li { margin-bottom: 10px; }
+  code { background: var(--card-2); padding: 1px 6px; border-radius: 6px; font-size: 13.5px; }
+  dialog { background: var(--card); color: var(--text); border: 1px solid var(--line); border-radius: 14px; padding: 20px; max-width: 420px; width: calc(100% - 32px); }
+  dialog::backdrop { background: rgba(0, 0, 0, .55); }
+  dialog p { margin: 0 0 16px; }
+  dialog .actions { grid-template-columns: 1fr 1fr; }
+  #toast { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); background: var(--text); color: var(--bg); padding: 10px 16px; border-radius: 12px; font-size: 14px; max-width: calc(100% - 32px); opacity: 0; pointer-events: none; transition: opacity .2s; }
+  #toast.on { opacity: 1; }
+  @media (max-width: 420px) { .actions { grid-template-columns: 1fr; } .row { flex-direction: column; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <nav aria-label="Páginas">
+    <a href="/">Visão geral</a>
+    <a href="/shopee-video" aria-current="page">Shopee Vídeo</a>
+  </nav>
+
+  <div class="banner" role="note">
+    <b>Protótipo da tela.</b> Este painel ainda não está ligado ao robô: o que você muda aqui fica só neste navegador e não altera nada no servidor nem no Telegram. Os números de exemplo estão marcados.
+  </div>
+
+  <h1>🎬 Shopee Vídeo</h1>
+  <p class="lead">Modo assistente: o robô prepara cada postagem (vídeo, título, produtos e comentário) e manda no seu privado do Telegram, para você postar pelo seu celular.</p>
+
+  <section aria-labelledby="t-status">
+    <h2 id="t-status">Situação</h2>
+    <div class="card">
+      <dl class="status">
+        <div><dt>Status</dt><dd id="v-status"></dd></div>
+        <div><dt>🎞️ Fonte dos vídeos</dt><dd id="v-fonte"></dd></div>
+        <div><dt>📦 Vídeos por dia</dt><dd><span id="v-faixa"></span><p class="hint" id="v-hoje"></p></dd></div>
+        <div><dt>⏰ Horário dos envios</dt><dd id="v-janela"></dd></div>
+        <div><dt>📤 Mandados hoje</dt><dd>0 <span class="hint">(exemplo)</span></dd></div>
+      </dl>
+      <div class="actions">
+        <button id="b-pausa" type="button"></button>
+        <button id="b-enviar" type="button">Enviar 1 Agora 📤</button>
+      </div>
+      <p class="hint">Enviar 1 Agora manda uma postagem na hora, mesmo pausado.</p>
+    </div>
+  </section>
+
+  <section aria-labelledby="t-faixa">
+    <h2 id="t-faixa">📦 Vídeos por dia</h2>
+    <form class="card" id="f-faixa" novalidate>
+      <label for="i-faixa">Faixa (<code>5-10</code>, sorteia um número a cada dia) ou fixo (<code>6</code>)</label>
+      <div class="row">
+        <input type="text" id="i-faixa" inputmode="text" autocomplete="off" placeholder="5-10" aria-describedby="e-faixa">
+        <button type="submit" class="primary">Salvar</button>
+      </div>
+      <p class="err" id="e-faixa" role="alert"></p>
+      <p class="hint">Máximo de 50 por dia. A faixa existe para a quantidade não ser sempre igual, que é o que denuncia robô.</p>
+    </form>
+  </section>
+
+  <section aria-labelledby="t-janela">
+    <h2 id="t-janela">⏰ Horário de postagem</h2>
+    <form class="card" id="f-janela" novalidate>
+      <label for="i-janela">As postagens se espalham dentro dessa faixa. Envie <code>início-fim</code> (ex.: <code>13-22</code>).</label>
+      <div class="row">
+        <input type="text" id="i-janela" inputmode="text" autocomplete="off" placeholder="13-22" aria-describedby="e-janela">
+        <button type="submit" class="primary">Salvar</button>
+        <button type="button" id="b-dia-todo">Dia Todo (24h) 🕛</button>
+      </div>
+      <p class="err" id="e-janela" role="alert"></p>
+    </form>
+  </section>
+
+  <section aria-labelledby="t-fonte">
+    <h2 id="t-fonte">🎞️ Fonte dos vídeos</h2>
+    <div class="card">
+      <p style="margin-top:0">De onde o robô puxa os vídeos? Vale para os próximos envios, inclusive o Enviar 1 Agora.</p>
+      <fieldset id="fs-fonte">
+        <legend class="hint" style="margin-bottom:8px">Escolha uma fonte</legend>
+        <label class="opt"><input type="radio" name="fonte" value="autorais"><div><b>Autorais 🎥</b><span>Feitos para afiliados repostarem (recomendado).</span></div></label>
+        <label class="opt"><input type="radio" name="fonte" value="viral"><div><b>Viral (Espião) 🕵️</b><span>Vídeos de outros criadores. A Shopee não recomenda conteúdo copiado (diretriz 7.2.1), e a IA pula os com marca d'água de outra plataforma.</span></div></label>
+        <label class="opt"><input type="radio" name="fonte" value="principal"><div><b>Canal Afiliados 📺</b><span>Os vídeos da fila do seu canal principal.</span></div></label>
+        <label class="opt"><input type="radio" name="fonte" value="publico"><div><b>Grupo Público 📬</b><span>Os vídeos enviados pelos membros.</span></div></label>
+      </fieldset>
+    </div>
+  </section>
+
+  <section aria-labelledby="t-cel">
+    <h2 id="t-cel">📱 Celular do robô</h2>
+    <div class="card">
+      <p style="margin-top:0">O robô da Shopee Vídeo vai postar pelo seu celular guardado, ligado ao servidor pela rede privada (Tailscale).</p>
+      <dl class="status">
+        <div><dt>🌐 Na rede privada</dt><dd>❌ nenhum celular</dd></div>
+        <div><dt>🔗 Pareado</dt><dd>⏳ ainda não</dd></div>
+        <div><dt>📶 Conexão</dt><dd>⏳ ainda não</dd></div>
+      </dl>
+      <p class="hint">No painel ligado ao servidor, estes três campos mostram o estado real do celular. Aqui aparece o estado de quem nunca conectou.</p>
+      <div class="actions">
+        <button type="button" class="b-ligar" data-acao="Ver Tela do Celular">Ver Tela do Celular 🖥️</button>
+        <button type="button" class="b-ligar" data-acao="Parear Celular">Parear Celular 🔗</button>
+        <button type="button" class="b-ligar full" data-acao="Reconectar Celular">Reconectar Celular 🔄</button>
+      </div>
+    </div>
+
+    <details class="card" style="margin-top:12px">
+      <summary>📖 Passo a passo do celular do robô</summary>
+      <p class="hint">Para quando você resetar o celular guardado (ou trocar de celular). Faça na ordem. Só reiniciou ou desligou a depuração? Ligue a <b>Depuração por Wi-Fi</b> (passo 6) e use <b>Reconectar Celular</b>.</p>
+      <h3 style="font-size:15px;margin:16px 0 0">Parte 1: no celular guardado</h3>
+      <ol>
+        <li><b>Ligar:</b> configure o celular, entre na sua conta Google e conecte no Wi-Fi de casa. Deixe no carregador.</li>
+        <li><b>Apps:</b> na Play Store, instale a Shopee e o Tailscale.</li>
+        <li><b>Shopee:</b> entre na sua conta pessoal (a de sempre). Se pedir verificação, resolva com a mão. Depois: Configurações → Apps → Shopee → Bateria → <b>Sem restrições</b>.</li>
+        <li><b>Tailscale:</b> entre com a mesma conta de antes e ligue (aceite o pedido de VPN). Depois: Configurações → Rede e Internet → VPN → ⚙️ do Tailscale → ligue <b>VPN sempre ativa</b>.</li>
+        <li><b>Modo desenvolvedor:</b> Configurações → Sobre o telefone → toque <b>7 vezes</b> em "Número da versão" (ele pede o PIN).</li>
+        <li><b>Opções do desenvolvedor:</b> ligue <b>Manter ativado</b> e <b>Depuração por Wi-Fi</b> (toque em Permitir).</li>
+      </ol>
+      <p class="hint">💡 Não achou uma opção? Use a lupa 🔍 no alto das Configurações e digite o nome dela.</p>
+      <h3 style="font-size:15px;margin:16px 0 0">Parte 2: no painel</h3>
+      <ol start="7">
+        <li>Use <b>Parear Celular</b>.</li>
+        <li>No celular: Depuração por Wi-Fi → <b>Parear o dispositivo com um código de pareamento</b>. Deixe a janela aberta.</li>
+        <li>Informe os números da janela: o <b>código de 6 dígitos</b>, um espaço e a <b>porta</b> (o número depois dos dois-pontos). Ex.: <code>123456 37123</code>.</li>
+        <li>Depois informe a <b>porta da conexão</b>: na tela da Depuração por Wi-Fi, em "Endereço IP e porta", é o número depois dos dois-pontos (outro número).</li>
+      </ol>
+      <p>✅ Pronto quando aparecer <b>Celular conectado</b>.</p>
+      <p class="hint"><b>Uma vez só, no navegador</b> (para o celular não sair da rede depois de uns meses): login.tailscale.com → Machines → o celular → ⋯ → <b>Disable key expiry</b>. Se o celular antigo ainda aparecer na lista, pode tirar (⋯ → Remove).</p>
+    </details>
+  </section>
+</div>
+
+<dialog id="dlg" aria-labelledby="dlg-texto">
+  <p id="dlg-texto"></p>
+  <div class="actions">
+    <button type="button" id="dlg-nao">Cancelar ❌</button>
+    <button type="button" id="dlg-sim" class="primary">Confirmar ✅</button>
+  </div>
+</dialog>
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script>
+(function () {
+  "use strict";
+  // Mesmos padrões e limites do painel do Telegram (painel_shopee_video.py).
+  var PADRAO = { pausado: true, limite_min: 5, limite_max: 10, inicio: 13, fim: 22, fonte: "autorais" };
+  var MAXIMO_POR_DIA = 50;
+  var FONTES = { autorais: "Autorais 🎥", viral: "Viral (Espião) 🕵️", principal: "Canal Afiliados 📺", publico: "Grupo Público 📬" };
+  var CHAVE = "shopee_video_prototipo";
+
+  function carregar() {
+    try {
+      var salvo = JSON.parse(localStorage.getItem(CHAVE) || "{}");
+      return Object.assign({}, PADRAO, salvo);
+    } catch (e) { return Object.assign({}, PADRAO); }
+  }
+  function gravar() { try { localStorage.setItem(CHAVE, JSON.stringify(config)); } catch (e) {} }
+  var config = carregar();
+
+  function interpretarFaixa(texto) {
+    var m = /^(\d{1,3})(?:\s*-\s*(\d{1,3}))?$/.exec((texto || "").trim());
+    if (!m) return null;
+    var piso = parseInt(m[1], 10), topo = m[2] ? parseInt(m[2], 10) : piso;
+    if (piso < 1 || topo < piso || topo > MAXIMO_POR_DIA) return null;
+    return [piso, topo];
+  }
+  function interpretarJanela(texto) {
+    texto = (texto || "").trim();
+    if (texto.toLowerCase() === "dia todo") return [0, 24];
+    var m = /^(\d{1,2})\s*-\s*(\d{1,2})$/.exec(texto);
+    if (!m) return null;
+    var ini = parseInt(m[1], 10), fim = parseInt(m[2], 10);
+    if (!(ini >= 0 && ini < fim && fim <= 24)) return null;
+    return [ini, fim];
+  }
+  function rotuloFaixa(p, t) { return t > p ? p + " a " + t : p + " (fixo)"; }
+  function rotuloJanela(i, f) { return (i === 0 && f === 24) ? "o dia todo (24h)" : "das " + i + "h às " + f + "h"; }
+
+  // Só para a demonstração: um número estável por dia dentro da faixa. No robô, quem sorteia é o motor de filas.
+  function videosHoje() {
+    var dia = new Date().toISOString().slice(0, 10), h = 0, i;
+    for (i = 0; i < dia.length; i++) h = (h * 31 + dia.charCodeAt(i)) % 100003;
+    return config.limite_min + (h % (config.limite_max - config.limite_min + 1));
+  }
+
+  var $ = function (id) { return document.getElementById(id); };
+
+  function desenhar() {
+    $("v-status").innerHTML = config.pausado
+      ? '<span class="pill pausado">⏸️ Pausado</span>'
+      : '<span class="pill ativo">▶️ Ativo</span>';
+    $("v-fonte").textContent = FONTES[config.fonte] || config.fonte;
+    $("v-faixa").textContent = rotuloFaixa(config.limite_min, config.limite_max);
+    $("v-hoje").textContent = config.limite_max > config.limite_min
+      ? "sorteado a cada dia; hoje: " + videosHoje() + " (exemplo)" : "";
+    $("v-janela").textContent = rotuloJanela(config.inicio, config.fim);
+    $("b-pausa").textContent = config.pausado ? "Retomar Robô ▶️" : "Pausar Robô ⏸️";
+    document.querySelectorAll('input[name="fonte"]').forEach(function (r) { r.checked = (r.value === config.fonte); });
+  }
+
+  var toastTimer;
+  function aviso(texto) {
+    var t = $("toast"); t.textContent = texto; t.classList.add("on");
+    clearTimeout(toastTimer); toastTimer = setTimeout(function () { t.classList.remove("on"); }, 3600);
+  }
+
+  var acaoPendente = null;
+  function confirmar(texto, aoConfirmar) {
+    $("dlg-texto").textContent = texto; acaoPendente = aoConfirmar; $("dlg").showModal();
+  }
+  $("dlg-nao").addEventListener("click", function () { acaoPendente = null; $("dlg").close(); });
+  $("dlg-sim").addEventListener("click", function () {
+    var f = acaoPendente; acaoPendente = null; $("dlg").close(); if (f) f();
+  });
+
+  $("f-faixa").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var r = interpretarFaixa($("i-faixa").value);
+    if (!r) { $("e-faixa").textContent = "Não entendi. Envie 5-10 (faixa) ou 6 (fixo), de 1 a " + MAXIMO_POR_DIA + " por dia."; return; }
+    $("e-faixa").textContent = "";
+    confirmar("Trocar para " + rotuloFaixa(r[0], r[1]) + " vídeos por dia?", function () {
+      config.limite_min = r[0]; config.limite_max = r[1]; gravar(); desenhar(); $("i-faixa").value = "";
+      aviso("Vídeos por dia: " + rotuloFaixa(r[0], r[1]));
+    });
+  });
+
+  function trocarJanela(r) {
+    confirmar("Trocar o horário dos envios para " + rotuloJanela(r[0], r[1]) + "?", function () {
+      config.inicio = r[0]; config.fim = r[1]; gravar(); desenhar(); $("i-janela").value = "";
+      aviso("Horário dos envios: " + rotuloJanela(r[0], r[1]));
+    });
+  }
+  $("f-janela").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var r = interpretarJanela($("i-janela").value);
+    if (!r) { $("e-janela").textContent = "Não entendi. Envie início-fim, como 13-22 (de 0 a 24, com o início menor que o fim)."; return; }
+    $("e-janela").textContent = ""; trocarJanela(r);
+  });
+  $("b-dia-todo").addEventListener("click", function () { $("e-janela").textContent = ""; trocarJanela([0, 24]); });
+
+  $("b-pausa").addEventListener("click", function () {
+    var pausar = !config.pausado;
+    confirmar(pausar
+      ? "Pausar o robô da Shopee Vídeo? Ele para de mandar postagens até você retomar."
+      : "Retomar o robô da Shopee Vídeo? Ele volta a mandar as postagens no seu privado do Telegram, dentro do horário e da quantidade do painel.",
+      function () { config.pausado = pausar; gravar(); desenhar(); aviso(pausar ? "Robô pausado" : "Robô ativo"); });
+  });
+
+  document.querySelectorAll('input[name="fonte"]').forEach(function (r) {
+    r.addEventListener("change", function () { config.fonte = r.value; gravar(); desenhar(); aviso("Fonte: " + FONTES[r.value]); });
+  });
+
+  $("b-enviar").addEventListener("click", function () {
+    aviso("Protótipo: no painel ligado ao servidor, isto prepara e manda uma postagem no seu Telegram, mesmo pausado.");
+  });
+  document.querySelectorAll(".b-ligar").forEach(function (b) {
+    b.addEventListener("click", function () {
+      aviso("Protótipo: \"" + b.dataset.acao + "\" só funciona quando o painel for ligado ao servidor.");
+    });
+  });
+
+  desenhar();
+})();
+</script>
+</body>
+</html>

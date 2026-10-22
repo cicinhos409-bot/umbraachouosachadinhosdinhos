@@ -19,8 +19,8 @@ archive/
 *.tar.gz
 *.png
 *.html
-# Exceção: página do site estático da Vercel (tem de vir depois de *.html)
-!public/index.html
+# Exceção: páginas do site estático da Vercel (têm de vir depois de *.html)
+!public/*.html
 contador.txt
 log_divulgacao.txt
 variantes/
