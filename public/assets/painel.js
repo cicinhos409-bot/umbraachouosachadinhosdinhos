@@ -74,7 +74,7 @@
     lateral.innerHTML = '<div class="painel-side-head"><a class="marca" href="/painel">🎛️ Painel do robô</a>' +
       '<button type="button" class="fechar" id="painel-fechar" aria-label="Fechar o menu">✕</button></div>' +
       '<div class="lista" role="navigation" aria-label="Painéis">' + itens + "</div>" +
-      '<div class="painel-side-foot"><a href="/">← Visão geral do site</a></div>';
+      '<div class="painel-side-foot"><a href="/visao-geral">← Visão geral do site</a></div>';
     var pelicula = document.createElement("div");
     pelicula.className = "painel-overlay"; pelicula.id = "painel-overlay";
     document.body.insertBefore(pelicula, document.body.firstChild);

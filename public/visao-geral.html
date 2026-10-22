@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Visão geral - Umbra Achou os Achadinhos</title>
+<meta name="description" content="Visão geral do ecossistema de automação para afiliados Shopee no Telegram: serviços, filas e proteções.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23ee4d2d'/%3E%3Cpath d='M20 24h24l-2 22H22z' fill='none' stroke='%23fff' stroke-width='4' stroke-linejoin='round'/%3E%3Cpath d='M26 24a6 6 0 0 1 12 0' fill='none' stroke='%23fff' stroke-width='4'/%3E%3C/svg%3E">
+<style>
+  :root {
+    --bg: #0f1115;
+    --card: #181b22;
+    --line: #272b35;
+    --text: #eef0f4;
+    --muted: #9aa1b0;
+    --accent: #ee4d2d;
+    --accent-2: #ffb199;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg: #f7f7f9;
+      --card: #ffffff;
+      --line: #e3e5ea;
+      --text: #1b1d23;
+      --muted: #5d6472;
+      --accent: #d93a1c;
+      --accent-2: #b3361d;
+    }
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 0 16px; }
+  header { padding: 56px 0 32px; }
+  .tag {
+    display: inline-block;
+    font-size: 13px;
+    color: var(--accent-2);
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    padding: 4px 12px;
+    background: var(--card);
+  }
+  h1 { font-size: clamp(30px, 6vw, 48px); line-height: 1.1; margin: 16px 0 12px; letter-spacing: -0.02em; }
+  h1 span { color: var(--accent); }
+  .lead { color: var(--muted); max-width: 640px; margin: 0; font-size: 18px; }
+  h2 { font-size: 22px; margin: 48px 0 16px; letter-spacing: -0.01em; }
+  .grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px; }
+  .card h3 { margin: 0 0 4px; font-size: 16px; }
+  .card code { font-size: 12.5px; color: var(--accent-2); }
+  .card p { margin: 8px 0 0; color: var(--muted); font-size: 14.5px; }
+  .table-box { overflow-x: auto; border: 1px solid var(--line); border-radius: 14px; background: var(--card); }
+  table { border-collapse: collapse; width: 100%; min-width: 520px; font-size: 14.5px; }
+  th, td { text-align: left; padding: 12px 16px; border-bottom: 1px solid var(--line); }
+  th { color: var(--muted); font-weight: 600; font-size: 13px; }
+  tr:last-child td { border-bottom: 0; }
+  ul.checks { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+  ul.checks li { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px 16px; }
+  ul.checks b { color: var(--accent-2); }
+  .note { color: var(--muted); font-size: 14px; margin-top: 12px; }
+  footer { margin: 56px 0 40px; padding-top: 20px; border-top: 1px solid var(--line); color: var(--muted); font-size: 14px; }
+  footer a { color: var(--accent-2); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <p style="margin:0 0 20px"><a href="/painel" class="tag" style="text-decoration:none">🎛️ Painel web do robô (protótipo) →</a> <a href="/" class="tag" style="text-decoration:none">← Página de entrada</a></p>
+    <span class="tag">Automação para afiliados Shopee</span>
+    <h1>Umbra Achou os <span>Achadinhos</span></h1>
+    <p class="lead">Cinco serviços independentes que capturam, organizam e publicam vídeos de achadinhos da Shopee no Telegram, com filas, proteções automáticas e painéis de controle.</p>
+  </header>
+
+  <main>
+    <h2>Os cinco serviços</h2>
+    <div class="grid">
+      <div class="card"><h3>Bot mestre</h3><code>bot_mestre.py</code><p>Painéis, filas, publicação, financeiro e parceiros.</p></div>
+      <div class="card"><h3>Espelhador de autorais</h3><code>espelhador_videos_autorais.py</code><p>Captura dos vídeos Autorais e do Grupo Público.</p></div>
+      <div class="card"><h3>Motor userbot</h3><code>motor_userbot.py</code><p>Espião e Espelhador, usando uma conta Telethon.</p></div>
+      <div class="card"><h3>Divulgação de canal</h3><code>divulgacao_canal.py</code><p>Divulgação em grupos externos.</p></div>
+      <div class="card"><h3>Downloader</h3><code>downloader_bot.py</code><p>Baixa vídeos a pedido dos membros.</p></div>
+    </div>
+
+    <h2>As cinco filas</h2>
+    <div class="table-box">
+      <table>
+        <thead><tr><th>Fila</th><th>Janela</th><th>Atraso</th><th>Espaçamento mínimo</th></tr></thead>
+        <tbody>
+          <tr><td>Espião → Viral</td><td>0h–24h</td><td>D+1</td><td>10 ± 5 min</td></tr>
+          <tr><td>Espelhador</td><td>8h–22h</td><td>por rota</td><td>20 ± 8 min</td></tr>
+          <tr><td>Autorais</td><td>10h–20h</td><td>D+15</td><td>15 ± 6 min</td></tr>
+          <tr><td>Grupo Público</td><td>10h–20h</td><td>D+30</td><td>15 ± 6 min</td></tr>
+          <tr><td>Parceiros</td><td>0h–24h</td><td>por parceiro</td><td>10 ± 5 min</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note">O espaçamento é um piso, não um intervalo fixo: o motor divide a janela pela quantidade de vídeos do dia.</p>
+
+    <h2>Proteções automáticas</h2>
+    <ul class="checks">
+      <li><b>Validador + CI</b> a cada commit no GitHub.</li>
+      <li><b>Testes do motor de filas</b> a cada commit.</li>
+      <li><b>Monitor de saúde</b> de hora em hora, com aviso no privado.</li>
+      <li><b>Faxina de arquivos órfãos</b> às 03h, cruzando com as filas.</li>
+      <li><b>Anti-duplicata</b> por arquivo e por produto.</li>
+      <li><b>Cache de análises da IA</b> para não analisar o mesmo vídeo duas vezes.</li>
+    </ul>
+  </main>
+
+  <footer>
+    Esta página é uma visão geral estática. Os robôs rodam 24h em um servidor próprio e não funcionam na Vercel.
+    Código em <a href="https://github.com/cicinhos409-bot/umbraachouosachadinhosdinhos">cicinhos409-bot/umbraachouosachadinhosdinhos</a>.
+  </footer>
+</div>
+</body>
+</html>

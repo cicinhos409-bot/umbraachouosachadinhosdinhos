@@ -3,120 +3,235 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Umbra Achou os Achadinhos</title>
-<meta name="description" content="Visão geral do ecossistema de automação para afiliados Shopee no Telegram: serviços, filas e proteções.">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23ee4d2d'/%3E%3Cpath d='M20 24h24l-2 22H22z' fill='none' stroke='%23fff' stroke-width='4' stroke-linejoin='round'/%3E%3Cpath d='M26 24a6 6 0 0 1 12 0' fill='none' stroke='%23fff' stroke-width='4'/%3E%3C/svg%3E">
+<title>Umbra Achou os Achadinhos - Ofertas da Shopee antes de acabar</title>
+<meta name="description" content="Entre no grupo grátis do Telegram e receba achadinhos e cupons da Shopee na hora em que aparecem. Oferta boa não espera.">
+<meta property="og:title" content="Achadinhos da Shopee na hora que aparecem">
+<meta property="og:description" content="Grupo grátis no Telegram. Oferta boa acaba rápido: quem entra primeiro, compra primeiro.">
+<meta property="og:type" content="website">
+<meta name="theme-color" content="#0b0b0f">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23ee4d2d'/%3E%3Cpath d='M36 8 18 36h12l-4 20 20-30H34z' fill='%23fff'/%3E%3C/svg%3E">
 <style>
   :root {
-    --bg: #0f1115;
-    --card: #181b22;
-    --line: #272b35;
-    --text: #eef0f4;
-    --muted: #9aa1b0;
-    --accent: #ee4d2d;
-    --accent-2: #ffb199;
-  }
-  @media (prefers-color-scheme: light) {
-    :root {
-      --bg: #f7f7f9;
-      --card: #ffffff;
-      --line: #e3e5ea;
-      --text: #1b1d23;
-      --muted: #5d6472;
-      --accent: #d93a1c;
-      --accent-2: #b3361d;
-    }
+    --bg: #0b0b0f; --card: #15151c; --card-2: #1c1c26; --line: #2a2a38;
+    --text: #f4f4f8; --muted: #a6a6b8; --accent: #ff4d1f; --accent-2: #ff8a3d;
+    --hot: #ffd23f; --ok: #3ddc97;
   }
   * { box-sizing: border-box; }
-  html { -webkit-text-size-adjust: 100%; }
-  body {
-    margin: 0;
-    background: var(--bg);
-    color: var(--text);
-    font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  }
-  .wrap { max-width: 960px; margin: 0 auto; padding: 0 16px; }
-  header { padding: 56px 0 32px; }
-  .tag {
-    display: inline-block;
-    font-size: 13px;
-    color: var(--accent-2);
-    border: 1px solid var(--line);
-    border-radius: 999px;
-    padding: 4px 12px;
-    background: var(--card);
-  }
-  h1 { font-size: clamp(30px, 6vw, 48px); line-height: 1.1; margin: 16px 0 12px; letter-spacing: -0.02em; }
-  h1 span { color: var(--accent); }
-  .lead { color: var(--muted); max-width: 640px; margin: 0; font-size: 18px; }
-  h2 { font-size: 22px; margin: 48px 0 16px; letter-spacing: -0.01em; }
-  .grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
-  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px; }
-  .card h3 { margin: 0 0 4px; font-size: 16px; }
-  .card code { font-size: 12.5px; color: var(--accent-2); }
-  .card p { margin: 8px 0 0; color: var(--muted); font-size: 14.5px; }
-  .table-box { overflow-x: auto; border: 1px solid var(--line); border-radius: 14px; background: var(--card); }
-  table { border-collapse: collapse; width: 100%; min-width: 520px; font-size: 14.5px; }
-  th, td { text-align: left; padding: 12px 16px; border-bottom: 1px solid var(--line); }
-  th { color: var(--muted); font-weight: 600; font-size: 13px; }
-  tr:last-child td { border-bottom: 0; }
-  ul.checks { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
-  ul.checks li { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px 16px; }
-  ul.checks b { color: var(--accent-2); }
-  .note { color: var(--muted); font-size: 14px; margin-top: 12px; }
-  footer { margin: 56px 0 40px; padding-top: 20px; border-top: 1px solid var(--line); color: var(--muted); font-size: 14px; }
-  footer a { color: var(--accent-2); }
+  html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } * { animation: none !important; } }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 17px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; padding-bottom: 84px; }
+  a { color: inherit; }
+  .wrap { max-width: 920px; margin: 0 auto; padding: 0 18px; }
+
+  /* Faixa de urgência no topo */
+  .urgencia { position: sticky; top: 0; z-index: 40; background: linear-gradient(90deg, #c4160a, var(--accent)); color: #fff; text-align: center; padding: 8px 12px; font-weight: 700; font-size: 14.5px; letter-spacing: .01em; }
+  .urgencia .tempo { font-variant-numeric: tabular-nums; background: #000; color: var(--hot); padding: 2px 8px; border-radius: 6px; margin-left: 6px; }
+
+  header { padding: 44px 0 20px; text-align: center; }
+  .selo { display: inline-flex; align-items: center; gap: 8px; border: 1px solid #ff4d1f66; background: #ff4d1f1f; color: var(--accent-2); padding: 6px 14px; border-radius: 999px; font-size: 13.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; }
+  .ponto { width: 9px; height: 9px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 0 0 #3ddc9788; animation: pulsa 1.6s infinite; }
+  @keyframes pulsa { 70% { box-shadow: 0 0 0 10px #3ddc9700; } 100% { box-shadow: 0 0 0 0 #3ddc9700; } }
+  h1 { font-size: clamp(36px, 8.4vw, 70px); line-height: 1.02; margin: 20px 0 16px; letter-spacing: -.03em; font-weight: 900; }
+  h1 em { font-style: normal; background: linear-gradient(90deg, var(--accent), var(--hot)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .sub { color: var(--muted); font-size: clamp(17px, 3.6vw, 21px); max-width: 640px; margin: 0 auto 26px; }
+  .sub b { color: var(--text); }
+
+  .cta { display: inline-flex; align-items: center; justify-content: center; gap: 10px; background: linear-gradient(180deg, #ff6a2b, var(--accent)); color: #fff; font-weight: 900; font-size: clamp(18px, 4.4vw, 22px); text-decoration: none; padding: 18px 30px; border-radius: 16px; border: 0; box-shadow: 0 10px 34px #ff4d1f59, inset 0 -3px 0 #0003; min-height: 60px; cursor: pointer; animation: balanca 3.2s ease-in-out infinite; width: min(100%, 460px); }
+  .cta:hover { filter: brightness(1.08); }
+  .cta:focus-visible { outline: 3px solid var(--hot); outline-offset: 3px; }
+  @keyframes balanca { 0%, 88%, 100% { transform: none; } 91% { transform: scale(1.04) rotate(-.6deg); } 94% { transform: scale(1.04) rotate(.6deg); } 97% { transform: scale(1.02); } }
+  .micro { color: var(--muted); font-size: 13.5px; margin: 12px 0 0; }
+
+  /* Relógio grande */
+  .relogio { margin: 30px auto 0; max-width: 520px; background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 16px 14px 14px; }
+  .relogio p { margin: 0 0 10px; font-size: 14px; color: var(--muted); text-transform: uppercase; letter-spacing: .07em; font-weight: 700; }
+  .digitos { display: flex; justify-content: center; gap: 10px; }
+  .dig { background: #000; border: 1px solid var(--line); border-radius: 12px; min-width: 76px; padding: 8px 6px; }
+  .dig b { display: block; font-size: clamp(32px, 9vw, 46px); line-height: 1.1; font-variant-numeric: tabular-nums; color: var(--hot); }
+  .dig span { font-size: 11.5px; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
+
+  h2 { font-size: clamp(26px, 5.6vw, 40px); line-height: 1.1; letter-spacing: -.02em; margin: 0 0 12px; font-weight: 900; text-align: center; }
+  section { padding: 52px 0 6px; }
+  .lead { color: var(--muted); text-align: center; max-width: 620px; margin: 0 auto 26px; }
+
+  .grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 18px; }
+  .card h3 { margin: 6px 0 6px; font-size: 19px; }
+  .card p { margin: 0; color: var(--muted); font-size: 15.5px; }
+  .card .ic { font-size: 30px; }
+
+  /* O que acaba rápido */
+  .perde { border-color: #ff4d1f55; background: linear-gradient(180deg, #ff4d1f14, var(--card)); }
+  .perde .ic { filter: drop-shadow(0 0 10px #ff4d1f88); }
+
+  .passos { counter-reset: p; display: grid; gap: 12px; }
+  .passo { display: grid; grid-template-columns: 52px 1fr; gap: 14px; align-items: center; background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 16px; }
+  .passo::before { counter-increment: p; content: counter(p); display: grid; place-items: center; width: 52px; height: 52px; border-radius: 14px; background: var(--accent); color: #fff; font-weight: 900; font-size: 26px; }
+  .passo b { display: block; font-size: 18px; }
+  .passo span { color: var(--muted); font-size: 15.5px; }
+
+  .comparar { display: grid; gap: 12px; grid-template-columns: 1fr 1fr; }
+  .comparar .lado { border-radius: 16px; padding: 18px; border: 1px solid var(--line); background: var(--card); }
+  .comparar .lado.ruim { border-color: #ff4d4d44; }
+  .comparar .lado.bom { border-color: #3ddc9755; background: linear-gradient(180deg, #3ddc9712, var(--card)); }
+  .comparar h3 { margin: 0 0 10px; font-size: 17px; }
+  .comparar ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; font-size: 15.5px; color: var(--muted); }
+  @media (max-width: 560px) { .comparar { grid-template-columns: 1fr; } }
+
+  .final { margin-top: 52px; text-align: center; background: radial-gradient(120% 140% at 50% 0%, #ff4d1f33, var(--card) 70%); border: 1px solid #ff4d1f66; border-radius: 22px; padding: 34px 18px 30px; }
+  .final h2 { margin-bottom: 8px; }
+
+  details { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 4px 16px; margin-bottom: 10px; }
+  summary { cursor: pointer; font-weight: 700; padding: 14px 0; list-style-position: outside; }
+  summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  details p { color: var(--muted); margin: 0 0 14px; font-size: 15.5px; }
+
+  footer { margin: 44px 0 20px; padding-top: 20px; border-top: 1px solid var(--line); color: var(--muted); font-size: 13px; text-align: center; }
+  footer p { margin: 0 0 8px; }
+
+  /* Botão fixo no celular */
+  .barra { position: fixed; left: 0; right: 0; bottom: 0; z-index: 45; background: #0b0b0fee; backdrop-filter: blur(8px); border-top: 1px solid var(--line); padding: 10px 14px calc(10px + env(safe-area-inset-bottom)); display: flex; gap: 12px; align-items: center; justify-content: center; }
+  .barra .cta { animation: none; min-height: 52px; padding: 12px 22px; font-size: 18px; width: min(100%, 420px); }
+  .barra small { color: var(--muted); font-size: 12.5px; display: none; }
+  @media (min-width: 700px) { .barra small { display: block; } }
+
+  #aviso { position: fixed; left: 50%; bottom: 100px; transform: translateX(-50%); background: #fff; color: #111; padding: 10px 16px; border-radius: 12px; font-size: 14px; max-width: calc(100% - 32px); opacity: 0; pointer-events: none; transition: opacity .2s; z-index: 60; }
+  #aviso.on { opacity: 1; }
 </style>
 </head>
 <body>
-<div class="wrap">
-  <header>
-    <p style="margin:0 0 20px"><a href="/painel" class="tag" style="text-decoration:none">🎛️ Painel web do robô (protótipo) →</a></p>
-    <span class="tag">Automação para afiliados Shopee</span>
-    <h1>Umbra Achou os <span>Achadinhos</span></h1>
-    <p class="lead">Cinco serviços independentes que capturam, organizam e publicam vídeos de achadinhos da Shopee no Telegram, com filas, proteções automáticas e painéis de controle.</p>
-  </header>
 
-  <main>
-    <h2>Os cinco serviços</h2>
+<div class="urgencia" role="status">
+  🔥 As ofertas de hoje renovam em <span class="tempo" id="t-topo">--:--:--</span>
+</div>
+
+<header class="wrap">
+  <span class="selo"><span class="ponto" aria-hidden="true"></span> Grupo grátis no Telegram</span>
+  <h1>A oferta boa da Shopee <em>não espera você pensar.</em></h1>
+  <p class="sub">Cupom some. Estoque some. Preço sobe. Entre agora e receba o <b>achadinho na hora em que ele aparece</b>, direto no seu celular, antes de acabar.</p>
+
+  <a class="cta" href="#" data-entrar>⚡ ENTRAR NO GRUPO AGORA</a>
+  <p class="micro">100% grátis · leva menos de 10 segundos · saia quando quiser</p>
+
+  <div class="relogio" aria-label="Tempo até a renovação das ofertas do dia">
+    <p>⏳ Ofertas de hoje renovam em</p>
+    <div class="digitos">
+      <div class="dig"><b id="t-h">00</b><span>horas</span></div>
+      <div class="dig"><b id="t-m">00</b><span>min</span></div>
+      <div class="dig"><b id="t-s">00</b><span>seg</span></div>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <section aria-labelledby="h-perde">
+    <h2 id="h-perde">Quem chega tarde paga mais caro</h2>
+    <p class="lead">Achadinho bom tem prazo, e quase sempre é curto.</p>
     <div class="grid">
-      <div class="card"><h3>Bot mestre</h3><code>bot_mestre.py</code><p>Painéis, filas, publicação, financeiro e parceiros.</p></div>
-      <div class="card"><h3>Espelhador de autorais</h3><code>espelhador_videos_autorais.py</code><p>Captura dos vídeos Autorais e do Grupo Público.</p></div>
-      <div class="card"><h3>Motor userbot</h3><code>motor_userbot.py</code><p>Espião e Espelhador, usando uma conta Telethon.</p></div>
-      <div class="card"><h3>Divulgação de canal</h3><code>divulgacao_canal.py</code><p>Divulgação em grupos externos.</p></div>
-      <div class="card"><h3>Downloader</h3><code>downloader_bot.py</code><p>Baixa vídeos a pedido dos membros.</p></div>
+      <div class="card perde"><div class="ic">🎟️</div><h3>O cupom acaba</h3><p>Cupom tem limite de resgates. Quando zera, o preço volta ao normal.</p></div>
+      <div class="card perde"><div class="ic">📦</div><h3>O estoque acaba</h3><p>Produto em promoção some da prateleira em horas. Depois, só esperando reposição.</p></div>
+      <div class="card perde"><div class="ic">📈</div><h3>O preço sobe</h3><p>A promoção termina e o valor muda sem aviso. Quem viu na hora, comprou barato.</p></div>
     </div>
+  </section>
 
-    <h2>As cinco filas</h2>
-    <div class="table-box">
-      <table>
-        <thead><tr><th>Fila</th><th>Janela</th><th>Atraso</th><th>Espaçamento mínimo</th></tr></thead>
-        <tbody>
-          <tr><td>Espião → Viral</td><td>0h–24h</td><td>D+1</td><td>10 ± 5 min</td></tr>
-          <tr><td>Espelhador</td><td>8h–22h</td><td>por rota</td><td>20 ± 8 min</td></tr>
-          <tr><td>Autorais</td><td>10h–20h</td><td>D+15</td><td>15 ± 6 min</td></tr>
-          <tr><td>Grupo Público</td><td>10h–20h</td><td>D+30</td><td>15 ± 6 min</td></tr>
-          <tr><td>Parceiros</td><td>0h–24h</td><td>por parceiro</td><td>10 ± 5 min</td></tr>
-        </tbody>
-      </table>
+  <section aria-labelledby="h-comp">
+    <h2 id="h-comp">Procurar sozinho x estar no grupo</h2>
+    <div class="comparar">
+      <div class="lado ruim">
+        <h3>😩 Sozinho</h3>
+        <ul>
+          <li>❌ Horas rolando o app atrás de promoção</li>
+          <li>❌ Descobre a oferta quando já acabou</li>
+          <li>❌ Paga preço cheio sem saber</li>
+        </ul>
+      </div>
+      <div class="lado bom">
+        <h3>⚡ No grupo</h3>
+        <ul>
+          <li>✅ O achado chega pronto, com o link</li>
+          <li>✅ Você vê no celular e compra na hora</li>
+          <li>✅ Sem pagar nada por isso</li>
+        </ul>
+      </div>
     </div>
-    <p class="note">O espaçamento é um piso, não um intervalo fixo: o motor divide a janela pela quantidade de vídeos do dia.</p>
+  </section>
 
-    <h2>Proteções automáticas</h2>
-    <ul class="checks">
-      <li><b>Validador + CI</b> a cada commit no GitHub.</li>
-      <li><b>Testes do motor de filas</b> a cada commit.</li>
-      <li><b>Monitor de saúde</b> de hora em hora, com aviso no privado.</li>
-      <li><b>Faxina de arquivos órfãos</b> às 03h, cruzando com as filas.</li>
-      <li><b>Anti-duplicata</b> por arquivo e por produto.</li>
-      <li><b>Cache de análises da IA</b> para não analisar o mesmo vídeo duas vezes.</li>
-    </ul>
-  </main>
+  <section aria-labelledby="h-como">
+    <h2 id="h-como">Funciona em 3 passos rápidos</h2>
+    <p class="lead">Do toque ao primeiro achadinho, sem cadastro nem formulário.</p>
+    <div class="passos">
+      <div class="passo"><div><b>Toque no botão e entre no grupo</b><span>Abre direto no Telegram. Se não tiver o app, ele instala em segundos.</span></div></div>
+      <div class="passo"><div><b>Ative as notificações</b><span>Assim o achado chega no seu celular no momento em que é postado.</span></div></div>
+      <div class="passo"><div><b>Viu algo bom? Compre na hora</b><span>O link leva direto ao produto na Shopee. Quanto antes, maior a chance de pegar o preço.</span></div></div>
+    </div>
+  </section>
+
+  <section aria-labelledby="h-faq">
+    <h2 id="h-faq">Perguntas rápidas</h2>
+    <details><summary>Eu pago alguma coisa para entrar?</summary><p>Não. Entrar e ficar no grupo é grátis. Você só paga o produto, se decidir comprar, direto na Shopee, pelo preço da Shopee.</p></details>
+    <details><summary>Como vocês ganham dinheiro?</summary><p>Participamos do Programa de Afiliados da Shopee. Se você comprar por um link nosso, podemos receber uma comissão da Shopee, sem custo extra para você.</p></details>
+    <details><summary>As ofertas são garantidas?</summary><p>Não. Preço, cupom e estoque são da Shopee e podem mudar ou acabar a qualquer momento. Por isso o aviso na hora faz diferença.</p></details>
+    <details><summary>Posso sair quando quiser?</summary><p>Pode, a qualquer momento, pelo próprio Telegram.</p></details>
+  </section>
+
+  <div class="final">
+    <h2>Enquanto você lê, alguém já pegou o cupom.</h2>
+    <p class="lead" style="margin-bottom:20px">Entre agora e comece a receber os próximos achados.</p>
+    <a class="cta" href="#" data-entrar>🚀 QUERO RECEBER AS OFERTAS</a>
+    <p class="micro">As ofertas de hoje renovam em <b id="t-final">--:--:--</b></p>
+  </div>
 
   <footer>
-    Esta página é uma visão geral estática. Os robôs rodam 24h em um servidor próprio e não funcionam na Vercel.
-    Código em <a href="https://github.com/cicinhos409-bot/umbraachouosachadinhosdinhos">cicinhos409-bot/umbraachouosachadinhosdinhos</a>.
+    <p>Somos afiliados da Shopee e podemos receber comissão pelas compras feitas pelos nossos links, sem custo extra para você. Não somos a Shopee nem temos vínculo oficial com ela.</p>
+    <p>Preços, cupons e disponibilidade são da Shopee e podem mudar ou acabar sem aviso.</p>
+    <p><a href="/visao-geral">Visão geral do projeto</a></p>
   </footer>
+</main>
+
+<div class="barra">
+  <a class="cta" href="#" data-entrar>⚡ ENTRAR NO GRUPO</a>
+  <small>Grátis · sai quando quiser</small>
 </div>
+<div id="aviso" role="status" aria-live="polite"></div>
+
+<script>
+(function () {
+  "use strict";
+  // >>> Troque pelo convite real do grupo (ex.: "https://t.me/+XXXXXXXX"). <<<
+  var LINK_DO_GRUPO = "";
+
+  var fmt;
+  try {
+    fmt = new Intl.DateTimeFormat("en-GB", { timeZone: "America/Sao_Paulo", hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  } catch (e) { fmt = null; }
+
+  function segundosParaMeiaNoite() {
+    var h, m, s, d = new Date();
+    if (fmt) {
+      var p = fmt.format(d).split(":");
+      h = parseInt(p[0], 10) % 24; m = parseInt(p[1], 10); s = parseInt(p[2], 10);
+    } else { h = d.getHours(); m = d.getMinutes(); s = d.getSeconds(); }
+    return 86400 - (h * 3600 + m * 60 + s);
+  }
+  function dois(n) { return (n < 10 ? "0" : "") + n; }
+  function tick() {
+    var t = segundosParaMeiaNoite();
+    var h = Math.floor(t / 3600), m = Math.floor((t % 3600) / 60), s = t % 60;
+    var txt = dois(h) + ":" + dois(m) + ":" + dois(s);
+    var ids = { "t-h": dois(h), "t-m": dois(m), "t-s": dois(s), "t-topo": txt, "t-final": txt };
+    for (var id in ids) { var el = document.getElementById(id); if (el) el.textContent = ids[id]; }
+  }
+  tick(); setInterval(tick, 1000);
+
+  var toast = document.getElementById("aviso"), tt;
+  function aviso(txt) { toast.textContent = txt; toast.classList.add("on"); clearTimeout(tt); tt = setTimeout(function () { toast.classList.remove("on"); }, 3600); }
+
+  Array.prototype.forEach.call(document.querySelectorAll("[data-entrar]"), function (a) {
+    if (LINK_DO_GRUPO) { a.href = LINK_DO_GRUPO; a.target = "_blank"; a.rel = "noopener"; }
+    else { a.addEventListener("click", function (e) { e.preventDefault(); aviso("Link do grupo ainda não configurado nesta página."); }); }
+  });
+})();
+</script>
 </body>
 </html>
