@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sistema de Achadinhos para Afiliados Shopee - Automatize seus canais</title>
+<meta name="description" content="Robôs de Telegram que capturam, organizam e postam achadinhos da Shopee com o seu link de afiliado, 24h por dia. Use com a sua própria API.">
+<meta property="og:title" content="Pare de postar achadinho na mão">
+<meta property="og:description" content="Sistema de automação para afiliados Shopee no Telegram: filas, IA nas legendas e link de afiliado automático, com a sua própria API.">
+<meta property="og:type" content="website">
+<meta name="theme-color" content="#0b0b0f">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23ee4d2d'/%3E%3Cpath d='M36 8 18 36h12l-4 20 20-30H34z' fill='%23fff'/%3E%3C/svg%3E">
+<style>
+  :root { --bg:#0b0b0f; --card:#15151c; --card-2:#1c1c26; --line:#2a2a38; --text:#f4f4f8; --muted:#a6a6b8; --accent:#ff4d1f; --accent-2:#ff8a3d; --hot:#ffd23f; --ok:#3ddc97; }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } * { animation: none !important; } }
+  body { margin:0; background:var(--bg); color:var(--text); font:17px/1.55 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; padding-bottom:84px; }
+  a { color: inherit; }
+  .wrap { max-width: 940px; margin: 0 auto; padding: 0 18px; }
+
+  .urgencia { position: sticky; top: 0; z-index: 40; background: linear-gradient(90deg,#c4160a,var(--accent)); color:#fff; text-align:center; padding:8px 12px; font-weight:700; font-size:14.5px; }
+  .urgencia .tempo { font-variant-numeric: tabular-nums; background:#000; color:var(--hot); padding:2px 8px; border-radius:6px; margin-left:6px; }
+  .urgencia[hidden] { display: none; }
+
+  header { padding: 44px 0 18px; text-align: center; }
+  .selo { display:inline-flex; align-items:center; gap:8px; border:1px solid #ff4d1f66; background:#ff4d1f1f; color:var(--accent-2); padding:6px 14px; border-radius:999px; font-size:13.5px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; }
+  h1 { font-size: clamp(34px,8vw,64px); line-height:1.03; margin:20px 0 16px; letter-spacing:-.03em; font-weight:900; }
+  h1 em { font-style:normal; background:linear-gradient(90deg,var(--accent),var(--hot)); -webkit-background-clip:text; background-clip:text; color:transparent; }
+  .sub { color:var(--muted); font-size:clamp(17px,3.6vw,21px); max-width:680px; margin:0 auto 26px; }
+  .sub b { color: var(--text); }
+
+  .cta { display:inline-flex; align-items:center; justify-content:center; gap:10px; background:linear-gradient(180deg,#ff6a2b,var(--accent)); color:#fff; font-weight:900; font-size:clamp(18px,4.4vw,22px); text-decoration:none; padding:18px 30px; border-radius:16px; border:0; box-shadow:0 10px 34px #ff4d1f59, inset 0 -3px 0 #0003; min-height:60px; cursor:pointer; width:min(100%,460px); animation: balanca 3.2s ease-in-out infinite; }
+  .cta:hover { filter: brightness(1.08); }
+  .cta:focus-visible { outline:3px solid var(--hot); outline-offset:3px; }
+  @keyframes balanca { 0%,88%,100% { transform:none; } 91% { transform:scale(1.04) rotate(-.6deg); } 94% { transform:scale(1.04) rotate(.6deg); } 97% { transform:scale(1.02); } }
+  .micro { color:var(--muted); font-size:13.5px; margin:12px 0 0; }
+
+  h2 { font-size: clamp(26px,5.6vw,40px); line-height:1.1; letter-spacing:-.02em; margin:0 0 12px; font-weight:900; text-align:center; }
+  section { padding: 52px 0 6px; }
+  .lead { color:var(--muted); text-align:center; max-width:660px; margin:0 auto 26px; }
+  .grid { display:grid; gap:12px; grid-template-columns: repeat(auto-fit,minmax(260px,1fr)); }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:18px; }
+  .card h3 { margin:6px 0 6px; font-size:19px; }
+  .card p { margin:0; color:var(--muted); font-size:15.5px; }
+  .card .ic { font-size:30px; }
+  .dor { border-color:#ff4d1f55; background:linear-gradient(180deg,#ff4d1f14,var(--card)); }
+
+  .passos { counter-reset:p; display:grid; gap:12px; }
+  .passo { display:grid; grid-template-columns:52px 1fr; gap:14px; align-items:center; background:var(--card); border:1px solid var(--line); border-radius:16px; padding:16px; }
+  .passo::before { counter-increment:p; content:counter(p); display:grid; place-items:center; width:52px; height:52px; border-radius:14px; background:var(--accent); color:#fff; font-weight:900; font-size:26px; }
+  .passo b { display:block; font-size:18px; }
+  .passo span { color:var(--muted); font-size:15.5px; }
+
+  .oferta { margin-top: 52px; text-align:center; background:radial-gradient(120% 140% at 50% 0%,#ff4d1f33,var(--card) 70%); border:1px solid #ff4d1f66; border-radius:22px; padding:34px 18px 30px; }
+  .oferta .preco { font-size: clamp(34px,8vw,56px); font-weight:900; color:var(--hot); margin:6px 0 4px; letter-spacing:-.02em; }
+  .oferta ul { list-style:none; margin:18px auto 24px; padding:0; max-width:420px; text-align:left; display:grid; gap:8px; color:var(--muted); font-size:16px; }
+  .vagas { display:inline-block; margin:6px 0 16px; padding:6px 14px; border-radius:999px; background:#ffd23f1f; border:1px solid #ffd23f66; color:var(--hot); font-weight:800; font-size:14px; }
+  .vagas[hidden] { display:none; }
+
+  .aviso-real { background:var(--card-2); border:1px solid var(--line); border-radius:14px; padding:14px 16px; color:var(--muted); font-size:14.5px; }
+  .aviso-real b { color: var(--text); }
+
+  details { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:4px 16px; margin-bottom:10px; }
+  summary { cursor:pointer; font-weight:700; padding:14px 0; }
+  summary:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+  details p { color:var(--muted); margin:0 0 14px; font-size:15.5px; }
+
+  footer { margin:44px 0 20px; padding-top:20px; border-top:1px solid var(--line); color:var(--muted); font-size:13px; text-align:center; }
+  footer p { margin:0 0 8px; }
+
+  .barra { position:fixed; left:0; right:0; bottom:0; z-index:45; background:#0b0b0fee; backdrop-filter:blur(8px); border-top:1px solid var(--line); padding:10px 14px calc(10px + env(safe-area-inset-bottom)); display:flex; justify-content:center; }
+  .barra .cta { animation:none; min-height:52px; padding:12px 22px; font-size:18px; width:min(100%,420px); }
+  #aviso { position:fixed; left:50%; bottom:100px; transform:translateX(-50%); background:#fff; color:#111; padding:10px 16px; border-radius:12px; font-size:14px; max-width:calc(100% - 32px); opacity:0; pointer-events:none; transition:opacity .2s; z-index:60; }
+  #aviso.on { opacity:1; }
+</style>
+</head>
+<body>
+
+<div class="urgencia" id="faixa" role="status" hidden>
+  🔥 <span id="faixa-txt">Condição de lançamento termina em</span> <span class="tempo" id="t-topo">--:--:--</span>
+</div>
+
+<header class="wrap">
+  <span class="selo">⚡ Para afiliados Shopee</span>
+  <h1>Pare de postar achadinho na mão. <em>Deixe o robô trabalhar 24h.</em></h1>
+  <p class="sub">O mesmo sistema que roda os meus canais, agora para você: ele <b>captura, organiza e posta</b> achadinhos no Telegram, com <b>o seu link de afiliado</b>, enquanto você faz outra coisa.</p>
+  <a class="cta" href="#" data-contato>⚡ QUERO USAR O SISTEMA</a>
+  <p class="micro">Você usa com a sua própria API da Shopee · sem depender de mim para postar</p>
+</header>
+
+<main class="wrap">
+
+  <section aria-labelledby="h-dor">
+    <h2 id="h-dor">Quem posta na mão perde dinheiro</h2>
+    <p class="lead">Achadinho tem prazo curto. Cada hora de atraso é comissão que vai para o concorrente.</p>
+    <div class="grid">
+      <div class="card dor"><div class="ic">⏱️</div><h3>Horas perdidas</h3><p>Baixar vídeo, montar legenda, gerar link, postar no horário. Todo dia, em todo canal.</p></div>
+      <div class="card dor"><div class="ic">🔗</div><h3>Link sem comissão</h3><p>Um link postado sem a sua marcação de afiliado é venda feita de graça para a Shopee.</p></div>
+      <div class="card dor"><div class="ic">😴</div><h3>Canal parado</h3><p>Dormiu, viajou, ficou doente: o canal para e o público esfria.</p></div>
+    </div>
+  </section>
+
+  <section aria-labelledby="h-faz">
+    <h2 id="h-faz">O que o sistema faz por você</h2>
+    <p class="lead">Cada peça é um robô independente, controlado por um painel dentro do Telegram.</p>
+    <div class="grid">
+      <div class="card"><div class="ic">🗓️</div><h3>Filas e horários</h3><p>Motor de filas que decide quando cada vídeo vai ao ar e quantos por dia, com espaçamento para o canal não parecer spam.</p></div>
+      <div class="card"><div class="ic">🔗</div><h3>Link de afiliado automático</h3><p>Acha o link da Shopee e converte pela sua API de afiliado, para a comissão cair na sua conta.</p></div>
+      <div class="card"><div class="ic">🤖</div><h3>Legendas com IA</h3><p>Nome do produto, texto e hashtags gerados por IA, no padrão que você escolher.</p></div>
+      <div class="card"><div class="ic">🕵️</div><h3>Espião de canais</h3><p>Acompanha canais de referência e alimenta a sua fila com o que está performando.</p></div>
+      <div class="card"><div class="ic">🔄</div><h3>Espelhador</h3><p>Leva o conteúdo de um canal a outro por rotas que você configura no painel.</p></div>
+      <div class="card"><div class="ic">🎥</div><h3>Vídeos autorais</h3><p>Captura dos seus próprios vídeos e repostagem organizada, sem repetir o mesmo vídeo.</p></div>
+      <div class="card"><div class="ic">📬</div><h3>Grupo público e parceiros</h3><p>Moderação de vídeos enviados por membros, rotinas dentro do grupo e fila para parceiros.</p></div>
+      <div class="card"><div class="ic">🎬</div><h3>Assistente de Shopee Vídeo</h3><p>Prepara título, comentário e produto de cada postagem e manda pronto no seu privado.</p></div>
+      <div class="card"><div class="ic">🛡️</div><h3>Monitor e backup</h3><p>Aviso no privado quando algo cai e backup diário dos dados.</p></div>
+    </div>
+  </section>
+
+  <section aria-labelledby="h-como">
+    <h2 id="h-como">Como você começa</h2>
+    <div class="passos">
+      <div class="passo"><div><b>Fale comigo e combine a entrada</b><span>Você tira as dúvidas e confirma o que precisa.</span></div></div>
+      <div class="passo"><div><b>Configure a sua API da Shopee</b><span>As chaves são suas: o link de afiliado sai com a sua marcação.</span></div></div>
+      <div class="passo"><div><b>Escolha canais, fontes e horários</b><span>Tudo pelo painel. Depois é só deixar o robô rodar.</span></div></div>
+    </div>
+  </section>
+
+  <div class="oferta" id="oferta">
+    <h2>Entre e comece a automatizar</h2>
+    <span class="vagas" id="vagas" hidden></span>
+    <div class="preco" id="preco">Valor a combinar</div>
+    <p class="micro" id="preco-obs">Fale comigo para saber as condições.</p>
+    <ul>
+      <li>✅ Acesso ao sistema de robôs e ao painel</li>
+      <li>✅ Você usa as suas próprias chaves da Shopee</li>
+      <li>✅ Suporte para configurar o começo</li>
+    </ul>
+    <a class="cta" href="#" data-contato>🚀 QUERO COMEÇAR AGORA</a>
+  </div>
+
+  <section aria-labelledby="h-honesto">
+    <h2 id="h-honesto">Sem promessa de ganho</h2>
+    <div class="aviso-real">
+      <b>Transparência:</b> o sistema automatiza o trabalho de postar. Ele <b>não garante vendas nem renda</b>. O resultado depende do seu nicho, do seu público, da sua constância e das regras da Shopee e do Telegram. Você precisa ter conta no Programa de Afiliados da Shopee e é responsável pelo que posta.
+    </div>
+  </section>
+
+  <section aria-labelledby="h-faq">
+    <h2 id="h-faq">Perguntas rápidas</h2>
+    <details><summary>Preciso saber programar?</summary><p>Não. Você controla tudo por um painel dentro do Telegram, com botões e menus.</p></details>
+    <details><summary>Preciso de conta de afiliado da Shopee?</summary><p>Sim. Você usa a sua própria conta e as suas próprias chaves de API, para as comissões caírem em você.</p></details>
+    <details><summary>Funciona para vários canais?</summary><p>O sistema trabalha com canais e grupos configurados no painel. Combine comigo quantos você pretende usar.</p></details>
+    <details><summary>Tem garantia de resultado?</summary><p>Não. Ninguém pode garantir vendas. O que o sistema entrega é automação e constância.</p></details>
+    <details><summary>Qual a forma de pagamento?</summary><p>Falamos pelo contato e combinamos a melhor forma.</p></details>
+  </section>
+
+  <footer>
+    <p>Este sistema é uma ferramenta independente de automação e não tem vínculo oficial com a Shopee nem com o Telegram.</p>
+    <p>Marcas citadas pertencem aos seus donos. Resultados variam e não são garantidos.</p>
+    <p><a href="/">Página de ofertas</a> · <a href="/visao-geral">Visão geral do projeto</a></p>
+  </footer>
+</main>
+
+<div class="barra"><a class="cta" href="#" data-contato>⚡ QUERO USAR O SISTEMA</a></div>
+<div id="aviso" role="status" aria-live="polite"></div>
+
+<script>
+(function () {
+  "use strict";
+  // ===== Configure aqui (deixe vazio o que não valer) =====
+  var LINK_CONTATO = "";   // WhatsApp ou Telegram. Ex.: "https://wa.me/55DDDNUMERO" ou "https://t.me/seuusuario"
+  var PRECO        = "";   // Ex.: "R$ 197" (vazio = "Valor a combinar")
+  var PRECO_OBS    = "";   // Ex.: "pagamento único" ou "por mês"
+  var OFERTA_ATE   = "";   // Só use se a condição realmente acabar. ISO com fuso: "2026-11-01T23:59:00-03:00"
+  var TEXTO_OFERTA = "Condição de lançamento termina em";
+  var VAGAS_TEXTO  = "";   // Só use se o limite for real. Ex.: "Apenas 10 vagas nesta turma"
+  // ========================================================
+
+  function $(id) { return document.getElementById(id); }
+  if (PRECO) $("preco").textContent = PRECO;
+  if (PRECO_OBS) $("preco-obs").textContent = PRECO_OBS;
+  if (VAGAS_TEXTO) { $("vagas").textContent = "🔥 " + VAGAS_TEXTO; $("vagas").hidden = false; }
+
+  function dois(n) { return (n < 10 ? "0" : "") + n; }
+  var fim = OFERTA_ATE ? Date.parse(OFERTA_ATE) : NaN;
+  if (!isNaN(fim)) {
+    $("faixa-txt").textContent = TEXTO_OFERTA;
+    $("faixa").hidden = false;
+    var tick = function () {
+      var t = Math.max(0, Math.floor((fim - Date.now()) / 1000));
+      var d = Math.floor(t / 86400), h = Math.floor((t % 86400) / 3600), m = Math.floor((t % 3600) / 60), s = t % 60;
+      $("t-topo").textContent = (d ? d + "d " : "") + dois(h) + ":" + dois(m) + ":" + dois(s);
+      if (t === 0) $("faixa").hidden = true;
+    };
+    tick(); setInterval(tick, 1000);
+  }
+
+  var toast = $("aviso"), tt;
+  function aviso(txt) { toast.textContent = txt; toast.classList.add("on"); clearTimeout(tt); tt = setTimeout(function () { toast.classList.remove("on"); }, 3600); }
+  Array.prototype.forEach.call(document.querySelectorAll("[data-contato]"), function (a) {
+    if (LINK_CONTATO) { a.href = LINK_CONTATO; a.target = "_blank"; a.rel = "noopener"; }
+    else { a.addEventListener("click", function (e) { e.preventDefault(); aviso("Contato ainda não configurado nesta página."); }); }
+  });
+})();
+</script>
+</body>
+</html>
