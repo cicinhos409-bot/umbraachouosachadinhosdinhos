@@ -4,6 +4,8 @@ __pycache__/
 *.json
 # Exceção: configuração do Claude Code (hook de início de sessão), sem dados
 !.claude/settings.json
+# Exceção: site estático da Vercel (vercel.json)
+!vercel.json
 *.db
 *.db-wal
 *.db-shm
@@ -17,6 +19,8 @@ archive/
 *.tar.gz
 *.png
 *.html
+# Exceção: página do site estático da Vercel (tem de vir depois de *.html)
+!public/index.html
 contador.txt
 log_divulgacao.txt
 variantes/
