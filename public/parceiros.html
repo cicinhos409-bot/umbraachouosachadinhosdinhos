@@ -1,0 +1,461 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Parceiros Afiliados - Painel</title>
+<meta name="description" content="Painel web dos Parceiros Afiliados: cadastro, edição, janelas, cota, crédito e fila por parceiro, como no painel do Telegram.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23ee4d2d'/%3E%3Cpath d='M26 20l20 12-20 12z' fill='%23fff'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="/assets/painel.css">
+<style>
+  [hidden] { display: none !important; }
+  #dlg-texto, .pre { white-space: pre-line; }
+  .bloco { background: var(--card-2); border: 1px solid var(--line); border-radius: 12px; padding: 12px; margin-top: 10px; overflow-wrap: anywhere; }
+  #i-wiz[type=password] { width: 100%; font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 12px; min-height: 48px; }
+  .sub-actions { display: grid; gap: 10px; grid-template-columns: 1fr 1fr; margin-top: 12px; }
+  .sub-actions .full { grid-column: 1 / -1; }
+  @media (max-width: 420px) { .sub-actions { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div id="topo"></div>
+
+  <h1>👥 Parceiros Afiliados</h1>
+  <p class="lead">Afiliados que repostam com as próprias credenciais, nos próprios canais. Os vídeos de cada um saem dos canais de origem dele; o que o dono reservou fica de fora.</p>
+
+  <section aria-labelledby="t-lista">
+    <h2 id="t-lista">Parceiros</h2>
+    <div id="lista"></div>
+    <div class="actions" id="acoes-lista">
+      <button type="button" class="primary full" id="b-cadastrar">Cadastrar Parceiro ➕</button>
+      <button type="button" id="b-gerenciar">Gerenciar Parceiro 🔧</button>
+      <button type="button" id="b-remover">Remover Parceiro 🗑️</button>
+      <button type="button" id="b-pausar-todos">Pausar Todos ⏸️</button>
+      <button type="button" id="b-ativar-todos">Ativar Todos ▶️</button>
+      <button type="button" class="full" id="b-excluir-todos">Excluir Todos 🗑️</button>
+      <button type="button" class="full" id="b-fila">Fila dos Parceiros 🔍</button>
+      <a class="btn full" href="/publico">Voltar ao Painel Público 🔙</a>
+    </div>
+    <p class="err" id="e-lista" role="alert"></p>
+    <p class="hint">Protótipo: o App Secret nunca é guardado (nem o App ID inteiro, só a versão mascarada). A lista começa vazia e fica só neste navegador.</p>
+  </section>
+
+  <!-- Escolha do parceiro (gerenciar, remover, fila) -->
+  <form class="card fluxo" id="f-sel" hidden novalidate>
+    <h3 id="sel-titulo" style="margin-top:0"></h3>
+    <div id="sel-lista" class="pre"></div>
+    <label for="i-sel" style="margin-top:12px" id="l-sel"></label>
+    <input type="text" id="i-sel" inputmode="numeric" autocomplete="off" placeholder="1" aria-describedby="e-sel">
+    <p class="err" id="e-sel" role="alert"></p>
+    <div class="actions"><button type="submit" class="primary">Enviar</button><button type="button" data-cancela>Cancelar ❌</button></div>
+  </form>
+
+  <!-- Cadastro: 8 passos + confirmação -->
+  <form class="card fluxo" id="f-wiz" hidden novalidate>
+    <h3 id="wiz-titulo" style="margin-top:0"></h3>
+    <p class="pre" id="wiz-texto"></p>
+    <label for="i-wiz" id="l-wiz">Resposta</label>
+    <input type="text" id="i-wiz" autocomplete="off" aria-describedby="e-wiz">
+    <p class="err pre" id="e-wiz" role="alert"></p>
+    <p class="hint pre" id="n-wiz"></p>
+    <div class="actions">
+      <button type="submit" class="primary full">Enviar</button>
+      <button type="button" id="b-wiz-voltar">Voltar ⬅️</button>
+      <button type="button" id="b-wiz-cancelar">Cancelar ❌</button>
+    </div>
+  </form>
+
+  <div class="card fluxo" id="c-confere" hidden>
+    <h3 style="margin-top:0">📋 CONFIRA O CADASTRO</h3>
+    <div class="pre" id="confere-texto"></div>
+    <div class="actions">
+      <button type="button" class="primary" id="b-aprovar">Aprovar ✅</button>
+      <button type="button" id="b-confere-cancelar">Cancelar ❌</button>
+    </div>
+  </div>
+
+  <!-- Tela de um parceiro -->
+  <section class="card fluxo" id="c-ger" hidden aria-labelledby="ger-titulo">
+    <h3 id="ger-titulo" style="margin-top:0"></h3>
+    <div class="bloco pre" id="ger-info" style="margin-top:0"></div>
+    <p class="hint">Crédito em "👤 Vídeo enviado por": primeiro o @ cadastrado; sem ele, o @ público do canal de origem; sem nenhum @, o nome do cadastro (texto, sem marcar ninguém). Vale para os vídeos que vão para a Vídeos da Comunidade do Grupo Público.</p>
+    <p style="margin-bottom:0">Escolha a ação desejada:</p>
+    <div class="sub-actions">
+      <button type="button" class="full" id="b-ger-toggle"></button>
+      <button type="button" data-edita="canal_origem">Editar Origem 📥</button>
+      <button type="button" data-edita="canal_destino">Editar Destino 📤</button>
+      <button type="button" data-edita="dias_atraso">Editar Dias ⏳</button>
+      <button type="button" data-edita="cota">Editar Cota 📦</button>
+      <button type="button" data-edita="janela">Editar Janela 🕒</button>
+      <button type="button" data-edita="arroba">Editar @ do Parceiro 👤</button>
+      <button type="button" class="full" id="b-ger-excluir">Excluir Parceiro 🗑️</button>
+      <button type="button" class="full" data-cancela-ger>Voltar aos Parceiros 🔙</button>
+    </div>
+    <form id="f-edit" hidden novalidate style="margin-top:12px">
+      <label for="i-edit" id="l-edit" class="pre"></label>
+      <input type="text" id="i-edit" autocomplete="off" aria-describedby="e-edit">
+      <p class="err" id="e-edit" role="alert"></p>
+      <p class="hint pre" id="n-edit"></p>
+      <div class="actions"><button type="submit" class="primary">Enviar</button><button type="button" id="b-edit-cancelar">Cancelar ❌</button></div>
+    </form>
+  </section>
+
+  <!-- Fila de um parceiro -->
+  <section class="card fluxo" id="c-fila" hidden aria-labelledby="fila-titulo">
+    <h3 id="fila-titulo" style="margin-top:0"></h3>
+    <div class="bloco pre" id="fila-resumo" style="margin-top:0"></div>
+    <p class="hint">Os vídeos da fila, o disco usado, a última captura e o diagnóstico da origem vêm do servidor (banco de dados e robô dos Autorais). Neste protótipo a fila aparece sempre vazia.</p>
+    <p class="hint">Quando houver vídeos, cada um aparece no mesmo card das outras filas (status do dia, captura e previsão, "Ver Post no Telegram" da origem e do destino), os publicados de hoje primeiro; o registro de publicados fica 3 dias.</p>
+    <div class="actions"><button type="button" class="full" data-cancela-ger>Voltar aos Parceiros 🔙</button></div>
+  </section>
+
+  <section aria-labelledby="t-regras">
+    <h2 id="t-regras">Como o robô trata os parceiros</h2>
+    <details class="card">
+      <summary>Regras do motor de publicação</summary>
+      <ul>
+        <li>O motor roda a cada 2 minutos e faz <b>um disparo por ciclo</b>, nunca em lote. Cada parceiro tem credenciais, canal, atraso e cota próprios.</li>
+        <li>A captura continua 24 h; só a <b>publicação</b> respeita a janela de postagem.</li>
+        <li>Cota em faixa (ex.: 4-8) sorteia um número por dia; fixa (ex.: 6) é sempre o mesmo; 0 = sem teto (publica tudo).</li>
+        <li>Os vídeos baixados dos parceiros dividem um teto de disco de <b>10 GB</b>.</li>
+        <li>Parceiro pausado: a fila fica intacta, nada é publicado nem capturado.</li>
+        <li>Excluir apaga o cadastro, as credenciais, a fila e os vídeos baixados; as <b>reservas ficam</b> (vídeo já entregue a alguém nunca volta ao acervo).</li>
+        <li>O acesso à origem só vale quando a conta da captura é membro do canal. O robô reconfere a cada 6 h e entra de novo sozinho quando a origem é @ ou link. Sem acesso, o painel mostra o motivo.</li>
+      </ul>
+    </details>
+  </section>
+</div>
+
+<script src="/assets/painel.js"></script>
+<script>
+(function () {
+  "use strict";
+  var P = Painel, $ = P.$, esc = P.esc;
+  var E = P.estado("parceiros", { proximo_id: 1, parceiros: [] });
+  function C() { return E.ler(); }
+  function mudar(fn) { E.alterar(fn); desenhar(); }
+  function achar(id) { var l = C().parceiros; for (var i = 0; i < l.length; i++) if (String(l[i].id) === String(id)) return l[i]; return null; }
+  function mascarar(v) { v = String(v || ""); return v.length > 10 ? v.slice(0, 4) + "••••" + v.slice(-4) : "••••"; }
+
+  // O @ do parceiro: 4 a 32 letras, números ou "_", começando por letra. "-" vira "" (sem @).
+  function normalizarArroba(txt) {
+    var v = (txt || "").trim();
+    if (v === "-") return "";
+    v = v.replace(/^(?:https?:\/\/)?(?:www\.)?t(?:elegram)?\.me\//i, "").replace(/^@+/, "").replace(/^\/+|\/+$/g, "").trim();
+    return /^[A-Za-z][A-Za-z0-9_]{3,31}$/.test(v) ? "@" + v : null;
+  }
+  // Lê ID, @, link t.me ou Telegram Web como o validar_e_formatar_alvo, sem consultar o Telegram.
+  function lerAlvo(txt) {
+    var e = (txt || "").trim(), base = e, top = null, m;
+    if (!e) return null;
+    if (/t\.me\/c\//i.test(e)) { m = /t\.me\/c\/(\d+)(?:\/(\d+))?/i.exec(e); if (!m) return null; base = "-100" + m[1]; top = m[2] || null; }
+    else if (/t\.me\//i.test(e)) { m = /t\.me\/([A-Za-z0-9_+]+)(?:\/(\d+))?/i.exec(e); if (!m) return null; base = "@" + m[1]; top = m[2] || null; }
+    else if (/web\.telegram\.org/i.test(e) && e.indexOf("#") > -1) {
+      var parte = e.split("#")[1].split("/")[0];
+      if (parte.indexOf("_") > -1) { var s = parte.split("_"); base = s[0]; top = /^\d+$/.test(s[1]) ? s[1] : null; } else base = parte;
+    } else if (e.indexOf("_") > -1 && !/http/.test(e)) {
+      var i = e.lastIndexOf("_"), a = e.slice(0, i).trim(), b = e.slice(i + 1).trim();
+      if (/^\d+$/.test(b) && /^-?\d+$/.test(a)) { base = a; top = b; }
+    } else if (e.indexOf(":") > -1 && !/http/.test(e)) { var q = e.split(":"); base = q[0]; top = /^\d+$/.test(q[1] || "") ? q[1] : null; }
+    else if (e.indexOf("/") > -1 && !/http/.test(e)) { var r = e.split("/"); base = r[0]; top = /^\d+$/.test(r[1] || "") ? r[1] : null; }
+    if (!(/^-?\d+$/.test(base) || /^@[A-Za-z0-9_+]{4,}$/.test(base))) return null;
+    return { base: base, top: top, id: top ? base + ":" + top : base };
+  }
+  function entraSozinho(v) { return v.charAt(0) === "@" || v.indexOf("t.me/") > -1; }
+  function alvoRotulo(v) { return v ? "<code>" + esc(String(v).replace(":", "_")) + "</code>" : "<i>não definido (usando o padrão)</i>"; }
+  function alvoTexto(v) { return v ? String(v).replace(":", "_") : "não definido (usando o padrão)"; }
+  function cota(p) {
+    var mn = p.limite_min || 0, mx = p.limite_max || 0;
+    if (mx < mn) mx = mn;
+    if (!mn) return "sem teto (publica tudo)";
+    return mx > mn ? mn + " a " + mx + " vídeos/dia · hoje sorteado pelo servidor" : mn + " vídeos/dia (fixo)";
+  }
+  function janelaTxt(p) { return (p.janela_inicio || 0) + "h às " + (p.janela_fim || 24) + "h"; }
+  function acesso(p) {
+    return "⏳ aguardando entrada" + (p.origem_erro ? "\n" + p.origem_erro : "");
+  }
+  function rotuloArroba(p) {
+    if ((p.arroba || "").trim()) return p.arroba;
+    var o = p.canal_origem || "", m = /^@([A-Za-z][A-Za-z0-9_]{3,31})$/.exec(o) || /t\.me\/([A-Za-z][A-Za-z0-9_]{3,31})(?:\/|$)/i.exec(o);
+    if (m && m[1].toLowerCase() !== "c") return "não cadastrado (o crédito sai com @" + m[1] + ", do canal de origem)";
+    return "não cadastrado (o crédito sai com o @ público do canal de origem, se houver, ou com o nome: " + p.nome + ") [a confirmar no servidor]";
+  }
+
+  // ---------- fluxos: um aberto por vez ----------
+  var modoSel = null, pidAtual = null;
+  function fechar() { P.$$(".fluxo").forEach(function (f) { f.hidden = true; }); $("f-edit").hidden = true; }
+  function limparErros() { P.$$(".err").forEach(function (e) { e.textContent = ""; }); }
+  function abrir(id) {
+    fechar(); limparErros();
+    var f = $(id); f.hidden = false;
+    var c = f.querySelector("input[type=text],input[type=password]");
+    if (c) { try { c.focus({ preventScroll: true }); } catch (e) {} }
+    try { f.scrollIntoView({ block: "nearest", behavior: "smooth" }); } catch (e) {}
+  }
+  function voltarLista() { fechar(); limparErros(); pidAtual = null; desenhar(); try { $("t-lista").scrollIntoView({ block: "start" }); } catch (e) {} }
+  document.addEventListener("click", function (ev) {
+    var b = ev.target.closest ? ev.target.closest("button") : null;
+    if (!b) return;
+    if (b.hasAttribute("data-cancela")) { voltarLista(); P.aviso("Operação cancelada."); }
+    if (b.hasAttribute("data-cancela-ger")) voltarLista();
+  });
+
+  // ---------- lista ----------
+  function desenhar() {
+    var l = C().parceiros, h;
+    if (!l.length) h = '<div class="card vazio"><i>Nenhum parceiro cadastrado ainda.</i></div>';
+    else h = l.map(function (p) {
+      return '<div class="card"><b>' + (p.ativo ? "🟢" : "⏸️") + " " + esc(p.nome) + '</b> · <code>#' + p.id + '</code>' +
+        '<div class="bloco pre" style="margin-top:8px">🔑 App ID: <code>' + esc(p.app_id) + '</code>\n📥 Origem: ' + alvoRotulo(p.canal_origem) +
+        '\n📤 Destino: ' + alvoRotulo(p.canal_destino) + '\n⏳ Oculto por: <b>' + p.dias_atraso + ' dias</b>\n📦 Cota Diária: <b>' + esc(cota(p)) +
+        '</b>\n🕒 Janela de Postagem: <b>' + janelaTxt(p) + '</b>\n🤖 Acesso à origem: ' + esc(acesso(p)) + '</div></div>';
+    }).join("");
+    $("lista").innerHTML = h;
+    ["b-gerenciar", "b-remover", "b-pausar-todos", "b-ativar-todos", "b-excluir-todos"].forEach(function (id) { $(id).hidden = !l.length; });
+  }
+
+  // ---------- escolher parceiro ----------
+  function listaParaEscolha() {
+    return C().parceiros.map(function (p) { return p.id + " — " + p.nome + " " + (p.ativo ? "🟢" : "⏸️"); }).join("\n");
+  }
+  function abrirEscolha(modo) {
+    var l = C().parceiros;
+    if (!l.length) { $("e-lista").textContent = "⚠️ Nenhum parceiro cadastrado ainda."; return; }
+    modoSel = modo;
+    if (modo === "fila" && l.length === 1) { mostrarFila(l[0]); return; }
+    var t = { gerenciar: ["🔧 Qual parceiro você quer gerenciar?", "Envie apenas o número correspondente."],
+              remover: ["🗑️ Qual parceiro você quer remover?", "Envie apenas o número correspondente. Ainda haverá uma confirmação."],
+              fila: ["🔍 Qual fila você quer abrir?", "Envie apenas o número correspondente."] }[modo];
+    $("sel-titulo").textContent = t[0];
+    $("sel-lista").textContent = listaParaEscolha();
+    $("l-sel").textContent = t[1];
+    abrir("f-sel"); $("i-sel").value = "";
+  }
+  $("b-gerenciar").addEventListener("click", function () { abrirEscolha("gerenciar"); });
+  $("b-remover").addEventListener("click", function () { abrirEscolha("remover"); });
+  $("b-fila").addEventListener("click", function () { abrirEscolha("fila"); });
+  $("f-sel").addEventListener("submit", function (ev) {
+    ev.preventDefault();
+    var v = $("i-sel").value.trim();
+    if (!/^\d+$/.test(v)) { $("e-sel").textContent = "⚠️ Envie apenas o número do parceiro."; return; }
+    var p = achar(v);
+    if (!p) { $("e-sel").textContent = "⚠️ Parceiro não encontrado."; return; }
+    if (modoSel === "remover") pedirExclusao(p);
+    else if (modoSel === "fila") mostrarFila(p);
+    else mostrarParceiro(p.id);
+  });
+
+  // ---------- tela do parceiro ----------
+  function mostrarParceiro(id) {
+    var p = achar(id);
+    if (!p) { P.aviso("⚠️ Parceiro não encontrado."); voltarLista(); return; }
+    pidAtual = p.id;
+    abrir("c-ger");
+    $("ger-titulo").textContent = "🔧 " + p.nome + " · #" + p.id + " · " + (p.ativo ? "🟢 ATIVO" : "⏸️ PAUSADO");
+    $("ger-info").textContent = "🔑 App ID: " + p.app_id + "\n📥 Origem: " + alvoTexto(p.canal_origem) + "\n📤 Destino: " + alvoTexto(p.canal_destino) +
+      "\n👤 @ no Telegram: " + rotuloArroba(p) + "\n⏳ Oculto por: " + p.dias_atraso + " dias\n📦 Cota Diária: " + cota(p) +
+      "\n🕒 Janela de Postagem: " + janelaTxt(p) + "\n🤖 Acesso à origem: " + (p.origem_ok ? "✅ conectado" : "⏳ aguardando entrada");
+    $("b-ger-toggle").textContent = p.ativo ? "Pausar Parceiro ⏸️" : "Ativar Parceiro ▶️";
+  }
+  $("b-ger-toggle").addEventListener("click", function () {
+    var p = achar(pidAtual); if (!p) return;
+    var novo = !p.ativo;
+    mudar(function (c) { c.parceiros.forEach(function (x) { if (x.id === p.id) x.ativo = novo; }); });
+    P.aviso("✅ " + p.nome + " foi " + (novo ? "ativado" : "pausado") + ". " + (novo ? "Voltou a capturar e publicar normalmente." : "A fila dele fica intacta: nada é publicado nem capturado."));
+    mostrarParceiro(p.id);
+  });
+  $("b-pausar-todos").addEventListener("click", function () { todos(false); });
+  $("b-ativar-todos").addEventListener("click", function () { todos(true); });
+  function todos(ativar) {
+    mudar(function (c) { c.parceiros.forEach(function (x) { x.ativo = ativar; }); });
+    P.aviso("✅ Todos os parceiros foram " + (ativar ? "ativados" : "pausados") + ".");
+  }
+
+  // ---------- exclusão ----------
+  function pedirExclusao(p) {
+    P.confirmar("🗑️ Excluir " + p.nome + " (#" + p.id + ")?\n\n• O cadastro e as credenciais serão apagados\n• A fila de vídeos dele será apagada\n• Os vídeos já reservados não voltam ao acervo\n\nEsta ação não pode ser desfeita.", function () {
+      mudar(function (c) { c.parceiros = c.parceiros.filter(function (x) { return x.id !== p.id; }); });
+      voltarLista(); P.aviso("🗑️ " + p.nome + " foi excluído. As reservas dele seguem queimadas.");
+    });
+  }
+  $("b-ger-excluir").addEventListener("click", function () { var p = achar(pidAtual); if (p) pedirExclusao(p); });
+  $("b-excluir-todos").addEventListener("click", function () {
+    var n = C().parceiros.length;
+    if (!n) return;
+    P.confirmar("🗑️ Excluir TODOS os " + n + " parceiros?\n\nCadastros, credenciais e filas serão apagados.\nAs reservas de vídeo não voltam ao acervo.\n\nEsta ação não pode ser desfeita.", function () {
+      mudar(function (c) { c.parceiros = []; });
+      voltarLista(); P.aviso("🗑️ " + n + " parceiro(s) excluído(s).");
+    });
+  });
+
+  // ---------- edição de um campo ----------
+  var campoEdit = null;
+  var PERGUNTAS = {
+    canal_origem: "✏️ Envie o novo canal de ORIGEM (de onde os vídeos são pegos):",
+    canal_destino: "✏️ Envie o novo canal de DESTINO (onde o parceiro publica):",
+    dias_atraso: "✏️ Envie o novo número de dias de atraso (D+X).\n\nÉ quanto tempo o vídeo fica guardado antes de ser publicado.",
+    cota: "Quantos vídeos por dia este parceiro pode publicar?\n\n• Faixa: 4-8 — cada dia sorteia um número entre 4 e 8 (média 6)\n• Fixo: 6 — sempre 6 por dia\n\nA faixa existe para a quantidade não ser sempre igual, que é o que denuncia robô.",
+    arroba: "✏️ Envie o @ do parceiro no Telegram (ex.: @joaosilva).\n\nEle aparece em \"👤 Vídeo enviado por\" nos vídeos deste parceiro que vão para a Vídeos da Comunidade do Grupo Público. Envie - para tirar o @.",
+    janela: "Em que horário este parceiro pode publicar?\n\n• Formato Inicio-Fim — Exemplo: 8-23\n• 0-24 libera o dia inteiro\n\nA captura continua 24h; só a publicação respeita a janela."
+  };
+  var PLACEHOLDERS = { canal_origem: "@canal ou -100123...", canal_destino: "-100123... ou @canal", dias_atraso: "30", cota: "4-8 ou 6", arroba: "@usuario ou -", janela: "8-23" };
+  P.$$("[data-edita]").forEach(function (b) {
+    b.addEventListener("click", function () {
+      campoEdit = b.dataset.edita;
+      $("l-edit").textContent = PERGUNTAS[campoEdit];
+      var i = $("i-edit"); i.value = ""; i.placeholder = PLACEHOLDERS[campoEdit];
+      $("e-edit").textContent = ""; $("n-edit").textContent = "";
+      $("f-edit").hidden = false; i.focus();
+    });
+  });
+  $("b-edit-cancelar").addEventListener("click", function () { $("f-edit").hidden = true; P.aviso("Operação cancelada."); });
+  function gravar(pid, fn, msg) {
+    mudar(function (c) { c.parceiros.forEach(function (x) { if (x.id === pid) fn(x); }); });
+    P.aviso(msg); mostrarParceiro(pid);
+  }
+  $("f-edit").addEventListener("submit", function (ev) {
+    ev.preventDefault();
+    var p = achar(pidAtual); if (!p) return;
+    var v = $("i-edit").value.trim(), pid = p.id, m;
+    $("e-edit").textContent = "";
+    if (campoEdit === "cota") {
+      m = /^(\d{1,3})(?:\s*-\s*(\d{1,3}))?$/.exec(v);
+      if (!m) { $("e-edit").textContent = "⚠️ Envie um número (6) ou uma faixa (6-10)."; return; }
+      var mn = +m[1], mx = m[2] ? +m[2] : mn;
+      if (mx < mn) { $("e-edit").textContent = "⚠️ O segundo número precisa ser maior que o primeiro."; return; }
+      gravar(pid, function (x) { x.limite_min = mn; x.limite_max = mx; }, "✅ Cota atualizada: " + (mx > mn ? mn + " a " + mx + " vídeos/dia" : mn + " vídeos/dia") + ".");
+    } else if (campoEdit === "janela") {
+      m = /^(\d{1,2})\s*-\s*(\d{1,2})$/.exec(v);
+      if (!m) { $("e-edit").textContent = "⚠️ Use o formato Inicio-Fim. Exemplo: 8-23."; return; }
+      var ini = +m[1], fim = +m[2];
+      if (ini >= fim || ini < 0 || fim > 24) { $("e-edit").textContent = "⚠️ O início precisa ser menor que o fim, dentro de 0 a 24."; return; }
+      gravar(pid, function (x) { x.janela_inicio = ini; x.janela_fim = fim; }, "✅ Janela atualizada: " + ini + "h às " + fim + "h.");
+    } else if (campoEdit === "arroba") {
+      var ar = normalizarArroba(v);
+      if (ar === null) { $("e-edit").textContent = "⚠️ Esse @ não é válido. Envie no formato @joaosilva ou - para tirar."; return; }
+      gravar(pid, function (x) { x.arroba = ar; }, "✅ @ atualizado: " + (ar || "sem @") + ".");
+    } else if (campoEdit === "dias_atraso") {
+      if (!/^\d+$/.test(v)) { $("e-edit").textContent = "⚠️ Envie apenas números."; return; }
+      gravar(pid, function (x) { x.dias_atraso = parseInt(v, 10); }, "✅ Atualizado com sucesso!");
+    } else {
+      if (!v) { $("e-edit").textContent = "⚠️ Envie o canal (ID, @username ou link)."; return; }
+      var a = lerAlvo(v), aviso = a ? "✅ Formato do canal conferido (a consulta ao Telegram só ocorre com o servidor ligado)." : "⚠️ Canal não encontrado. O valor será salvo mesmo assim.";
+      if (campoEdit === "canal_origem") {
+        var sozinho = entraSozinho(v), valor = sozinho ? v : (a ? a.base : v.split(":")[0]);
+        gravar(pid, function (x) { x.canal_origem = valor; x.origem_ok = 0; x.origem_erro = ""; }, aviso + " ✅ Atualizado com sucesso!" + (sozinho ? "" : " ⚠️ Esse formato não permite entrada automática. O userbot precisa já estar no canal, senão o acesso trava em ⏳."));
+      } else {
+        var dest = a ? a.id : v;
+        gravar(pid, function (x) { x.canal_destino = dest; }, aviso + " ✅ Atualizado com sucesso!");
+      }
+    }
+  });
+
+  // ---------- fila ----------
+  function mostrarFila(p) {
+    abrir("c-fila");
+    $("fila-titulo").textContent = "📊 Relatório da Fila do Parceiro (D+" + p.dias_atraso + ")";
+    $("fila-resumo").textContent = (p.ativo ? "🟢" : "⏸️") + " " + p.nome + " · #" + p.id +
+      "\n📦 Na fila: 0 vídeo(s) · 💾 0 MB (0.00 de 10 GB de todos os parceiros)" +
+      "\n⏳ Oculto por: " + p.dias_atraso + " dias" +
+      "\n📅 Cota Diária: " + cota(p) +
+      "\n🤖 Acesso à origem: ⏳ aguardando a conta da captura entrar no canal" +
+      "\n📥 Última captura: nenhuma ainda" +
+      "\n👀 Origem hoje: nada recebido do canal" +
+      "\nFila vazia — aguardando novas capturas.";
+  }
+
+  // ---------- cadastro ----------
+  var PASSOS = ["nome", "arroba", "app_id", "app_secret", "origem", "destino", "dias", "limite"];
+  var TEXTOS = {
+    nome: ["👤 PASSO 1 de 8 — Nome do parceiro", "Como você quer identificar este afiliado? (ex: João Silva)", "Nome do parceiro", "text"],
+    arroba: ["📣 PASSO 2 de 8 — @ do parceiro no Telegram", "Envie o @ dele (ex: @joaosilva). Ele aparece em \"👤 Vídeo enviado por\" nos vídeos deste parceiro que vão para a Vídeos da Comunidade do Grupo Público.\nSem @? Envie -: o crédito sai com o @ do canal de origem, se ele for público, ou com o nome do parceiro.", "@ do parceiro", "text"],
+    app_id: ["🔑 PASSO 3 de 8 — App ID da Shopee", "Cole o App ID da conta de afiliado deste parceiro.", "App ID", "text"],
+    app_secret: ["🔐 PASSO 4 de 8 — App Secret", "Cole o App Secret deste parceiro.\n⚠️ Dado sensível: apague a mensagem do chat depois de enviar.", "App Secret", "password"],
+    origem: ["📥 PASSO 5 de 8 — Canal de ORIGEM", "De onde este parceiro vai pegar os vídeos?\nEnvie o ID, @username ou link do canal.", "Canal de origem", "text"],
+    destino: ["📤 PASSO 6 de 8 — Canal de DESTINO", "Onde este parceiro vai publicar os vídeos?", "Canal de destino", "text"],
+    dias: ["⏳ PASSO 7 de 8 — Dias de atraso (D+X)", "Quantos dias o vídeo fica guardado antes de ser repostado?\nEnvie apenas o número. Exemplo: 30", "Dias de atraso", "text"],
+    limite: ["📦 PASSO 8 de 8 — Cota diária", "Quantos vídeos por dia este parceiro pode publicar?\nEnvie apenas o número. Exemplo: 6", "Cota diária", "text"]
+  };
+  var PH = { nome: "Nome", arroba: "@usuario ou -", app_id: "123456...", app_secret: "", origem: "@canal ou -100123...", destino: "-100123... ou @canal", dias: "30", limite: "6" };
+  var d = {}, passo = 0;
+  function mostrarPasso(n, aviso) {
+    passo = n;
+    var k = PASSOS[n], t = TEXTOS[k], i = $("i-wiz");
+    abrir("f-wiz");
+    $("wiz-titulo").textContent = t[0]; $("wiz-texto").textContent = t[1];
+    $("l-wiz").textContent = t[2];
+    i.type = t[3]; i.value = ""; i.placeholder = PH[k]; i.setAttribute("autocomplete", t[3] === "password" ? "off" : "off");
+    var pre = { nome: d.nome, arroba: d.arroba, app_id: d.app_id_bruto, origem: d.canal_origem, destino: d.canal_destino, dias: d.dias_atraso, limite: d.limite };
+    if (pre[k] !== undefined && pre[k] !== null && k !== "app_secret") i.value = String(pre[k]);
+    $("n-wiz").textContent = aviso || "";
+    $("e-wiz").textContent = "";
+    i.focus();
+  }
+  $("b-cadastrar").addEventListener("click", function () { d = {}; mostrarPasso(0); });
+  $("b-wiz-cancelar").addEventListener("click", function () { voltarLista(); P.aviso("Cadastro cancelado. Nada foi salvo."); });
+  $("b-wiz-voltar").addEventListener("click", function () { if (passo === 0) voltarLista(); else mostrarPasso(passo - 1); });
+  function erroW(t) { $("e-wiz").textContent = t; }
+  $("f-wiz").addEventListener("submit", function (ev) {
+    ev.preventDefault();
+    var k = PASSOS[passo], v = $("i-wiz").value.trim(), a, n;
+    if (k === "nome") {
+      if (v.length < 2) return erroW("⚠️ O nome precisa ter pelo menos 2 caracteres. Tente de novo:");
+      d.nome = v; mostrarPasso(1);
+    } else if (k === "arroba") {
+      a = normalizarArroba(v);
+      if (a === null) return erroW("⚠️ Esse @ não é válido. Envie no formato @joaosilva ou - se ele não tiver.");
+      d.arroba = a; mostrarPasso(2);
+    } else if (k === "app_id") {
+      if (!/^\d+$/.test(v) || v.length < 6) return erroW("❌ App ID inválido.\n\nO App ID da Shopee é só números e tem pelo menos 6 dígitos.\nConfira no painel de afiliado e envie de novo:");
+      d.app_id_bruto = v; d.app_id = mascarar(v); mostrarPasso(3);
+    } else if (k === "app_secret") {
+      if (v.length < 16 || v.indexOf(" ") > -1) return erroW("❌ App Secret inválido.\n\nO Secret é uma sequência longa, sem espaços.\nConfira e envie de novo:");
+      if (!/^[A-Za-z0-9]+$/.test(v)) {
+        var estranhos = v.split("").filter(function (c) { return !/[A-Za-z0-9]/.test(c); }).slice(0, 5).map(function (c) { return "U+" + ("0000" + c.charCodeAt(0).toString(16).toUpperCase()).slice(-4); });
+        return erroW("❌ O Secret veio com caractere estranho.\n\nEncontrei: " + estranhos.join(" ") + "\n\nIsso costuma acontecer quando o Secret é copiado de uma imagem ou de um painel que insere espaço invisível.\nCopie de novo pelo botão de cópia do painel da Shopee e cole aqui:");
+      }
+      $("i-wiz").value = "";   // o Secret nunca é guardado
+      d.secret_mascarado = mascarar(v);
+      mostrarPasso(4, "🔍 O teste das credenciais na API da Shopee só funciona com o servidor ligado. Neste protótipo ele é pulado e o cadastro fica marcado como não testado.");
+    } else if (k === "origem") {
+      a = lerAlvo(v);
+      if (!a) return erroW("❌ Canal não encontrado.\n\nAceito qualquer um destes formatos:\n• @usuariodocanal\n• t.me/+AbCdEf... — link de convite\n• link do Telegram Web\n• ID numérico — ex: -1001234567890\n\nConfira o endereço e tente de novo:");
+      var sozinho = entraSozinho(v);
+      d.canal_origem = sozinho ? v : a.base;
+      mostrarPasso(5, "✅ Formato da origem conferido (o Telegram só é consultado com o servidor ligado)." + (sozinho ? "" : "\n⚠️ Esse formato não permite entrada automática. O userbot precisa já estar no canal. Se não estiver, adicione ele na mão — ou refaça este passo com o @username ou o link de convite."));
+    } else if (k === "destino") {
+      a = lerAlvo(v);
+      if (!a) return erroW("❌ Canal não encontrado.\n\nO bot precisa ser administrador do canal para publicar nele.\n\n• Adicione o bot como admin e tente de novo\n• Ou envie outro @username, ID ou link");
+      d.canal_destino = a.id;
+      mostrarPasso(6, "✅ Formato do destino conferido (o Telegram só é consultado com o servidor ligado).");
+    } else if (k === "dias") {
+      if (!/^\d+$/.test(v) || +v > 365) return erroW("⚠️ Envie um número entre 0 e 365. Exemplo: 30");
+      d.dias_atraso = parseInt(v, 10); mostrarPasso(7);
+    } else {
+      if (!/^\d+$/.test(v) || +v < 1 || +v > 100) return erroW("⚠️ Envie um número entre 1 e 100. Exemplo: 6");
+      d.limite = parseInt(v, 10);
+      abrir("c-confere");
+      $("confere-texto").textContent = "👤 Nome: " + d.nome + "\n📣 @ no Telegram: " + (d.arroba || "sem @") + "\n🔑 App ID: " + d.app_id + "  ⏳ não testado (protótipo)\n🔐 Secret: " + d.secret_mascarado +
+        "  ⏳ não testado (protótipo)\n📥 Origem: " + alvoTexto(d.canal_origem) + "\n📤 Destino: " + alvoTexto(d.canal_destino) + "\n⏳ Atraso: D+" + d.dias_atraso + "\n📦 Cota: " + d.limite +
+        " vídeos/dia\n\nO parceiro nasce ativo: o userbot tenta entrar no canal de origem e a captura começa quando o acesso der certo.";
+    }
+  });
+  $("b-confere-cancelar").addEventListener("click", function () { voltarLista(); P.aviso("❌ Cadastro cancelado. Nada foi salvo."); });
+  $("b-aprovar").addEventListener("click", function () {
+    var novo;
+    mudar(function (c) {
+      novo = c.proximo_id++;
+      c.parceiros.push({ id: novo, nome: d.nome, arroba: d.arroba || "", app_id: d.app_id, canal_origem: d.canal_origem, canal_destino: d.canal_destino,
+        dias_atraso: d.dias_atraso, limite_min: d.limite, limite_max: d.limite, ativo: 1, janela_inicio: 0, janela_fim: 24, origem_ok: 0, origem_erro: "" });
+    });
+    var nome = d.nome; d = {};
+    voltarLista(); P.aviso("✅ Parceiro cadastrado! " + nome + " recebeu o ID #" + novo + ".");
+  });
+
+  P.topo("parceiros");
+  desenhar();
+})();
+</script>
+</body>
+</html>

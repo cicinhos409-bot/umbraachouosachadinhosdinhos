@@ -1,0 +1,838 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Espelhador - Painel</title>
+<meta name="description" content="Painel web do Espelhador de Canais: as mesmas configurações do painel do Telegram.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23ee4d2d'/%3E%3Cpath d='M26 20l20 12-20 12z' fill='%23fff'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="/assets/painel.css">
+<style>
+  .bloco { white-space: pre-line; overflow-wrap: anywhere; margin: 0 0 12px; }
+  .nota { background: var(--card-2); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; margin: 0 0 12px; white-space: pre-line; overflow-wrap: anywhere; }
+  .rota-bloco { background: var(--card-2); border: 1px solid var(--line); border-radius: 12px; padding: 12px; margin-top: 10px; overflow-wrap: anywhere; }
+  .rota-bloco p { margin: 0; white-space: pre-line; }
+  .area-titulo { font-size: 16px; margin: 0 0 10px; }
+  .exemplo-linha { display: grid; gap: 6px; margin-bottom: 12px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div id="topo"></div>
+  <h1>🔄 Espelhador de Canais</h1>
+  <p class="lead">Clona publicações de canais e grupos de origem para um destino, com janela de horário, atraso D+X, modo de distribuição, limite diário e lista negra.</p>
+
+  <div id="recado" class="nota" role="status" aria-live="polite" hidden></div>
+
+  <h2>Painel do Espelhador</h2>
+  <div class="card" id="status"></div>
+
+  <div class="menu-grid" style="margin-top:12px">
+    <button type="button" id="b-add">Adicionar Espelho ➕</button>
+    <button type="button" id="b-rem">Remover Espelho 🗑️</button>
+    <button type="button" id="b-edit">Editar Espelho ✏️</button>
+    <button type="button" id="b-forcar">Forçar Espelhos 🚀</button>
+  </div>
+  <a class="voltar" href="/painel">Voltar aos Canais 🔙</a>
+
+  <div class="card" id="area" tabindex="-1" aria-live="polite" hidden style="margin-top:16px"></div>
+
+  <h2>Fila do Espelhador 🔄</h2>
+  <div class="card">
+    <p class="hint" style="margin-top:0">Relatórios, Filas. A fila é preenchida pelo robô no servidor; neste protótipo ela começa vazia.</p>
+    <div id="fila-escolha" hidden>
+      <p class="bloco"><b>🔄 Múltiplas rotas detectadas!</b>
+Qual fila do Espelhador deseja analisar?</p>
+      <label for="fila-rota">Fila</label>
+      <select id="fila-rota"></select>
+    </div>
+    <div class="actions"><button type="button" id="fila-ver" class="full">Fila do Espelhador 🔄</button></div>
+    <div id="fila-res" style="margin-top:12px"></div>
+  </div>
+
+  <h2>Zerar Filas e Tarefas 🧹</h2>
+  <div class="card">
+    <p class="bloco"><b>🧹 CENTRAL DE LIMPEZA DO SERVIDOR</b>
+As suas configurações do robô (textos, horários, alvos) <b>nunca</b> são apagadas.
+👉 <b>Fila Espelhador:</b> Apaga a repassagem de vídeos pendentes e seus respectivos arquivos.</p>
+    <div class="actions"><button type="button" id="b-limpar" class="full">Limpar Fila Espelhador 🔄</button></div>
+    <div id="limpar-conf" hidden style="margin-top:12px"></div>
+  </div>
+
+  <details class="card" style="margin-top:16px">
+    <summary>Exemplo para testar a fila (só do protótipo)</summary>
+    <p class="hint">No bot, a fila vem do servidor. Aqui você pode informar um número de vídeos retidos (exemplo) por rota para testar a tela Fila de Espera, Forçar Espelhos 🚀 e o relatório da fila.</p>
+    <div id="exemplo"></div>
+  </details>
+
+  <details class="card" style="margin-top:12px">
+    <summary>A confirmar com o servidor</summary>
+    <ul class="hint">
+      <li>A validação do canal no Telegram (existir, o robô ser administrador, nome do canal) só acontece no servidor. Aqui a página confere apenas o formato (ID, @username, link t.me ou Telegram Web, com tópico opcional). Um ID digitado sem o prefixo -100 fica como foi digitado.</li>
+      <li>O ícone ✅/❌ de cada canal vem do auditor do servidor. Aqui todos aparecem como ✅, e por isso os botões ❌ Erros e Remover Todos com Erro 🗑️ só mostram "Tudo limpo".</li>
+      <li>O renomeio automático de rotas "Espelho: -100..." quando o nome do canal fica conhecido, o número sorteado do dia no limite diário em faixa e os cartões de cada vídeo da fila também vêm do servidor.</li>
+      <li>Importar Banco Global 🌍, Forçar Espelhos 🚀 e Limpar Fila Espelhador 🔄 só funcionam com o servidor ligado.</li>
+    </ul>
+  </details>
+</div>
+<script src="/assets/painel.js"></script>
+<script>
+(function () {
+  "use strict";
+  var h = Painel.esc, $ = Painel.$;
+  var E = Painel.estado("espelhador", { rotas: [], retidos: {} });
+  var S = { tela: null, d: {}, nota: "" };
+  var area = $("area");
+
+  var BTN_APROVAR = "Aprovar ✅", BTN_CANCELAR = "Cancelar Operação ❌";
+  var MAPA_DIAS = { "Mesmo Dia (D+0) 🟢": 0, "Dia Seguinte (D+1) 🟡": 1, "Dois Dias (D+2) 🔵": 2 };
+
+  function rotas() { return E.ler().rotas; }
+  function qtdRetidos(nome) { var n = parseInt(E.ler().retidos[nome], 10); return isNaN(n) || n < 0 ? 0 : n; }
+  function tituloModo(m) { m = m || "ordem"; return m.charAt(0).toUpperCase() + m.slice(1); }
+  function rotuloModo(m) { return m === "aleatorio" ? "Aleatório 🔀" : "Ordem de Chegada ⬇️"; }
+  function pad2(n) { return (n < 10 ? "0" : "") + n; }
+  function code(x) { return "<code>" + h(x) + "</code>"; }
+
+  // ---------- Leitura de canais (mesmas regras do utils.py, sem consultar o Telegram) ----------
+  function ehNum(s) { return /^\d+$/.test(String(s).replace(/^-+/, "")); }
+  function validarAlvo(entrada) {
+    entrada = String(entrada || "").trim();
+    if (!entrada) return null;
+    var base = entrada, topico = null, p;
+    if (entrada.indexOf("t.me/c/") >= 0) {
+      p = entrada.split("t.me/c/")[1].split("/");
+      base = "-100" + p[0];
+      if (p.length > 1 && /^\d+$/.test(p[1])) topico = p[1];
+    } else if (entrada.indexOf("t.me/") >= 0) {
+      p = entrada.split("t.me/")[1].split("/");
+      base = "@" + p[0];
+      if (p.length > 1 && /^\d+$/.test(p[1])) topico = p[1];
+    } else if (entrada.indexOf("web.telegram.org") >= 0 && entrada.indexOf("#") >= 0) {
+      var web = entrada.split("#")[1].split("/")[0];
+      if (web.indexOf("_") >= 0) {
+        var pw = web.split("_");
+        base = pw[0];
+        if (/^\d+$/.test(pw[1])) topico = pw[1];
+      } else base = web;
+    } else if (entrada.indexOf("_") >= 0 && entrada.indexOf("http") < 0) {
+      var k = entrada.lastIndexOf("_"), a = entrada.slice(0, k).trim(), b = entrada.slice(k + 1).trim();
+      if (/^\d+$/.test(b) && ehNum(a)) { base = a; topico = b; }
+    } else if (entrada.indexOf(":") >= 0 && entrada.indexOf("http") < 0) {
+      p = entrada.split(":");
+      base = p[0];
+      if (p.length > 1 && /^\d+$/.test(p[1])) topico = p[1];
+    } else if (entrada.indexOf("/") >= 0 && entrada.indexOf("http") < 0) {
+      p = entrada.split("/");
+      base = p[0];
+      if (p.length > 1 && /^\d+$/.test(p[1])) topico = p[1];
+    }
+    if (ehNum(base)) return topico ? base + ":" + topico : base;
+    if (/^@\w+$/.test(base)) return topico ? base + ":" + topico : base;
+    return null;
+  }
+  function extrairEntradas(texto, comWeb) {
+    var re = comWeb
+      ? /(-100\d+(?::\d+)?|@\w+|https?:\/\/t\.me\/[^\s)]+|https?:\/\/web\.telegram\.org\/[^\s)]+)/g
+      : /(-100\d+(?::\d+)?|@\w+|https?:\/\/t\.me\/[^\s)]+)/g;
+    var achados = texto.match(re);
+    if (achados && achados.length) return achados.filter(function (x, i) { return achados.indexOf(x) === i; });
+    return texto.replace(/\n/g, ",").split(",");
+  }
+  function semCem(s) { return String(s).replace(/-100/g, ""); }
+
+  // ---------- Janela, limite ----------
+  function lerJanela(texto, curto) {
+    texto = String(texto || "").trim();
+    if (texto === "Dia Todo (24h) 🕛" || texto.toLowerCase() === "dia todo") return { i: 0, f: 24 };
+    var m = /^(\d{1,2})-(\d{1,2})$/.exec(texto);
+    if (!m) return { erro: curto ? "Formato inválido!" : "Formato inválido! Use o formato exato como no exemplo: 10-22, ou clique em 'Dia Todo (24h) 🕛'." };
+    var i = parseInt(m[1], 10), f = parseInt(m[2], 10);
+    if (i >= f || i < 0 || f > 24) return { erro: curto ? "Valores inválidos!" : "Valores inválidos! A hora de início deve ser menor que a do fim." };
+    return { i: i, f: f };
+  }
+  function textoJanela(i, f) { return i === 0 && f === 24 ? "24 horas por dia" : "entre as " + i + "h e as " + f + "h"; }
+  function faixaRota(r) {
+    var p = parseInt(r.limite_min, 10) || 0, t = parseInt(r.limite_max, 10) || 0;
+    if (t < p) t = p;
+    return [p, t];
+  }
+  function textoLimite(r) {
+    var f = faixaRota(r);
+    if (!f[0]) return "Todos os vídeos";
+    if (f[1] > f[0]) return f[0] + " a " + f[1] + "/dia · hoje sorteou: calculado pelo servidor";
+    return f[0] + "/dia (fixo)";
+  }
+
+  // ---------- Textos de rota ----------
+  function escutaHtml(r) {
+    var o = r.origens || [], total = o.length, L = o.map(function (x, i) { return "<code>" + pad2(i + 1) + ".</code> ✅ " + code(x); });
+    var s = "";
+    if (total <= 15) { s = L.join("\n"); }
+    else {
+      s = L.slice(0, 5).join("\n");
+      s += "\n   <i>... e mais " + (total - 10) + " canais operando normalmente ...</i>\n";
+      s += L.slice(total - 5).join("\n");
+    }
+    return "📥 <b>Na escuta (" + total + "):</b>\n" + s;
+  }
+  function destinoHtml(r) { return "🎯 <b>Canal de Destino:</b> ✅ " + code(r.destino); }
+
+  function renderStatus() {
+    var rs = rotas(), s = "<p class=\"bloco\"><b>🔄 Painel do Espelhador de Canais</b>\n\nEste módulo clona publicações de um grupo para outro automaticamente, convertendo os links e respeitando um atraso programado.</p>";
+    if (!rs.length) {
+      s += "<p class=\"vazio\"><i>Nenhuma rota de espelhamento cadastrada no momento.</i></p>";
+    } else {
+      s += "<p class=\"bloco\" style=\"margin-bottom:0\">📡 <b>Rotas Ativas:</b></p>";
+      rs.forEach(function (r, i) {
+        s += "<div class=\"rota-bloco\"><p><b>" + (i + 1) + ". " + h(r.nome) + "</b>\n" +
+          "   🕒 Janela de Postagem: " + r.inicio + "h às " + r.fim + "h\n" +
+          "   🔀 Distribuição: " + h(tituloModo(r.modo)) + "\n" +
+          "   📦 Fila de Espera: " + qtdRetidos(r.nome) + " vídeo(s)\n\n" +
+          destinoHtml(r) + "\n\n" + escutaHtml(r) + "</p></div>";
+      });
+      s += "<p class=\"bloco\" style=\"margin-top:12px;margin-bottom:0\">Escolha a ação que deseja realizar:</p>";
+    }
+    $("status").innerHTML = s;
+  }
+
+  function renderExemplo() {
+    var rs = rotas(), box = $("exemplo");
+    if (!rs.length) { box.innerHTML = "<p class=\"vazio\">Crie uma rota para poder informar vídeos retidos de exemplo.</p>"; return; }
+    box.innerHTML = rs.map(function (r, i) {
+      return "<div class=\"exemplo-linha\"><label for=\"ex" + i + "\">" + h(r.nome) + " (exemplo)</label>" +
+        "<input type=\"number\" min=\"0\" max=\"999\" id=\"ex" + i + "\" data-ex=\"" + i + "\" value=\"" + qtdRetidos(r.nome) + "\"></div>";
+    }).join("");
+  }
+
+  function renderFilaEscolha() {
+    var rs = rotas(), box = $("fila-escolha"), sel = $("fila-rota");
+    if (rs.length > 1) {
+      var atual = sel.value;
+      sel.innerHTML = "<option value=\"\">Todos os Espelhos 🌐</option>" + rs.map(function (r, i) { return "<option value=\"" + i + "\">" + h(r.nome) + "</option>"; }).join("");
+      if (atual && rs[atual]) sel.value = atual;
+      box.hidden = false;
+    } else box.hidden = true;
+  }
+
+  function renderTudo() { renderStatus(); renderExemplo(); renderFilaEscolha(); $("fila-res").innerHTML = ""; }
+
+  function recado(html) {
+    var r = $("recado");
+    if (html) { r.innerHTML = html; r.hidden = false; } else { r.innerHTML = ""; r.hidden = true; }
+  }
+
+  function sair(nota) {
+    S = { tela: null, d: {}, nota: "" };
+    area.hidden = true; area.innerHTML = "";
+    recado(nota ? h(nota) : "");
+    renderTudo();
+  }
+  function sairHtml(nota) { S = { tela: null, d: {}, nota: "" }; area.hidden = true; area.innerHTML = ""; recado(nota); renderTudo(); }
+
+  function ir(tela, nota) {
+    S.tela = tela; S.nota = nota || "";
+    recado("");
+    desenhar();
+  }
+
+  function rotaAtual() { var r = rotas()[S.d.i]; return r; }
+
+  // ---------- Blocos de HTML reutilizáveis ----------
+  function btn(rot, act, cls) { return "<button type=\"button\" data-act=\"" + act + "\"" + (cls ? " class=\"" + cls + "\"" : "") + ">" + rot + "</button>"; }
+  function erroP() { return "<p class=\"err\" id=\"erro\" role=\"alert\"></p>"; }
+  function confBotoes(act) { return "<div class=\"actions\">" + btn(BTN_APROVAR, act, "primary") + btn(BTN_CANCELAR, "cancelar") + "</div>"; }
+  function campo(form, id, rotulo, ph, dica, textarea) {
+    return "<form data-form=\"" + form + "\" novalidate><div class=\"field\"><label for=\"" + id + "\">" + rotulo + "</label>" +
+      (textarea ? "<textarea id=\"" + id + "\" placeholder=\"" + h(ph) + "\"></textarea>" : "<input type=\"text\" id=\"" + id + "\" autocomplete=\"off\" placeholder=\"" + h(ph) + "\">") +
+      (dica ? "<p class=\"hint\">" + dica + "</p>" : "") + erroP() + "</div>";
+  }
+  function fimForm(extra) {
+    return "<div class=\"actions\"><button type=\"submit\" class=\"primary\">Enviar</button>" + (extra || "") + btn(BTN_CANCELAR, "cancelar") + "</div></form>";
+  }
+  function listaNumerada(rs, comCanais) {
+    return rs.map(function (r, i) { return (i + 1) + ". " + h(r.nome || "Rota " + (i + 1)) + (comCanais ? " (" + (r.origens || []).length + " canais vigiados agrupados)" : ""); }).join("\n");
+  }
+  function resumo(res, cfg) {
+    var s = "";
+    function sec(titulo, arr, ico, cap, fmt) {
+      if (!arr.length) return;
+      s += titulo + "\n";
+      arr.slice(0, cap || arr.length).forEach(function (x) { s += ico + " " + (fmt ? fmt(x) : code(x)) + "\n"; });
+      if (cap && arr.length > cap) s += "<i>... e mais " + (arr.length - cap) + " canais.</i>\n";
+      s += "\n";
+    }
+    sec(cfg.t1.replace("{n}", res.validas.length), res.validas, "🔹", cfg.cap1, function (o) { return code(o); });
+    sec(cfg.t2.replace("{n}", res.loop.length), res.loop, "🔻", cfg.cap, null);
+    sec(cfg.t3.replace("{n}", res.dup.length), res.dup, "🔸", cfg.cap, null);
+    sec(cfg.t4.replace("{n}", res.inval.length), res.inval, "🔻", cfg.cap, null);
+    return s;
+  }
+  var CFG_CRIAR = { cap: 10, cap1: 15, t1: "✅ <b>{n} Origem(ns) validada(s):</b>", t2: "🛑 <b>{n} bloqueada(s) por Anti-Loop:</b>", t3: "ℹ️ <b>{n} repetida(s) no envio:</b>", t4: "❌ <b>{n} falharam (Formato inválido/Link Privado):</b>" };
+  var CFG_ADD = { cap: 0, cap1: 0, t1: "✅ <b>{n} NOVO(S) canal(is) validado(s):</b>", t2: "🛑 <b>{n} bloqueada(s) por Anti-Loop (É o destino desta rota):</b>", t3: "ℹ️ <b>{n} ignorado(s) por já estarem na rota (Duplicados):</b>", t4: "❌ <b>{n} falharam (Formato inválido ou link Privado):</b>" };
+
+  // ---------- Telas ----------
+  var TELAS = {};
+
+  // Criação de rota
+  TELAS.criar1 = function () {
+    return campo("criar1", "f-dest", "Para começar, envie o <b>ID Numérico, Link ou @username</b> do Canal de DESTINO (Para onde o robô vai enviar as cópias):", "-100123... ou @canal", "<i>Exemplo: -100123456789 ou https://t.me/meucanal</i>") + fimForm();
+  };
+  TELAS.criar2 = function () {
+    return campo("criar2", "f-orig", "Agora, envie os @usernames, links ou IDs dos grupos/canais que deseja <b>MONITORAR</b> (Na Escuta).", "@grupo1, -100123, https://t.me/grupo2", "OBS: Você pode enviar vários separando por vírgula (Ex: <code>@grupo1, -100123, https://t.me/grupo2, https://web.telegram.org/a/#-1001234567890</code>)", true) +
+      fimForm(btn("Importar Banco Global 🌍", "global"));
+  };
+  TELAS.criar3 = function () {
+    return campo("criar3", "f-jan", "Envie no formato <code>Inicio-Fim</code> (Exemplo: <code>10-22</code>) ou clique no botão abaixo para rodar 24h:", "10-22", "") + fimForm(btn("Dia Todo (24h) 🕛", "dia-todo"));
+  };
+  TELAS.criar4 = function () {
+    return "<p class=\"bloco\">Excelente! Agora escolha o intervalo de dias de maturação para a postagem (D+0 significa publicar no próprio dia em que o vídeo foi capturado):</p><div class=\"actions\" style=\"grid-template-columns:1fr\">" +
+      Object.keys(MAPA_DIAS).map(function (k) { return btn(k, "dias:" + MAPA_DIAS[k]); }).join("") + btn(BTN_CANCELAR, "cancelar") + "</div>";
+  };
+  TELAS.criar5 = function () {
+    return "<p class=\"bloco\">Como deseja distribuir os vídeos retidos dentro dessa janela de horário?</p><div class=\"actions\">" + btn("Aleatório 🔀", "modo:aleatorio") + btn("Ordem de Chegada ⬇️", "modo:ordem") + btn(BTN_CANCELAR, "cancelar", "full") + "</div>";
+  };
+  TELAS.criar6 = function () {
+    var d = S.d, o = d.origens, s = "⚠️ <b>Confirmação de Criação de Rota (D+" + d.intervalo + ")</b>\n\n<b>Canais Vigiados (" + o.length + "):</b>\n";
+    o.slice(0, 15).forEach(function (x) { s += "└ " + code(x) + "\n"; });
+    if (o.length > 15) s += "└ <i>... e mais " + (o.length - 15) + " canal(is) importado(s)</i>\n";
+    s += "\n<b>Destino:</b> " + code(d.destino) + "\n<b>Distribuição:</b> " + d.inicio + "h às " + d.fim + "h\n<b>Ordem:</b> " + h(rotuloModo(d.modo)) + "\n\nDeseja aprovar e ativar este espelhamento inteligente agora?";
+    return "<p class=\"bloco\">" + s + "</p>" + confBotoes("criar-ok");
+  };
+
+  // Escolha de rota (remover, editar, forçar)
+  function telaEscolha(form, texto, comCanais) {
+    return "<p class=\"bloco\">" + texto + "\n\n" + listaNumerada(rotas(), comCanais) + "</p>" +
+      campo(form, "f-num", "Número da rota", "1", "") + fimForm("<button type=\"button\" data-act=\"cancelar\">Voltar ao Menu Espelho 🔙</button>").replace(btn(BTN_CANCELAR, "cancelar"), "");
+  }
+  TELAS.rem_esc = function () { return telaEscolha("rem_esc", "Digite o <b>NÚMERO</b> da rota que deseja remover:", true); };
+  TELAS.ed_esc = function () { return telaEscolha("ed_esc", "Digite o <b>NÚMERO</b> da rota que deseja configurar:", false); };
+  TELAS.for_esc = function () {
+    var rs = rotas();
+    var l = rs.map(function (r, i) { return (i + 1) + ". " + h(r.nome) + " (" + qtdRetidos(r.nome) + " vídeos retidos)"; }).join("\n");
+    return "<p class=\"bloco\">Selecione de qual rota deseja <b>PUBLICAR AGORA</b> todos os vídeos pendentes:\n\n" + l + "</p>" + campo("for_esc", "f-num", "Número da rota", "1", "") + fimForm();
+  };
+  TELAS.rem_conf = function () {
+    var r = rotaRem();
+    return "<p class=\"bloco\">⚠️ Tem a certeza de que deseja remover permanentemente a rota agrupada <b>" + h(r.nome) + "</b>?\n\n<b>Canais de Origem que serão desconectados:</b> " + (r.origens || []).length + "\n<b>Destino:</b> " + code(r.destino) + "</p>" + confBotoes("rem-ok");
+  };
+  function rotaRem() { return rotas()[S.d.iRem]; }
+  TELAS.for_conf = function () {
+    var r = rotas()[S.d.iFor], q = qtdRetidos(r.nome);
+    return "<p class=\"bloco\">🚀 Tem certeza que deseja forçar o disparo de <b>" + q + " vídeos</b> da rota <b>" + h(r.nome) + "</b> imediatamente?</p>" + confBotoes("for-ok");
+  };
+
+  // Menu da rota
+  TELAS.rota = function () {
+    var r = rotaAtual();
+    var s = "⚙️ <b>Editando Rota: " + h(r.nome) + "</b>\n🕒 Janela atual: " + r.inicio + "h às " + r.fim + "h\n📅 Intervalo de Dias: D+" + r.intervalo_dias + "\n🔀 Modo atual: " + h(tituloModo(r.modo)) + "\n📊 Limite diário: " + h(textoLimite(r)) + "\n\n" +
+      destinoHtml(r) + "\n\n" + escutaHtml(r) + "\n\nEscolha a ação que deseja realizar:";
+    return "<p class=\"bloco\">" + s + "</p><div class=\"menu-grid\">" +
+      btn("📝 Editar Nome", "ir:ed_nome") + btn("🔀 Modificar Modo", "ir:ed_modo") + btn("🎯 Editar Destino", "ir:ed_dest") + btn("📥 Editar Canais", "ir:canais") +
+      btn("🕒 Modificar Janela", "ir:ed_jan") + btn("📅 Modificar Dias", "ir:ed_dias") + btn("📊 Limite Diário", "ir:ed_lim") +
+      "</div><div class=\"actions\" style=\"grid-template-columns:1fr\">" + btn("Analisar Canais Vigiados 🔎", "ir:analise") + btn("Voltar ao Menu Espelho 🔙", "voltar-painel") + "</div>";
+  };
+  TELAS.ed_nome = function () {
+    return campo("ed_nome", "f-nome", "Digite o <b>NOVO NOME</b> para esta rota (Ex: Espelho Principal):", "Espelho Principal", "") + fimForm();
+  };
+  TELAS.ed_dest = function () {
+    return campo("ed_dest", "f-dest", "Envie o <b>ID Numérico, Link ou @username</b> do NOVO Canal de DESTINO para esta rota:", "-100123... ou @canal", "<i>Exemplo: -100123456789 ou https://t.me/meucanal</i>") + fimForm();
+  };
+  TELAS.ed_jan = function () {
+    return campo("ed_jan", "f-jan", "Defina a <b>Nova Janela de Horário</b> para a postagem nesta rota. Envie no formato <code>Inicio-Fim</code> (Exemplo: <code>10-22</code>) ou clique no botão abaixo para rodar 24h:", "10-22", "") + fimForm(btn("Dia Todo (24h) 🕛", "dia-todo"));
+  };
+  TELAS.ed_jan_c = function () { return "<p class=\"bloco\">Deseja confirmar a janela de postagem <b>" + textoJanela(S.d.inicio, S.d.fim) + "</b>?</p>" + confBotoes("jan-ok"); };
+  TELAS.ed_lim = function () {
+    return campo("ed_lim", "f-lim", "Quantos vídeos esta rota pode publicar <b>por dia</b>?", "6-10", "• Faixa: <code>6-10</code> — cada dia sorteia um número entre 6 e 10<br>• Fixo: <code>6</code> — sempre 6 por dia<br><i>A captura continua pegando tudo; o que passar do teto do dia é descartado, não fica para o dia seguinte.</i>") +
+      fimForm(btn("Todos os Vídeos ♾️", "todos-videos"));
+  };
+  function textoLimiteConf(p, t, longo) {
+    if (p === 0) return "todos os vídeos capturados";
+    if (t > p) return "entre " + p + " e " + t + " vídeos por dia" + (longo ? ", sorteados a cada dia" : "");
+    return "exatamente " + p + " vídeo(s) por dia";
+  }
+  TELAS.ed_lim_c = function () {
+    var d = S.d, aviso = d.lmin === 0 ? "" : "\n\n⚠️ O excedente do dia é <b>descartado</b>, não transborda para amanhã.";
+    return "<p class=\"bloco\">Deseja confirmar a publicação de <b>" + textoLimiteConf(d.lmin, d.lmax, true) + "</b>?" + aviso + "</p>" + confBotoes("lim-ok");
+  };
+  TELAS.ed_dias = function () {
+    return "<p class=\"bloco\">Escolha o novo intervalo temporal de atraso para o espelhamento:</p><div class=\"actions\" style=\"grid-template-columns:1fr\">" +
+      Object.keys(MAPA_DIAS).map(function (k) { return btn(k, "dias:" + MAPA_DIAS[k]); }).join("") + btn(BTN_CANCELAR, "cancelar") + "</div>";
+  };
+  TELAS.ed_dias_c = function () {
+    var i = S.d.intervalo, extra = i === 0 ? "\n⚠️ <b>Nota:</b> O modo será alterado para <i>Ordem de Chegada</i>." : "";
+    return "<p class=\"bloco\">Deseja confirmar o intervalo temporal D+" + i + "?" + extra + "</p>" + confBotoes("dias-ok");
+  };
+  TELAS.ed_modo = function () {
+    return "<p class=\"bloco\">Escolha o novo modo de distribuição:</p><div class=\"actions\">" + btn("Aleatório 🔀", "modo:aleatorio") + btn("Ordem de Chegada ⬇️", "modo:ordem") + "</div><div class=\"actions\" style=\"grid-template-columns:1fr\">" + btn(BTN_CANCELAR, "cancelar") + "</div>";
+  };
+  TELAS.ed_modo_c = function () { return "<p class=\"bloco\">Deseja confirmar o modo de distribuição " + h(rotuloModo(S.d.modo)) + "?</p>" + confBotoes("modo-ok"); };
+
+  // Analisar canais vigiados
+  TELAS.analise = function () {
+    return "<p class=\"bloco\">🔎 <b>Análise de Canais Vigiados</b>\nEscolha a ferramenta que deseja utilizar:</p><div class=\"actions\">" +
+      btn("📜 Listar Todos", "an-listar") + btn("❌ Erros", "an-erros") + btn("⚠️ Duplicados", "an-dup") + btn("🔙 Voltar ao Menu de Edição", "cancelar") + "</div>" +
+      (S.d.res ? "<div class=\"nota\" style=\"margin-top:12px\">" + S.d.res + "</div>" + (S.d.resAcao || "") : "");
+  };
+  // Editar canais
+  TELAS.canais = function () {
+    return "<p class=\"bloco\">O que você deseja fazer com os canais monitorados desta rota?</p><div class=\"actions\">" + btn("➕ Adicionar Canal", "ir:add_orig") + btn("🗑️ Remover Canal", "rem-canal") + btn("🔙 Voltar ao Menu de Edição", "cancelar", "full") + "</div>";
+  };
+  TELAS.add_orig = function () {
+    return "<p class=\"bloco\">Envie os @usernames, links ou IDs dos grupos que deseja monitorar como ORIGEM.</p>" +
+      campo("add_orig", "f-orig", "OBS: Você pode enviar vários separando por vírgula (Ex: @grupo1, -100123, https://t.me/grupo2, https://web.telegram.org/a/#-1001234567890)", "@grupo1, -100123, https://t.me/grupo2", "💡 <b>Dica:</b> Você pode colar uma lista ou clicar no botão abaixo para puxar o <b>Banco Global</b> (o robô ignorará os grupos duplicados e os da Lista Negra automaticamente).", true) +
+      fimForm(btn("Importar Banco Global 🌍", "global") + btn("Lista Negra (Blacklist) ⛔", "bl-abrir"));
+  };
+  TELAS.add_orig_c = function () {
+    var r = rotaAtual(), rs = rotas();
+    if (rs.length > 1) {
+      return "<p class=\"bloco\">O seu sistema possui <b>" + rs.length + " rotas ativas</b>. Onde deseja adicionar?</p><div class=\"actions\" style=\"grid-template-columns:1fr\">" +
+        btn("Apenas nesta Rota 🎯", "orig-ok:uma") + btn("Em TODAS as Rotas 🌍", "orig-ok:todas") + btn(BTN_CANCELAR, "cancelar") + "</div>";
+    }
+    return "<p class=\"bloco\">Deseja adicionar à rota <b>" + h(r.nome) + "</b>?</p>" + confBotoes("orig-ok:uma");
+  };
+  TELAS.rem_orig = function () {
+    var r = rotaAtual();
+    var l = (r.origens || []).map(function (o, i) { return "<b>" + (i + 1) + ".</b> " + code(o); }).join("\n");
+    return "<p class=\"bloco\">Qual canal deseja parar de vigiar? Digite o <b>NÚMERO</b> correspondente.\n<i>(Para remover vários de uma vez, separe por vírgula. Ex: 1, 3, 4)</i>\n\n" + l + "</p>" + campo("rem_orig", "f-num", "Número(s) do(s) canal(is)", "1, 3, 4", "") + fimForm();
+  };
+  TELAS.rem_orig_c = function () {
+    var r = rotaAtual(), o = r.origens || [];
+    var l = S.d.idxRem.map(function (i) { return "🗑️ " + code(o[i]); }).join("\n");
+    return "<p class=\"bloco\">⚠️ Tem certeza de que deseja desvincular <b>" + S.d.idxRem.length + " origem(ns)</b> da rota <b>" + h(r.nome) + "</b>?\n\n" + l + "</p>" + confBotoes("orig-rem-ok");
+  };
+  // Lista negra
+  function listaBlHtml(r, titulo) {
+    var bl = r.blacklist || [], s = titulo || "⛔ <b>Lista Negra da Rota '" + h(r.nome) + "'</b>";
+    s += "\n";
+    if (bl.length) s += bl.map(function (b, i) { return (i + 1) + ". " + code(b); }).join("\n"); else s += "<i>Nenhuma restrição cadastrada.</i>";
+    return s;
+  }
+  TELAS.bl = function () {
+    return "<p class=\"bloco\">" + listaBlHtml(rotaAtual()) + "</p><div class=\"actions\">" + btn("➕ Add à Blacklist", "ir:bl_add") + btn("🗑️ Rem. da Blacklist", "ir:bl_rem") + btn(BTN_CANCELAR, "cancelar", "full") + "</div>";
+  };
+  TELAS.bl_add = function () {
+    return "<p class=\"bloco\">Envie os @usernames, links ou IDs dos canais que deseja <b>BLOQUEAR NESTA ROTA</b>.</p>" +
+      campo("bl_add", "f-bl", "OBS: Você pode enviar vários separando por vírgula (Ex: @grupo1, -100123, https://t.me/grupo2, https://web.telegram.org/a/#-1001234567890)", "@grupo1, -100123", "💡 <b>Dica:</b> Você pode colar uma lista inteira. O robô irá ignorar formatos inválidos e bloquear os corretos automaticamente.", true) + fimForm();
+  };
+  TELAS.bl_add_c = function () {
+    var cache = S.d.conflitos.map(function (c) { return "🗑️ " + code(c); }).join("\n");
+    return "<p class=\"bloco\">⚠️ <b>Atenção: Conflito Detetado!</b>\n\nVocê está a tentar adicionar canais à Lista Negra que <b>já estão a ser monitorizados</b> nesta rota.\n\nCanais que serão <b>AUTOMATICAMENTE REMOVIDOS</b> da escuta:\n" + cache + "\n\nDeseja aprovar a adição à Lista Negra e a exclusão destes canais da escuta da rota?</p>" + confBotoes("bl-ok");
+  };
+  TELAS.bl_rem = function () {
+    return campo("bl_rem", "f-blr", "Envie os IDs para LIBERAR NESTA ROTA (separados por vírgula):", "-100123, @canal", "") + fimForm();
+  };
+
+  function desenhar() {
+    if (!S.tela) { area.hidden = true; area.innerHTML = ""; return; }
+    var html = (S.nota ? "<p class=\"nota\">" + S.nota + "</p>" : "") + TELAS[S.tela]();
+    area.innerHTML = html;
+    area.hidden = false;
+    var alvo = area.querySelector("input[type=text], textarea");
+    try { (alvo || area).focus({ preventScroll: true }); } catch (e) {}
+    try { area.scrollIntoView({ block: "nearest", behavior: "smooth" }); } catch (e) {}
+  }
+  function erro(msg) { var e = $("erro"); if (e) e.textContent = msg; }
+  function mostraRes(html) {
+    var e = $("erro");
+    if (!e) return;
+    var box = $("res-box");
+    if (!box) { box = document.createElement("p"); box.id = "res-box"; box.className = "nota"; e.parentNode.insertBefore(box, e); }
+    box.innerHTML = html;
+  }
+
+  // Volta ao menu da rota com uma mensagem.
+  function menuRota(nota) { ir("rota", nota); }
+  function gravarRota(i, fn) { E.alterar(function (o) { fn(o.rotas[i], o); }); }
+
+  // ---------- Ações de botões ----------
+  var A = {};
+  A.cancelar = function () {
+    var t = S.tela;
+    var origem = ["add_orig", "add_orig_c", "rem_orig", "rem_orig_c", "bl", "bl_add", "bl_rem", "bl_add_c"];
+    var edicao = ["canais", "analise", "ed_nome", "ed_dest", "ed_jan", "ed_jan_c", "ed_lim", "ed_lim_c", "ed_dias", "ed_dias_c", "ed_modo", "ed_modo_c"];
+    if (origem.indexOf(t) >= 0) { S.d.res = null; return ir("canais", "Ação cancelada. O que você deseja fazer com os canais vigiados desta rota?"); }
+    if (edicao.indexOf(t) >= 0 && S.d.i != null) { S.d.res = null; return menuRota("Ação cancelada. Retornando às configurações da rota..."); }
+    sair("Operação cancelada.");
+  };
+  A["voltar-painel"] = function () { sair("Operação cancelada."); };
+  A.ir = function (t) { S.d.res = null; ir(t); };
+  A.global = function () { Painel.soServidor("Importar Banco Global 🌍"); };
+  A["bl-abrir"] = function () { ir("bl"); };
+  A["dia-todo"] = function () { enviarJanela("Dia Todo (24h) 🕛"); };
+  A["todos-videos"] = function () { enviarLimite("Todos os Vídeos ♾️"); };
+  A.dias = function (n) {
+    n = parseInt(n, 10);
+    if (S.tela === "criar4") {
+      S.d.intervalo = n;
+      if (n === 0) { S.d.modo = "ordem"; return ir("criar6"); }
+      return ir("criar5");
+    }
+    S.d.intervalo = n;
+    ir("ed_dias_c");
+  };
+  A.modo = function (m) {
+    S.d.modo = m;
+    if (S.tela === "criar5") return ir("criar6");
+    ir("ed_modo_c");
+  };
+  A["criar-ok"] = function () {
+    var d = S.d, nome = "", base = "Espelho: " + String(d.destino).split(":")[0], n = 1;
+    var rs = rotas();
+    nome = base;
+    while (rs.some(function (r) { return r.nome === nome; })) { n++; nome = base + " (" + n + ")"; }
+    E.alterar(function (o) {
+      o.rotas.push({ nome: nome, origens: d.origens.slice(), destino: d.destino, inicio: d.inicio, fim: d.fim, intervalo_dias: d.intervalo, modo: d.modo, limite_min: 0, limite_max: 0, blacklist: [] });
+    });
+    var dia = d.intervalo === 0 ? "no próprio dia (D+0)" : "com " + d.intervalo + " dia(s) de atraso";
+    sairHtml("✅ <b>Rota " + h(nome) + "</b> ativada!\nOs vídeos capturados serão postados " + dia + " entre as " + d.inicio + "h e as " + d.fim + "h.");
+  };
+  A["rem-ok"] = function () {
+    var i = S.d.iRem, rs = rotas();
+    if (i != null && i >= 0 && i < rs.length) {
+      var nome = rs[i].nome;
+      E.alterar(function (o) { o.rotas.splice(i, 1); delete o.retidos[nome]; });
+      sairHtml("A rota <b>" + h(nome) + "</b> foi apagada e os espelhamentos foram interrompidos.");
+    } else sairHtml("Erro de sincronização. Operação cancelada.");
+  };
+  A["for-ok"] = function () {
+    var r = rotas()[S.d.iFor];
+    sairHtml("");
+    Painel.soServidor("Forçar Espelhos 🚀" + (r ? " (" + r.nome + ")" : ""));
+  };
+  A["jan-ok"] = function () {
+    var i = S.d.i, d = S.d;
+    gravarRota(i, function (r) { r.inicio = d.inicio; r.fim = d.fim; });
+    menuRota("✅ A janela de postagem foi atualizada para <b>" + textoJanela(d.inicio, d.fim) + "</b> com sucesso!");
+  };
+  A["lim-ok"] = function () {
+    var i = S.d.i, d = S.d;
+    gravarRota(i, function (r) { r.limite_min = d.lmin; r.limite_max = d.lmax; });
+    menuRota("✅ Esta rota passa a publicar <b>" + textoLimiteConf(d.lmin, d.lmax, false) + "</b>.");
+  };
+  A["dias-ok"] = function () {
+    var i = S.d.i, novo = S.d.intervalo, antigo = rotaAtual().intervalo_dias, nome = rotaAtual().nome;
+    gravarRota(i, function (r) { r.intervalo_dias = novo; if (novo === 0) r.modo = "ordem"; });
+    var msg = "✅ O intervalo de dias foi atualizado para <b>D+" + novo + "</b> com sucesso!";
+    if (antigo !== novo && qtdRetidos(nome) > 0) msg += "\n⚠️ <b>Gatilho de Recálculo Acionado!</b>\nComo a defasagem da rota '" + h(nome) + "' mudou, os horários pendentes foram resetados para reorganização.";
+    menuRota(msg);
+  };
+  A["modo-ok"] = function () {
+    var i = S.d.i, m = S.d.modo;
+    gravarRota(i, function (r) { r.modo = m; });
+    menuRota("✅ O modo de distribuição foi atualizado para " + h(rotuloModo(m)) + " com sucesso!");
+  };
+  A["rem-canal"] = function () {
+    if (!(rotaAtual().origens || []).length) { erroSimples("Esta rota não possui canais vigiados para remover."); return; }
+    ir("rem_orig");
+  };
+  function erroSimples(txt) { S.nota = h(txt); desenhar(); }
+  A["orig-ok"] = function (modo) {
+    var novas = S.d.novas, i = S.d.i, n = 0, msg;
+    if (modo === "todas") {
+      E.alterar(function (o) {
+        o.rotas.forEach(function (r) {
+          novas.forEach(function (x) { if ((r.origens = r.origens || []).indexOf(x) < 0) { r.origens.push(x); n++; } });
+        });
+      });
+      msg = "✅ <b>" + novas.length + " Origem(ns) processada(s) globalmente nas rotas!</b>";
+    } else {
+      var nome = rotaAtual().nome;
+      E.alterar(function (o) {
+        novas.forEach(function (x) { if (o.rotas[i].origens.indexOf(x) < 0) { o.rotas[i].origens.push(x); n++; } });
+      });
+      msg = "✅ <b>" + novas.length + " Origem(ns) adicionada(s) à rota '" + h(nome) + "'!</b>";
+    }
+    menuRota(msg);
+  };
+  A["orig-rem-ok"] = function () {
+    var i = S.d.i, idx = S.d.idxRem.slice().sort(function (a, b) { return b - a; }), n = 0;
+    E.alterar(function (o) { var os = o.rotas[i].origens; idx.forEach(function (k) { if (k >= 0 && k < os.length) { os.splice(k, 1); n++; } }); });
+    menuRota(n > 0 ? "✅ <b>" + n + " origem(ns) desvinculada(s) com sucesso!</b>" : "Erro de sincronização. As origens não puderam ser removidas.");
+  };
+  A["bl-ok"] = function () {
+    var i = S.d.i, novos = S.d.novosBl, conf = S.d.conflitos, bl;
+    E.alterar(function (o) {
+      var r = o.rotas[i];
+      r.origens = (r.origens || []).filter(function (x) { return conf.indexOf(x) < 0; });
+      r.blacklist = r.blacklist || [];
+      novos.forEach(function (n) { if (r.blacklist.indexOf(n) < 0) r.blacklist.push(n); });
+    });
+    var r2 = rotaAtual();
+    ir("bl", "✅ <b>Sucesso!</b>\n⛔ " + novos.length + " adicionado(s).\n🗑️ " + conf.length + " removido(s) da escuta.\n\n" + listaBlHtml(r2, "⛔ <b>Lista Negra Atualizada:</b>"));
+  };
+
+  // Analisar
+  A["an-listar"] = function () {
+    var r = rotaAtual(), o = r.origens || [];
+    if (!o.length) { S.d.res = "Esta rota não possui canais vigiados."; S.d.resAcao = ""; return desenhar(); }
+    S.d.res = "📜 <b>Lista Completa de Canais Vigiados: " + h(r.nome) + "</b>\n\n" + o.map(function (x, i) { return "<b>" + (i + 1) + ".</b> ✅ " + code(x); }).join("\n");
+    S.d.resAcao = ""; desenhar();
+  };
+  A["an-erros"] = function () {
+    var o = rotaAtual().origens || [];
+    S.d.resAcao = "";
+    S.d.res = o.length ? "✅ <b>Tudo limpo!</b>\nNão há nenhum canal com erro de acesso nesta rota." : "Esta rota não possui canais vigiados.";
+    desenhar();
+  };
+  function infoDup(o) {
+    var s = String(o), num = /^\d+$/.test(s.replace(/^-+/, "").replace(/:/g, ""));
+    var b0 = s.split(":")[0];
+    return { original: s, nome: s, num: num, base: num ? b0.replace(/-100/g, "").replace(/-/g, "") : b0, topic: s.indexOf(":") >= 0 ? s.split(":")[1] : "0" };
+  }
+  function acharDup(origens) {
+    var L = origens.map(infoDup), out = [], vistos = {};
+    for (var i = 0; i < L.length; i++) for (var j = i + 1; j < L.length; j++) {
+      var a = L[i], b = L[j], k = [a.original, b.original].sort().join("\u0000");
+      if (vistos[k]) continue;
+      vistos[k] = 1;
+      if (a.base === b.base && a.topic === b.topic) out.push([a, b, "Mesmo ID Base", i + 1, j + 1]);
+      else if (a.nome === b.nome && a.num !== b.num) out.push([a, b, "Mesmo nome (@Link vs ID)", i + 1, j + 1]);
+    }
+    return out;
+  }
+  A["an-dup"] = function () {
+    var o = rotaAtual().origens || [];
+    S.d.resAcao = "";
+    if (o.length < 2) { S.d.res = "Não há canais suficientes nesta rota para procurar duplicados."; return desenhar(); }
+    var dup = acharDup(o);
+    if (!dup.length) { S.d.res = "✅ <b>Tudo limpo!</b>\nO sistema não detectou nenhum canal duplicado nesta rota."; return desenhar(); }
+    S.d.res = "⚠️ <b>Aviso: Possíveis Duplicados Detectados</b>\n\n" + dup.map(function (p) {
+      return "🔹 <b>" + h(p[0].nome) + "</b>\n   ├ <b>" + p[3] + ".</b> ✅ " + code(p[0].original) + "\n   └ <b>" + p[4] + ".</b> ✅ " + code(p[1].original) + "\n   <i>(Motivo: " + p[2] + ")</i>\n";
+    }).join("\n");
+    S.d.resAcao = "<div class=\"actions\">" + btn("🤖 Auto-Remover Duplicados", "an-auto", "full") + "</div>";
+    desenhar();
+  };
+  A["an-auto"] = function () {
+    var i = S.d.i, o = rotaAtual().origens || [], L = o.map(infoDup), rem = [];
+    for (var x = 0; x < L.length; x++) for (var y = x + 1; y < L.length; y++) {
+      var a = L[x], b = L[y];
+      if (rem.indexOf(a.original) >= 0 || rem.indexOf(b.original) >= 0) continue;
+      var dup = (a.base === b.base && a.topic === b.topic) || (a.nome === b.nome && a.num !== b.num);
+      if (!dup) continue;
+      if (a.num && !b.num) rem.push(b.original);
+      else if (b.num && !a.num) rem.push(a.original);
+      else rem.push(b.original);
+    }
+    S.d.resAcao = "";
+    if (rem.length) {
+      E.alterar(function (st) { st.rotas[i].origens = st.rotas[i].origens.filter(function (v) { return rem.indexOf(String(v)) < 0; }); });
+      S.d.res = "✅ <b>Duplicados Removidos Automaticamente!</b>\nOs seguintes canais foram desvinculados da rota:\n" + rem.map(function (r) { return "🗑️ " + code(r); }).join("\n");
+    } else S.d.res = "Nenhum duplicado válido para remoção automática encontrado.";
+    renderStatus(); desenhar();
+  };
+
+  // ---------- Envio de formulários ----------
+  function enviarJanela(texto) {
+    var j = lerJanela(texto, S.tela === "ed_jan");
+    if (j.erro) return erro(j.erro);
+    S.d.inicio = j.i; S.d.fim = j.f;
+    ir(S.tela === "criar3" ? "criar4" : "ed_jan_c");
+  }
+  function enviarLimite(texto) {
+    texto = (texto || "").trim();
+    var p, t;
+    if (texto === "Todos os Vídeos ♾️") { p = t = 0; }
+    else {
+      var m = /^(\d{1,3})(?:\s*-\s*(\d{1,3}))?$/.exec(texto);
+      if (!m) return erro("Envie um número (6) ou uma faixa (6-10), ou use o botão Todos os Vídeos ♾️.");
+      p = parseInt(m[1], 10); t = m[2] ? parseInt(m[2], 10) : p;
+      if (p < 1) return erro("O piso precisa ser 1 ou mais. Para publicar tudo, use o botão Todos os Vídeos ♾️.");
+      if (t < p) return erro("O segundo número precisa ser maior que o primeiro. Exemplo: 6-10.");
+    }
+    S.d.lmin = p; S.d.lmax = t;
+    ir("ed_lim_c");
+  }
+  function processarLote(texto, ctx) {
+    // ctx: { destino, existentes, blacklist }
+    var res = { validas: [], loop: [], dup: [], inval: [] };
+    extrairEntradas(texto, false).forEach(function (bruta) {
+      var e = bruta.trim();
+      if (!e) return;
+      var id = validarAlvo(e);
+      if (!id) { res.inval.push(e); return; }
+      var base = semCem(id);
+      if (ctx.blacklist && (ctx.blacklist.indexOf(id) >= 0 || ctx.blacklist.map(semCem).indexOf(base) >= 0)) res.inval.push(e + " (Blacklist ⛔)");
+      else if (ctx.destino && base === semCem(ctx.destino)) res.loop.push(e);
+      else if ((ctx.existentes && ctx.existentes.indexOf(id) >= 0) || res.validas.indexOf(id) >= 0) res.dup.push(e);
+      else res.validas.push(id);
+    });
+    return res;
+  }
+
+  var F = {};
+  F.criar1 = function () {
+    var id = validarAlvo($("f-dest").value);
+    if (!id) return erro("⚠️ Canal não encontrado ou sem permissão! Certifique-se de que o ID ou @username está correto e de que o bot é administrador do canal. Tente enviar novamente:");
+    S.d.destino = id;
+    ir("criar2", "✅ Destino confirmado: <code>" + h(id) + "</code>");
+  };
+  F.criar2 = function () {
+    var res = processarLote($("f-orig").value, { destino: S.d.destino, existentes: [] });
+    var s = resumo(res, CFG_CRIAR);
+    if (res.validas.length) {
+      S.d.origens = res.validas;
+      return ir("criar3", s + "Excelente. Agora defina a <b>Janela de Horário</b> para a postagem.");
+    }
+    mostraRes(s + "⚠️ <b>Nenhum canal válido aprovado!</b>\nCertifique-se de que os IDs não são links de convite privados ou iguais ao destino.\n\nTente enviar novamente:");
+  };
+  F.criar3 = function () { enviarJanela($("f-jan").value); };
+  function escolherNumero(valor, max, msgInvalido) {
+    valor = String(valor || "").trim();
+    if (!/^\d+$/.test(valor)) { erro("Por favor, digite apenas o número da rota."); return null; }
+    var i = parseInt(valor, 10) - 1;
+    if (i < 0 || i >= max) { erro(msgInvalido); return null; }
+    return i;
+  }
+  F.rem_esc = function () {
+    var i = escolherNumero($("f-num").value, rotas().length, "Número inválido. Tente novamente ou clique em Cancelar ❌.");
+    if (i == null) return;
+    S.d.iRem = i; ir("rem_conf");
+  };
+  F.ed_esc = function () {
+    var i = escolherNumero($("f-num").value, rotas().length, "Número inválido. Tente novamente ou clique em Cancelar.");
+    if (i == null) return;
+    S.d.i = i; menuRota("");
+  };
+  F.for_esc = function () {
+    var i = escolherNumero($("f-num").value, rotas().length, "Número inválido. Tente novamente.");
+    if (i == null) return;
+    var r = rotas()[i];
+    if (qtdRetidos(r.nome) === 0) return sair("A fila de disparo desta rota já está vazia.");
+    S.d.iFor = i; ir("for_conf");
+  };
+  F.ed_nome = function () {
+    var novo = $("f-nome").value.trim();
+    if (!novo) return erro("Digite o novo nome da rota.");
+    var i = S.d.i, antigo = rotaAtual().nome;
+    E.alterar(function (o) {
+      o.rotas[i].nome = novo;
+      if (o.retidos[antigo] != null && antigo !== novo) { o.retidos[novo] = o.retidos[antigo]; delete o.retidos[antigo]; }
+    });
+    menuRota("✅ O nome da rota foi atualizado para <b>" + h(novo) + "</b> com sucesso!");
+  };
+  F.ed_dest = function () {
+    var id = validarAlvo($("f-dest").value);
+    if (!id) return erro("⚠️ Canal não encontrado ou formato inválido. Tente novamente:");
+    var i = S.d.i, nome = rotaAtual().nome;
+    gravarRota(i, function (r) { r.destino = id; });
+    menuRota("✅ O destino da rota <b>" + h(nome) + "</b> foi atualizado para <code>" + h(id) + "</code> com sucesso!");
+  };
+  F.ed_jan = function () { enviarJanela($("f-jan").value); };
+  F.ed_lim = function () { enviarLimite($("f-lim").value); };
+  F.add_orig = function () {
+    var r = rotaAtual();
+    var res = processarLote($("f-orig").value, { destino: String(r.destino || ""), existentes: r.origens || [], blacklist: (r.blacklist || []).map(String) });
+    var s = resumo(res, CFG_ADD);
+    if (!res.validas.length) return mostraRes(s + "⚠️ <b>Nenhum canal novo foi aprovado.</b> Tente novamente:");
+    S.d.novas = res.validas;
+    ir("add_orig_c", s);
+  };
+  F.rem_orig = function () {
+    var r = rotaAtual(), o = r.origens || [], idx = [];
+    $("f-num").value.replace(/ /g, "").split(",").forEach(function (e) {
+      if (/^\d+$/.test(e)) { var k = parseInt(e, 10) - 1; if (k >= 0 && k < o.length && idx.indexOf(k) < 0) idx.push(k); }
+    });
+    if (!idx.length) return erro("⚠️ Nenhum número válido detectado. Tente novamente:");
+    S.d.idxRem = idx; ir("rem_orig_c");
+  };
+  F.bl_add = function () {
+    var r = rotaAtual(), origens = (r.origens || []).map(String), bl = (r.blacklist || []).map(String), novos = [], conf = [];
+    extrairEntradas($("f-bl").value, true).forEach(function (bruta) {
+      var e = bruta.trim();
+      if (!e) return;
+      var alvo = validarAlvo(e) || e;
+      if (novos.indexOf(alvo) < 0 && bl.indexOf(alvo) < 0) novos.push(alvo);
+      origens.forEach(function (o) { if (alvo === o && conf.indexOf(o) < 0) conf.push(o); });
+    });
+    if (!novos.length) return menuRota("Nenhum canal válido detetado ou todos já estavam na Blacklist.");
+    S.d.novosBl = novos; S.d.conflitos = conf;
+    if (conf.length) return ir("bl_add_c");
+    var i = S.d.i;
+    E.alterar(function (o) { var l = o.rotas[i].blacklist = o.rotas[i].blacklist || []; novos.forEach(function (n) { if (l.indexOf(n) < 0) l.push(n); }); });
+    ir("bl", "✅ <b>" + novos.length + " canal(is) bloqueado(s) com sucesso!</b>");
+  };
+  F.bl_rem = function () {
+    var rem = $("f-blr").value.split(",").map(function (s) { return s.trim(); }), i = S.d.i;
+    E.alterar(function (o) { o.rotas[i].blacklist = (o.rotas[i].blacklist || []).filter(function (b) { return rem.indexOf(String(b)) < 0; }); });
+    ir("bl", "✅ <b>Blacklist atualizada com sucesso!</b>");
+  };
+
+  // ---------- Eventos ----------
+  document.addEventListener("click", function (ev) {
+    var el = ev.target.closest("[data-act]");
+    if (!el) return;
+    var p = el.getAttribute("data-act").split(":"), nome = p.shift();
+    if (A[nome]) A[nome](p.join(":"));
+  });
+  document.addEventListener("submit", function (ev) {
+    var f = ev.target.closest("[data-form]");
+    if (!f) return;
+    ev.preventDefault();
+    var fn = F[f.getAttribute("data-form")];
+    if (fn) fn();
+  });
+  document.addEventListener("change", function (ev) {
+    var el = ev.target;
+    if (el.hasAttribute && el.hasAttribute("data-ex")) {
+      var i = parseInt(el.getAttribute("data-ex"), 10), r = rotas()[i];
+      if (!r) return;
+      var n = Math.max(0, Math.min(999, parseInt(el.value, 10) || 0));
+      E.alterar(function (o) { o.retidos[r.nome] = n; });
+      el.value = n;
+      renderStatus();
+    }
+  });
+
+  $("b-add").addEventListener("click", function () { S.d = {}; ir("criar1"); });
+  $("b-rem").addEventListener("click", function () {
+    var rs = rotas();
+    if (!rs.length) return sair("Não há rotas ativas para remover.");
+    S.d = {};
+    if (rs.length === 1) { S.d.iRem = 0; return ir("rem_conf"); }
+    ir("rem_esc");
+  });
+  $("b-edit").addEventListener("click", function () {
+    var rs = rotas();
+    if (!rs.length) return sair("Não há rotas ativas para editar.");
+    S.d = {};
+    if (rs.length === 1) { S.d.i = 0; return menuRota(""); }
+    ir("ed_esc");
+  });
+  $("b-forcar").addEventListener("click", function () {
+    if (!rotas().length) return sair("Não há rotas ativas no sistema.");
+    S.d = {}; ir("for_esc");
+  });
+
+  // Relatório da fila
+  $("fila-ver").addEventListener("click", function () {
+    var rs = rotas(), sel = $("fila-rota").value, alvo = rs.length > 1 && sel !== "" ? [rs[sel]] : rs;
+    alvo = alvo.filter(function (r) { return qtdRetidos(r.nome) > 0; });
+    var box = $("fila-res");
+    if (!alvo.length) { box.innerHTML = "<p class=\"nota\">📭 A fila do Espelhador está vazia no momento.</p>"; return; }
+    var s = "<p class=\"bloco\"><b>📊 Relatório da Fila Espelhador</b></p>";
+    alvo.forEach(function (r, k) {
+      if (k > 0) s += "<p class=\"bloco\" style=\"text-align:center\">➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖\n🔄 <i>Próximo Espelho...</i>\n➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖</p>";
+      var post = r.intervalo_dias === 0 ? "Imediata (D+0)" : "D+" + r.intervalo_dias + ", entre " + r.inicio + "h e " + r.fim + "h";
+      s += "<p class=\"nota\">📡 <b>Rota: " + h(r.nome) + "</b> (" + qtdRetidos(r.nome) + " vídeos agendados)\n🕒 <b>Postagem:</b> " + h(post) + "</p>" +
+        "<p class=\"hint\">Os cartões de cada vídeo (origem, horário, links) vêm do servidor. A confirmar.</p>";
+    });
+    box.innerHTML = s;
+  });
+
+  // Limpar fila
+  $("b-limpar").addEventListener("click", function () {
+    var c = $("limpar-conf");
+    c.innerHTML = "<p class=\"bloco\">⚠️ <b>Atenção:</b> Você está prestes a executar a operação: <b>Limpar Fila Espelhador 🔄</b>.\n\nEsta ação apagará arquivos físicos e limpará a fila selecionada. Deseja continuar?</p>" +
+      "<div class=\"actions\"><button type=\"button\" class=\"danger\" id=\"limpar-ok\">Aprovar Exclusão ✅</button><button type=\"button\" id=\"limpar-voltar\">Voltar ao Menu Anterior 🔙</button></div>";
+    c.hidden = false;
+    $("limpar-ok").addEventListener("click", function () { c.hidden = true; c.innerHTML = ""; Painel.soServidor("Limpar Fila Espelhador 🔄"); });
+    $("limpar-voltar").addEventListener("click", function () { c.hidden = true; c.innerHTML = ""; });
+  });
+
+  Painel.topo("espelhador");
+  renderTudo();
+})();
+</script>
+</body>
+</html>

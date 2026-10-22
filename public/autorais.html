@@ -1,0 +1,819 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vídeos Autorais - Painel</title>
+<meta name="description" content="Painel web dos Vídeos Autorais: as mesmas configurações do painel do Telegram.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23ee4d2d'/%3E%3Cpath d='M26 20l20 12-20 12z' fill='%23fff'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="/assets/painel.css">
+<style>
+  [hidden] { display: none !important; }
+  .blk { background: var(--card-2); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; margin: 8px 0; overflow-wrap: anywhere; }
+  .secao { margin: 14px 0 6px; font-weight: 600; }
+  .item .info { overflow-wrap: anywhere; }
+  .actions.um { grid-template-columns: 1fr; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div id="topo"></div>
+  <h1>🎥 Vídeos Autorais</h1>
+  <p class="lead">Painel do Bot Vídeos Autorais: status, origem, destino, contas de plantão e regras do retorno.</p>
+
+  <!-- ===== Menu dos Autorais ===== -->
+  <section data-view="menu" aria-labelledby="t-menu">
+    <h2 id="t-menu">Painel do Bot Vídeos Autorais</h2>
+    <div class="card">
+      <div class="secao">Status Geral</div>
+      <dl class="status">
+        <div><dt>🤖 Robô Completo</dt><dd id="m-robo"></dd></div>
+        <div><dt>♻️ Repostagem</dt><dd id="m-repost"></dd></div>
+      </dl>
+      <div class="secao">Origem atual</div>
+      <div class="blk" id="m-origem"></div>
+      <div class="secao">Destino atual</div>
+      <div class="blk" id="m-destino"></div>
+      <div class="secao" id="m-plantao-t"></div>
+      <div class="blk" id="m-plantao"></div>
+      <div class="secao">♻️ Regras de Repostagem</div>
+      <dl class="status">
+        <div><dt>⏳ Oculto por</dt><dd id="m-dias"></dd></div>
+        <div><dt>📦 Cota Diária</dt><dd id="m-cota"></dd></div>
+        <div><dt>⏰ Janela de Postagem</dt><dd id="m-janela"></dd></div>
+      </dl>
+      <p class="hint">A contagem "Faltam N dias para iniciar a repostagem" aparece aqui com a repostagem ativa quando há vídeos arquivados na fila. Ela vem do servidor e não aparece no protótipo.</p>
+      <p class="hint">O robô Espelhador Isolado fará a escuta e o envio em tempo real baseando-se estritamente nestes valores.</p>
+    </div>
+    <h2>Escolha o que deseja alterar</h2>
+    <div class="menu-grid">
+      <button type="button" data-ir="origem">Editar Origem 📥</button>
+      <button type="button" data-ir="destino">Editar Destino 📤</button>
+      <button type="button" data-ir="regras">Regras de Repostagem ♻️</button>
+      <button type="button" data-ir="status">Status do Robô ⏸️</button>
+      <button type="button" data-ir="contas" style="grid-column:1/-1">Contas 👥</button>
+    </div>
+    <a class="voltar" href="/painel">Voltar aos Canais 🔙</a>
+  </section>
+
+  <!-- ===== Editar Origem ===== -->
+  <section data-view="origem" hidden aria-labelledby="t-origem">
+    <h2 id="t-origem">Editar Origem 📥</h2>
+    <form class="card" id="f-origem" novalidate>
+      <label for="i-origem">Envie o <b>ID Numérico, @username ou Link do Telegram Web</b> do grupo de ORIGEM de onde o bot vai puxar os vídeos (Ex: -100123456789 ou https://web.telegram.org/a/#-100...):</label>
+      <input type="text" id="i-origem" autocomplete="off" placeholder="-100123456789" aria-describedby="e-origem">
+      <p class="err" id="e-origem" role="alert"></p>
+      <div class="actions"><button type="button" data-ir="menu">Cancelar ❌</button><button type="submit" class="primary">Continuar</button></div>
+    </form>
+    <form class="card" id="f-topico" novalidate hidden>
+      <p style="margin-top:0" id="p-topico"></p>
+      <label for="i-topico">Agora, digite o <b>NÚMERO DO TÓPICO (Subcanal)</b> que ele deve monitorar.</label>
+      <input type="text" id="i-topico" inputmode="numeric" autocomplete="off" placeholder="1" aria-describedby="e-topico">
+      <p class="hint">Dica: Se os vídeos caem no chat "Geral", digite <b>1</b>. Se for um canal sem tópicos, digite <b>0</b> para ler tudo.</p>
+      <p class="err" id="e-topico" role="alert"></p>
+      <div class="actions"><button type="button" data-ir="menu">Cancelar ❌</button><button type="submit" class="primary">Continuar</button></div>
+    </form>
+    <p class="hint">A confirmação do grupo (nome e acesso) é feita pelo bot no Telegram. Aqui o protótipo só lê o texto digitado: a confirmação do nome fica a confirmar com o servidor ligado.</p>
+  </section>
+
+  <!-- ===== Editar Destino ===== -->
+  <section data-view="destino" hidden aria-labelledby="t-destino">
+    <h2 id="t-destino">Editar Destino 📤</h2>
+    <form class="card" id="f-destino" novalidate>
+      <label for="i-destino">Envie o <b>ID Numérico, @username ou Link do Telegram Web</b> do canal de DESTINO para onde o bot vai enviar os vídeos convertidos (Ex: @meu_canal ou https://web.telegram.org/...):</label>
+      <input type="text" id="i-destino" autocomplete="off" placeholder="@canal" aria-describedby="e-destino">
+      <p class="err" id="e-destino" role="alert"></p>
+      <div class="actions"><button type="button" data-ir="menu">Cancelar ❌</button><button type="submit" class="primary">Continuar</button></div>
+    </form>
+    <p class="hint">No bot, se o destino não for encontrado, aparece o aviso "verifique se ele é administrador do canal" e o ID é salvo mesmo assim. Aqui a checagem com o Telegram não existe (a confirmar com o servidor ligado).</p>
+  </section>
+
+  <!-- ===== Regras de Repostagem ===== -->
+  <section data-view="regras" hidden aria-labelledby="t-regras">
+    <h2 id="t-regras">♻️ Regras de Repostagem</h2>
+    <div class="card">
+      <p style="margin-top:0">Escolha o que deseja editar:</p>
+      <dl class="status">
+        <div><dt>⏳ Oculto por</dt><dd id="r-dias"></dd></div>
+        <div><dt>📦 Cota Diária</dt><dd id="r-cota"></dd></div>
+        <div><dt>⏰ Janela de Postagem</dt><dd id="r-janela"></dd></div>
+      </dl>
+      <div class="actions">
+        <button type="button" data-ir="dias">Editar Dias ⏳</button>
+        <button type="button" data-ir="limite">Editar Limite 📦</button>
+        <button type="button" data-ir="janela" class="full">Janela de Horário ⏰</button>
+        <button type="button" data-ir="menu" class="full">Voltar ao Menu Autorais 🔙</button>
+      </div>
+    </div>
+  </section>
+
+  <section data-view="dias" hidden aria-labelledby="t-dias">
+    <h2 id="t-dias">Editar Dias ⏳</h2>
+    <form class="card" id="f-dias" novalidate>
+      <label for="i-dias">Por quantos <b>dias</b> o vídeo deve ficar arquivado e oculto até retornar para o grupo de origem? (Ex: 15)</label>
+      <input type="text" id="i-dias" inputmode="numeric" autocomplete="off" placeholder="15" aria-describedby="e-dias">
+      <p class="err" id="e-dias" role="alert"></p>
+      <div class="actions"><button type="button" data-cancela="regras">Cancelar ❌</button><button type="submit" class="primary">Salvar</button></div>
+    </form>
+  </section>
+
+  <section data-view="limite" hidden aria-labelledby="t-limite">
+    <h2 id="t-limite">Editar Limite 📦</h2>
+    <form class="card" id="f-limite" novalidate>
+      <label for="i-limite">Quantos vídeos por dia?</label>
+      <input type="text" id="i-limite" inputmode="text" autocomplete="off" placeholder="4-8" aria-describedby="e-limite">
+      <p class="hint">• Faixa: <code>4-8</code> (cada dia sorteia um número entre 4 e 8, média 6)<br>• Fixo: <code>6</code> (sempre 6 por dia)</p>
+      <p class="hint">A faixa existe para a quantidade não ser sempre igual, que é o que denuncia robô.</p>
+      <p class="err" id="e-limite" role="alert"></p>
+      <div class="actions"><button type="button" data-cancela="regras">Cancelar ❌</button><button type="submit" class="primary">Salvar</button></div>
+    </form>
+  </section>
+
+  <section data-view="janela" hidden aria-labelledby="t-janela">
+    <h2 id="t-janela">Janela de Horário ⏰</h2>
+    <form class="card" id="f-janela" novalidate>
+      <p style="margin-top:0">Defina a <b>Janela de Horário</b> em que os vídeos de retorno podem ser postados.</p>
+      <label for="i-janela">Envie no formato <code>Inicio-Fim</code> (Exemplo: <code>8-22</code>) ou use o botão para rodar 24h.</label>
+      <input type="text" id="i-janela" autocomplete="off" placeholder="8-22" aria-describedby="e-janela">
+      <p class="hint" id="h-janela"></p>
+      <p class="err" id="e-janela" role="alert"></p>
+      <div class="actions">
+        <button type="submit" class="primary">Salvar</button>
+        <button type="button" id="b-dia-todo">Dia Todo (24h) 🕛</button>
+        <button type="button" data-cancela="regras" class="full">Cancelar ❌</button>
+      </div>
+    </form>
+  </section>
+
+  <!-- ===== Status do Robô ===== -->
+  <section data-view="status" hidden aria-labelledby="t-status">
+    <h2 id="t-status">⏸️ Controle de Pausa</h2>
+    <div class="card">
+      <p style="margin-top:0">Selecione o serviço que deseja pausar ou retomar:</p>
+      <dl class="status">
+        <div><dt>🤖 Robô Completo</dt><dd id="s-robo"></dd></div>
+        <div><dt>♻️ Repostagem</dt><dd id="s-repost"></dd></div>
+      </dl>
+      <div class="actions um">
+        <button type="button" id="b-repost"></button>
+        <button type="button" id="b-robo"></button>
+        <button type="button" data-ir="menu">Voltar ao Menu Autorais 🔙</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== Contas ===== -->
+  <section data-view="contas" hidden aria-labelledby="t-contas">
+    <h2 id="t-contas">Contas 👥</h2>
+    <div id="contas-corpo"></div>
+  </section>
+</div>
+
+<script src="/assets/painel.js"></script>
+<script>
+(function () {
+  "use strict";
+  var P = window.Painel, $ = P.$, esc = P.esc;
+  var PADRAO = {
+    origem: null, origem_topico: null, destino: null,
+    dias_retorno: 15, limite_min: 5, limite_max: 5, inicio: 10, fim: 20,
+    pausar_repostagem: false, pausar_robo_completo: false,
+    bloqueados: []
+  };
+  var est = P.estado("autorais", PADRAO);
+  var MAX_COTA = 999; // o bot só exige piso >= 1 e topo >= piso (até 3 dígitos)
+
+  P.topo("autorais");
+
+  // ---------- textos ----------
+  function rotuloCota(p, t) { return t > p ? p + " a " + t + "/dia · média " + Math.round((p + t) / 2) : p + "/dia (fixo)"; }
+  function sufixo(t) { return t ? "_" + t : ""; }
+  function pill(ativo) { return ativo ? '<span class="pill ativo">🟢 Ativo</span>' : '<span class="pill pausado">🔴 Pausado</span>'; }
+  function pillF(ativa) { return ativa ? '<span class="pill ativo">🟢 Ativa</span>' : '<span class="pill pausado">🔴 Pausada</span>'; }
+
+  // ---------- navegação entre as telas ----------
+  var viewAtual = "menu";
+  function ir(v) {
+    viewAtual = v;
+    P.$$("[data-view]").forEach(function (s) { s.hidden = s.getAttribute("data-view") !== v; });
+    limparErros();
+    if (v === "origem") { $("f-origem").hidden = false; $("f-topico").hidden = true; $("i-origem").value = ""; $("i-topico").value = ""; }
+    if (v === "destino") $("i-destino").value = "";
+    if (v === "dias") $("i-dias").value = "";
+    if (v === "limite") $("i-limite").value = "";
+    if (v === "janela") { $("i-janela").value = ""; }
+    if (v === "contas") { telaContas = "painel"; }
+    desenhar();
+    var h = document.querySelector('[data-view="' + v + '"] h2');
+    if (h && h.scrollIntoView) { try { h.scrollIntoView({ block: "start" }); } catch (e) {} }
+  }
+  function limparErros() { P.$$(".err").forEach(function (e) { e.textContent = ""; }); }
+
+  // ---------- desenho do menu ----------
+  function desenhar() {
+    var c = est.ler();
+    $("m-robo").innerHTML = pill(!c.pausar_robo_completo);
+    $("m-repost").innerHTML = pillF(!c.pausar_repostagem);
+    var o = c.origem ? esc(c.origem) + esc(sufixo(c.origem_topico)) : null;
+    $("m-origem").innerHTML = o
+      ? '⏳ <code>' + o + '</code> - <i>Aguardando leitura do Userbot...</i><br><span class="hint">' + (c.origem_topico ? "Tópico " + esc(c.origem_topico) : "Todos os tópicos") + ". O nome do grupo aparece com o servidor ligado.</span>"
+      : "Não definida";
+    var d = c.destino ? esc(String(c.destino).replace(":", "_")) : null;
+    $("m-destino").innerHTML = d
+      ? '⏳ <code>' + d + '</code><br><span class="hint">Nome e acesso (✅ / ❌ Acesso Negado) são conferidos pelo bot com o servidor ligado.</span>'
+      : "Não definido";
+    desenharPlantao();
+    var dias = c.dias_retorno + " dias";
+    $("m-dias").textContent = dias; $("r-dias").textContent = dias;
+    var cota = rotuloCota(c.limite_min, c.limite_max);
+    $("m-cota").textContent = cota; $("r-cota").textContent = cota;
+    var jan = c.inicio + "h às " + c.fim + "h";
+    $("m-janela").textContent = jan; $("r-janela").textContent = jan;
+    $("h-janela").textContent = "Janela atual: " + jan;
+    $("s-robo").innerHTML = pill(!c.pausar_robo_completo);
+    $("s-repost").innerHTML = pillF(!c.pausar_repostagem);
+    $("b-repost").textContent = c.pausar_repostagem ? "Retomar Repostagem ▶️" : "Pausar Repostagem ⏸️";
+    $("b-robo").textContent = c.pausar_robo_completo ? "Retomar Robô Completo ▶️" : "Pausar Robô Completo ⏸️";
+    if (viewAtual === "contas") desenharContas();
+  }
+
+  function desenharPlantao() {
+    if (!demo.length) {
+      $("m-plantao-t").textContent = "Contas de plantão";
+      $("m-plantao").innerHTML = '👤 <i>sessão fixa (nenhuma conta no pool)</i>';
+      return;
+    }
+    $("m-plantao-t").textContent = "Contas (detalhes em Contas 👥)";
+    var cap = postoCaptura();
+    var rod = rodizio();
+    $("m-plantao").innerHTML =
+      "🎯 Captura: <b>" + (cap ? esc(nomeConta(cap)) : "⚠️ nenhuma conta (captura parada)") + "</b><br>" +
+      "🔁 Repostagem: <b>" + (rod.length ? esc(rod.map(nomeConta).join(", ")) : "⚠️ nenhuma conta (parada)") + "</b>";
+  }
+
+  // ---------- botões de navegação ----------
+  document.addEventListener("click", function (e) {
+    var b = e.target.closest("[data-ir],[data-cancela]");
+    if (!b) return;
+    if (b.hasAttribute("data-cancela")) { P.aviso("Operação cancelada."); ir(b.getAttribute("data-cancela")); return; }
+    ir(b.getAttribute("data-ir"));
+  });
+
+  // ---------- Editar Origem ----------
+  // Lê o texto como o utils.validar_e_formatar_alvo do bot: link t.me, Telegram Web, ID_tópico, ID:tópico, ID/tópico.
+  function lerAlvo(entrada) {
+    entrada = entrada.trim();
+    var base = entrada, topico = null, partes;
+    if (entrada.indexOf("t.me/c/") >= 0) {
+      partes = entrada.split("t.me/c/")[1].split("/");
+      base = "-100" + partes[0];
+      if (partes.length > 1 && /^\d+$/.test(partes[1])) topico = partes[1];
+    } else if (entrada.indexOf("t.me/") >= 0) {
+      partes = entrada.split("t.me/")[1].split("/");
+      base = "@" + partes[0];
+      if (partes.length > 1 && /^\d+$/.test(partes[1])) topico = partes[1];
+    } else if (entrada.indexOf("web.telegram.org") >= 0 && entrada.indexOf("#") >= 0) {
+      var web = entrada.split("#")[1].split("/")[0];
+      if (web.indexOf("_") >= 0) {
+        var pw = web.split("_");
+        base = pw[0];
+        if (/^\d+$/.test(pw[1])) topico = pw[1];
+      } else base = web;
+    } else if (entrada.indexOf("_") >= 0 && entrada.indexOf("http") < 0) {
+      var i = entrada.lastIndexOf("_"), a = entrada.slice(0, i).trim(), t = entrada.slice(i + 1).trim();
+      if (/^\d+$/.test(t) && /^-?\d+$/.test(a)) { base = a; topico = t; }
+    } else if (entrada.indexOf(":") >= 0 && entrada.indexOf("http") < 0) {
+      partes = entrada.split(":"); base = partes[0];
+      if (partes.length > 1 && /^\d+$/.test(partes[1])) topico = partes[1];
+    } else if (entrada.indexOf("/") >= 0 && entrada.indexOf("http") < 0) {
+      partes = entrada.split("/"); base = partes[0];
+      if (partes.length > 1 && /^\d+$/.test(partes[1])) topico = partes[1];
+    }
+    return { base: base.trim(), topico: topico };
+  }
+
+  var fluxoOrigem = null;
+  $("f-origem").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var v = $("i-origem").value.trim();
+    if (!v) { $("e-origem").textContent = "Envie o ID numérico, o @username ou o link do grupo de origem."; return; }
+    $("e-origem").textContent = "";
+    var r = lerAlvo(v);
+    fluxoOrigem = r;
+    if (r.topico !== null) {
+      P.aviso("Tópico detectado automaticamente pelo link: " + r.topico + ". Não precisa digitar nada.");
+      confirmarOrigem(r.base, parseInt(r.topico, 10) || null);
+      return;
+    }
+    $("f-origem").hidden = true; $("f-topico").hidden = false;
+    $("p-topico").textContent = "Grupo de origem: " + r.base;
+    $("i-topico").focus();
+  });
+  $("f-topico").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var t = $("i-topico").value.trim();
+    if (!/^\d+$/.test(t)) {
+      var m = /[_:/](\d+)\s*$/.exec(t);
+      if (!m) { $("e-topico").textContent = "⚠️ Formato inválido! Envie apenas o número do tópico (Ex: 1 ou 0)."; return; }
+      t = m[1];
+    }
+    $("e-topico").textContent = "";
+    var n = parseInt(t, 10);
+    confirmarOrigem(fluxoOrigem.base, n > 0 ? n : null);
+  });
+  function confirmarOrigem(nova, topico) {
+    var c = est.ler();
+    var antiga = c.origem ? String(c.origem).split(":")[0] : "Não definida";
+    var txtNovo = topico ? "Tópico " + topico : "Todos os tópicos";
+    var txtAnt = c.origem_topico ? "Tópico " + c.origem_topico : "Todos os tópicos";
+    P.confirmar("Confirme a alteração da ORIGEM. De: " + antiga + sufixo(c.origem_topico) + " (" + txtAnt + "). Para: " + nova + sufixo(topico) + " (" + txtNovo + "). O robô passará a escutar exclusivamente este grupo/tópico. Deseja aprovar?", function () {
+      est.alterar(function (o) { o.origem = nova; o.origem_topico = topico; });
+      P.aviso("Origem e Tópico salvos com sucesso!");
+      ir("menu");
+    });
+    // Cancelar na confirmação: o bot avisa que a origem não foi alterada e volta ao menu.
+    var nao = $("dlg-nao");
+    if (nao) { nao.onclick = function () { P.aviso("Operação cancelada. A origem não foi alterada."); ir("menu"); }; }
+  }
+
+  // ---------- Editar Destino ----------
+  $("f-destino").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var v = $("i-destino").value.trim();
+    if (!v) { $("e-destino").textContent = "Envie o ID numérico, o @username ou o link do canal de destino."; return; }
+    $("e-destino").textContent = "";
+    var r = lerAlvo(v);
+    var id = r.base + (r.topico ? ":" + r.topico : "");
+    var c = est.ler();
+    var antigo = c.destino ? String(c.destino).replace(":", "_") : "Não definido";
+    var aviso = "";
+    var origemAtual = c.origem ? String(c.origem).split(":")[0].trim() : "";
+    if (origemAtual && r.base === origemAtual) {
+      aviso = " ATENÇÃO: este destino é o mesmo grupo da origem. Isso cria um loop infinito (o robô reposta o que ele mesmo publicou). Só aprove se souber o que está fazendo.";
+    }
+    P.confirmar("Confirme a alteração do DESTINO. De: " + antigo + ". Para: " + id.replace(":", "_") + ". Todos os vídeos convertidos passarão a ser publicados aqui. Deseja aprovar?" + aviso, function () {
+      est.alterar(function (o) { o.destino = id; });
+      P.aviso("Destino atualizado com sucesso! Os vídeos convertidos serão enviados para: " + id.replace(":", "_"));
+      ir("menu");
+    });
+    var nao = $("dlg-nao");
+    if (nao) { nao.onclick = function () { P.aviso("Operação cancelada. O destino não foi alterado."); ir("menu"); }; }
+  });
+
+  // ---------- Dias, limite, janela ----------
+  // Cada confirmação cancelada volta às Regras de Repostagem, como no bot.
+  function confirmarRegras(texto, aoConfirmar) {
+    P.confirmar(texto, function () { aoConfirmar(); ir("regras"); });
+    $("dlg-nao").onclick = function () { P.aviso("Operação cancelada."); ir("regras"); };
+  }
+  $("f-dias").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var v = $("i-dias").value.trim();
+    if (!/^\d+$/.test(v)) { $("e-dias").textContent = "⚠️ Envie apenas números inteiros."; return; }
+    $("e-dias").textContent = "";
+    var n = parseInt(v, 10);
+    confirmarRegras("Tem certeza que deseja configurar o retorno para " + n + " dias?", function () {
+      est.alterar(function (o) { o.dias_retorno = n; });
+      P.aviso("Tempo de Retorno Atualizado! Os vídeos interceptados ficarão arquivados por " + n + " dias antes de serem postados novamente.");
+    });
+  });
+  $("f-limite").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var f = P.faixa($("i-limite").value, MAX_COTA);
+    if (!f) { $("e-limite").textContent = "⚠️ Envie um número (6) ou uma faixa (4-8)."; return; }
+    $("e-limite").textContent = "";
+    confirmarRegras("Tem certeza que deseja definir a cota diária para " + rotuloCota(f[0], f[1]) + "?", function () {
+      est.alterar(function (o) { o.limite_min = f[0]; o.limite_max = f[1]; });
+      P.aviso("Cota de Retorno Atualizada! O robô arquivará " + rotuloCota(f[0], f[1]) + ".");
+    });
+  });
+  function trocarJanela(ini, fim) {
+    var c = est.ler();
+    var limite = c.limite_min || 5; // o bot usa limite_videos (o piso da cota)
+    var espaco = Math.floor(((fim - ini) * 60) / limite);
+    var exib = (ini === 0 && fim === 24) ? "24 horas por dia" : "entre " + ini + "h e " + fim + "h";
+    confirmarRegras("Confirmar a janela de postagem " + exib + "? Com " + limite + " vídeos/dia, dará cerca de " + espaco + " minutos entre um vídeo e outro.", function () {
+      est.alterar(function (o) { o.inicio = ini; o.fim = fim; });
+      var exib2 = (ini === 0 && fim === 24) ? "24 horas por dia" : "entre as " + ini + "h e as " + fim + "h";
+      P.aviso("Janela de Postagem Salva! Os vídeos de retorno serão distribuídos " + exib2 + ". Vale a partir do próximo agendamento; vídeos que já têm horário cravado mantêm o horário antigo.");
+    });
+  }
+  $("f-janela").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var t = $("i-janela").value.trim();
+    if (t.toLowerCase() === "dia todo") { $("e-janela").textContent = ""; trocarJanela(0, 24); return; }
+    if (!/^\d{1,2}\s*-\s*\d{1,2}$/.test(t)) { $("e-janela").textContent = "⚠️ Formato inválido! Use exatamente como no exemplo: 8-22."; return; }
+    var j = P.janela(t);
+    if (!j) { $("e-janela").textContent = "⚠️ Valores inválidos! A hora de início precisa ser menor que a do fim (0 a 24)."; return; }
+    $("e-janela").textContent = "";
+    trocarJanela(j[0], j[1]);
+  });
+  $("b-dia-todo").addEventListener("click", function () { $("e-janela").textContent = ""; trocarJanela(0, 24); });
+
+  // ---------- Status do Robô ----------
+  $("b-repost").addEventListener("click", function () {
+    var pausar = !est.ler().pausar_repostagem;
+    P.confirmar("Tem certeza de que deseja " + (pausar ? "PAUSAR" : "RETOMAR") + " a repostagem automática de vídeos antigos?", function () {
+      est.alterar(function (o) { o.pausar_repostagem = pausar; });
+      desenhar();
+      P.aviso("A repostagem automática de vídeos antigos foi " + (pausar ? "PAUSADA 🔴" : "RETOMADA 🟢") + ".");
+    });
+    $("dlg-nao").onclick = function () { P.aviso("Ação cancelada."); };
+  });
+  $("b-robo").addEventListener("click", function () {
+    var pausar = !est.ler().pausar_robo_completo;
+    P.confirmar("Tem certeza de que deseja " + (pausar ? "PAUSAR" : "RETOMAR") + " o funcionamento geral do robô Espelhador Isolado?", function () {
+      est.alterar(function (o) { o.pausar_robo_completo = pausar; });
+      desenhar();
+      P.aviso("O funcionamento geral do robô Espelhador Isolado foi " + (pausar ? "PAUSADO 🔴" : "RETOMADO 🟢") + ".");
+    });
+    $("dlg-nao").onclick = function () { P.aviso("Ação cancelada."); };
+  });
+
+  // =====================================================================
+  // Contas 👥
+  // As contas reais (login do Telegram) só existem no servidor. Aqui a lista
+  // começa vazia; "Mostrar contas de exemplo" cria 3 contas só na memória desta
+  // aba (somem ao recarregar) para mostrar as telas e os botões.
+  // =====================================================================
+  var demo = [];
+  var telaContas = "painel";
+  var contaAberta = null;     // id da conta aberta
+  var modoNumero = "gerenciar"; // ou "remover"
+  var alvoBloqueio = "";
+  var LIMITE_NOME = 30;
+
+  var TEXTO_GRUPO = { NO_GRUPO: "✅ dentro", SAIU: "🚪 saiu", NUNCA: "⚪ fora", BANIDA: "⛔ banida" };
+  var ROTULO_PAPEL = { captura: "🎯 Captura e publicação no canal de destino", repostagem: "🔁 Repostagem no grupo de origem" };
+
+  function criarDemo() {
+    demo = [
+      { id: 1, auto: "Conta A (exemplo)", nome: "", tel: "+55 11 90000-0001 (exemplo)", papel: "captura", hab: true, grupo: "NO_GRUPO", manual: null },
+      { id: 2, auto: "Conta B (exemplo)", nome: "", tel: "+55 11 90000-0002 (exemplo)", papel: "repostagem", hab: true, grupo: "NO_GRUPO", manual: null },
+      { id: 3, auto: "Conta C (exemplo)", nome: "", tel: "+55 11 90000-0003 (exemplo)", papel: "repostagem", hab: true, grupo: "NUNCA", manual: null }
+    ];
+  }
+  function nomeConta(c) { return (c.nome || "").trim() || c.auto; }
+  function situacaoGrupo(c) {
+    if ((c.manual === "BANIDA" || c.manual === "SAIU") && c.grupo !== "NO_GRUPO") return { s: c.manual, manual: true };
+    return { s: c.grupo, manual: false };
+  }
+  function textoGrupo(c) { var s = situacaoGrupo(c); return TEXTO_GRUPO[s.s] + (s.manual ? " (marcado por você)" : ""); }
+  function apta(c) { return c.hab && c.grupo === "NO_GRUPO"; }
+  function motivoInapta(c) {
+    if (!c.hab) return "conta desabilitada manualmente";
+    if (c.grupo === "BANIDA") return "banida dentro do grupo dos Autorais";
+    if (c.grupo === "SAIU") return "saiu do grupo dos Autorais";
+    if (c.grupo === "NUNCA") return "não está no grupo dos Autorais";
+    return "ficou inapta";
+  }
+  function postoCaptura() { return demo.filter(function (c) { return c.papel === "captura" && apta(c); })[0] || null; }
+  function rodizio() { var cap = postoCaptura(); return demo.filter(function (c) { return c.papel === "repostagem" && apta(c) && c !== cap; }); }
+  function achar(id) { return demo.filter(function (c) { return c.id === id; })[0] || null; }
+  function identificar(c) { return "<b>" + esc(nomeConta(c)) + "</b> · 📱 " + esc(c.tel); }
+
+  function relatorioContas() {
+    var h = '<h3>👥 Contas dos Autorais</h3>' +
+      '<p class="hint">🎯 Captura: uma conta pega os vídeos do grupo de origem e publica no canal de destino.<br>🔁 Repostagem: as outras devolvem os vídeos ao grupo de origem, revezando.</p>';
+    if (!demo.length) return h + '<p class="vazio">Nenhuma conta cadastrada ainda: toque em Cadastrar Conta ➕.</p>';
+    var cap = postoCaptura();
+    h += '<div class="blk">🎯 <b>Captura</b>: ' + (cap ? "✅ <b>" + esc(nomeConta(cap)) + "</b> · <i>sem envio ainda</i>" : "❌ <i>nenhuma conta apta: a captura está parada</i>") + "<br>";
+    var rod = rodizio();
+    if (rod.length) h += rod.map(function (c) { return "🔁 <b>Repostagem</b>: ✅ <b>" + esc(nomeConta(c)) + "</b> · <i>sem envio ainda</i>"; }).join("<br>");
+    else h += "🔁 <b>Repostagem</b>: ❌ <i>nenhuma conta no rodízio: a repostagem está parada</i>";
+    h += "</div>";
+    demo.forEach(function (c, i) {
+      var agora;
+      if (!c.hab) agora = "⏸️ pausada";
+      else if (cap === c) agora = "capturando";
+      else if (rod.indexOf(c) >= 0) agora = "repostando";
+      else agora = "parada";
+      h += '<div class="blk"><b>' + (i + 1) + "</b> — " + identificar(c) + "<br>🧩 " +
+        (c.papel ? ROTULO_PAPEL[c.papel] : "⚪ papel não escolhido") + " · " + agora + "<br>📍 Grupo de origem: " + textoGrupo(c);
+      if (c.papel !== "repostagem") h += "<br>📣 Canal de destino: ✅ pode publicar";
+      h += "</div>";
+    });
+    return h + '<p class="hint">Contas e situação de exemplo, só nesta aba.</p>';
+  }
+
+  function avisosConta(c) {
+    var a = [], s = situacaoGrupo(c).s;
+    if (s === "BANIDA") a.push("⛔ Ela foi banida do grupo de origem: só um admin do grupo pode desbanir. Enquanto isso, use outra conta.");
+    else if (s === "SAIU") a.push("🚪 Ela saiu do grupo de origem: toque em <b>Colocar no Grupo 🚪</b> para voltar.");
+    else if (s !== "NO_GRUPO") a.push("🚪 Ela não está no grupo de origem: toque em <b>Colocar no Grupo 🚪</b> ou adicione a conta pelo app.");
+    if (!c.papel) a.push("🧩 Escolha para que ela serve: <b>Usar na Captura 🎯</b> ou <b>Usar na Repostagem 🔁</b>.");
+    return a;
+  }
+
+  function telaConta(c) {
+    var cap = postoCaptura(), rod = rodizio();
+    var agora = !c.hab ? "⏸️ pausada por você" : (cap === c ? "capturando e publicando no canal de destino" : (rod.indexOf(c) >= 0 ? "repostando no grupo de origem (revezamento)" : "parada"));
+    var h = '<p style="margin-top:0">👤 ' + identificar(c) + '</p><div class="blk">' +
+      "🏷️ Nome: <b>" + esc(nomeConta(c)) + "</b>" + (c.nome ? " (editado por você)" : "") + "<br>" +
+      "🧩 Função: <b>" + (c.papel ? ROTULO_PAPEL[c.papel] : "ainda não escolhida") + "</b><br>" +
+      "📍 Grupo de origem: <b>" + textoGrupo(c) + "</b><br>";
+    if (c.papel !== "repostagem") h += "📣 Canal de destino: <b>✅ pode publicar</b><br>";
+    h += "⚙️ Agora: <b>" + agora + "</b><br>🔌 Telegram: <b>conectada</b><br>🆔 Telegram: id (exemplo) · sem @ · —</div>";
+    avisosConta(c).forEach(function (t) { h += "<p>" + t + "</p>"; });
+    h += "<p>Escolha a ação desejada:</p>";
+    h += '<div class="actions">' +
+      '<button type="button" data-a="papel-captura">Usar na Captura 🎯</button>' +
+      '<button type="button" data-a="papel-repostagem">Usar na Repostagem 🔁</button>';
+    if (c.grupo !== "NO_GRUPO") h += '<button type="button" data-a="colocar">Colocar no Grupo 🚪</button><button type="button" data-a="situacao">Situação no Grupo 📝</button>';
+    h += '<button type="button" data-a="nome" class="full">Editar Nome ✏️</button>' +
+      '<button type="button" data-a="pausar" class="full">' + (c.hab ? "Pausar Conta ⏸️" : "Reativar Conta ▶️") + "</button>" +
+      '<button type="button" data-a="excluir" class="full">Excluir Conta 🗑️</button>' +
+      '<button type="button" data-a="painel" class="full">Voltar às Contas 🔙</button></div>';
+    return h;
+  }
+
+  function listaNumerada() {
+    return '<ul class="list" style="margin-bottom:12px">' + demo.map(function (c, i) {
+      return '<li class="item"><div class="info"><b>' + (i + 1) + "</b> — " + identificar(c) + "</div></li>";
+    }).join("") + "</ul>";
+  }
+
+  function textoBloqueados() {
+    var m = est.ler().bloqueados || [];
+    var h = '<h3>🚫 Pessoas bloqueadas</h3><p class="hint">O robô dos Autorais não copia para o canal de destino os vídeos que estas pessoas postam. Como não são copiados, também nunca são repostados.</p>';
+    h += '<div class="secao">🔒 Suas contas (' + demo.length + '): entram sozinhas</div><p class="hint">Para o robô não copiar de novo o que as suas próprias contas repostam no grupo.</p>';
+    h += demo.length ? '<ul class="list">' + demo.map(function (c) { return '<li class="item"><div class="info">• ' + identificar(c) + "</div></li>"; }).join("") + "</ul>" : '<p class="muted">nenhuma</p>';
+    h += '<div class="secao">✋ Bloqueadas por você (' + m.length + ")</div>";
+    if (!m.length) h += '<p class="muted">nenhuma</p>';
+    else {
+      h += '<ul class="list">' + m.slice(0, 30).map(function (e, i) {
+        var alvo = e.id ? "<code>" + esc(e.id) + "</code>" : "@" + esc(e.user);
+        return '<li class="item"><div class="info"><b>' + (i + 1) + "</b> — " + alvo + " · " + (e.escopo === "global" ? "🌐 Autorais e parceiros" : "🎥 só nos Autorais") + (e.id ? "" : " · ⏳ @ ainda não confirmado") + "</div></li>";
+      }).join("") + "</ul>";
+      if (m.length > 30) h += '<p class="hint">… e mais ' + (m.length - 30) + "</p>";
+    }
+    return h;
+  }
+
+  function desenharContas() {
+    var h = "", t = telaContas, c = contaAberta ? achar(contaAberta) : null;
+    if (t === "conta" && !c) { telaContas = t = "painel"; }
+    if (t === "painel") {
+      h += '<div class="card">' + relatorioContas() + "<p>Escolha a ação desejada:</p>" +
+        '<div class="actions"><button type="button" data-a="cadastrar" class="full">Cadastrar Conta ➕</button>' +
+        (demo.length ? '<button type="button" data-a="gerenciar">Gerenciar Conta 🔧</button><button type="button" data-a="remover">Remover Conta 🗑️</button>' : "") +
+        '<button type="button" data-a="bloqueados" class="full">Pessoas Bloqueadas 🚫</button>' +
+        '<button type="button" data-ir="menu" class="full">Voltar ao Menu Autorais 🔙</button></div></div>';
+      h += demo.length
+        ? '<p class="hint">Contas de exemplo ligadas só nesta aba; somem ao recarregar.</p><div class="actions um"><button type="button" data-a="sem-demo">Limpar contas de exemplo</button></div>'
+        : '<div class="card"><p style="margin-top:0" class="hint">As contas reais dependem do login do Telegram e só existem com o servidor ligado. Para ver as telas e os botões de uma conta, use as contas de exemplo (ficam só na memória desta aba).</p><div class="actions um"><button type="button" data-a="com-demo">Mostrar contas de exemplo</button></div></div>';
+    } else if (t === "escolher") {
+      h += '<form class="card" data-f="numero" novalidate>' +
+        (modoNumero === "remover" ? "<p style='margin-top:0'>🗑️ <b>Qual conta você quer remover?</b></p>" : "<p style='margin-top:0'>🔧 <b>Qual conta você quer gerenciar?</b></p>") +
+        listaNumerada() +
+        '<label for="i-num">Envie apenas o número correspondente.' + (modoNumero === "remover" ? " Ainda haverá uma confirmação." : "") + '</label>' +
+        '<input type="text" id="i-num" inputmode="numeric" autocomplete="off" aria-describedby="e-num"><p class="err" id="e-num" role="alert"></p>' +
+        '<div class="actions"><button type="button" data-a="painel">Cancelar ❌</button><button type="submit" class="primary">Continuar</button></div></form>';
+    } else if (t === "conta") {
+      h += '<div class="card">' + telaConta(c) + "</div>";
+    } else if (t === "nome") {
+      h += '<form class="card" data-f="nome" novalidate><p style="margin-top:0">✏️ <b>Nome da conta</b></p><p>Hoje: <b>' + esc(nomeConta(c)) + "</b><br>Automático: <b>" + esc(c.auto) + "</b> (o @ ou o nome do Telegram)</p>" +
+        '<label for="i-nome">Mande o nome novo (até ' + LIMITE_NOME + ' letras). O telefone continua aparecendo ao lado.</label>' +
+        '<input type="text" id="i-nome" autocomplete="off" aria-describedby="e-nome"><p class="hint">Para voltar ao automático, toque em <b>Usar Nome Automático 🔄</b>.</p><p class="err" id="e-nome" role="alert"></p>' +
+        '<div class="actions"><button type="submit" class="primary">Salvar</button><button type="button" data-a="nome-auto">Usar Nome Automático 🔄</button><button type="button" data-a="voltar-conta" class="full">Cancelar ❌</button></div></form>';
+    } else if (t === "situacao") {
+      h += '<div class="card"><p style="margin-top:0">📝 <b>Situação no grupo de origem</b></p><p>Hoje: <b>' + textoGrupo(c) + "</b></p>" +
+        '<p class="hint">O robô descobre sozinho quando a conta sai ou é banida. Para o que aconteceu antes de ele saber (ou se ele mostrar errado), marque aqui. Quando a conta voltar ao grupo, a marcação some sozinha.</p>' +
+        '<div class="actions"><button type="button" data-a="sit-BANIDA">Foi Banida ⛔</button><button type="button" data-a="sit-SAIU">Saiu do Grupo 🚪</button>' +
+        '<button type="button" data-a="sit-auto" class="full">Deixar Automático 🔄</button><button type="button" data-a="voltar-conta" class="full">Cancelar ❌</button></div></div>';
+    } else if (t === "convite") {
+      h += '<form class="card" data-f="convite" novalidate><p style="margin-top:0">🔗 <b>Colocar no grupo de origem</b></p>' +
+        "<p>O robô pega os vídeos do grupo de origem (definido em Editar Origem 📥). Para capturar (ou repostar), a conta precisa ser membro dele.</p>" +
+        '<label for="i-convite">Mande o <b>link de convite</b> desse grupo (ex.: <code>https://t.me/+AbCdEf</code>) e o bot faz a conta entrar sozinha.</label>' +
+        '<input type="text" id="i-convite" autocomplete="off" placeholder="https://t.me/+..." aria-describedby="e-convite"><p class="err" id="e-convite" role="alert"></p>' +
+        '<p class="hint">📍 Onde achar o link: no grupo, toque no nome dele → <b>Convidar via link</b>. Só aparece para quem é admin; se você não for, peça o link a um admin do grupo. O link fica guardado para as próximas contas (no servidor; este protótipo não guarda link nenhum).</p>' +
+        '<div class="actions"><button type="button" data-a="voltar-conta">Cancelar ❌</button><button type="submit" class="primary">Enviar</button></div></form>';
+    } else if (t === "cadastro") {
+      h += cadastroHtml();
+    } else if (t === "bloqueados") {
+      h += '<div class="card">' + textoBloqueados() + "<p>Escolha a ação desejada:</p>" +
+        '<div class="actions"><button type="button" data-a="bloquear">Bloquear Pessoa ➕</button>' +
+        ((est.ler().bloqueados || []).length ? '<button type="button" data-a="desbloquear">Desbloquear Pessoa 🗑️</button>' : "") +
+        '<button type="button" data-a="painel" class="full">Voltar às Contas 🔙</button></div></div>';
+    } else if (t === "bloquear") {
+      h += '<form class="card" data-f="bloquear" novalidate><p style="margin-top:0">🚫 <b>Bloquear Pessoa</b></p>' +
+        "<p>Os vídeos que essa pessoa postar no grupo de origem <b>não serão copiados para o canal de destino</b> (e, por isso, nunca serão repostados).</p>" +
+        '<label for="i-bloq">Envie um destes: <b>@usuario</b>, <b>ID numérico</b> ou <b>link do perfil</b> (abra a conversa com a pessoa no Telegram Web e cole a barra de endereço inteira).</label>' +
+        '<input type="text" id="i-bloq" autocomplete="off" placeholder="@usuario" aria-describedby="e-bloq"><p class="hint">O link é o mais confiável: ele traz o ID numérico, que a pessoa não consegue trocar. O @ ela troca quando quiser.</p><p class="err" id="e-bloq" role="alert"></p>' +
+        '<div class="actions"><button type="button" data-a="bloqueados">Cancelar ❌</button><button type="submit" class="primary">Continuar</button></div></form>';
+    } else if (t === "alcance") {
+      h += '<div class="card"><p style="margin-top:0">🚫 Onde o bloqueio de <b>' + esc(alvoBloqueio) + "</b> vale?</p>" +
+        "<p>🎥 <b>Só nos Autorais</b>: só no grupo de origem dos Autorais.<br>🌐 <b>Autorais e Parceiros</b>: também nos canais dos parceiros.</p>" +
+        '<div class="actions um"><button type="button" data-a="esc-autorais">Só nos Autorais 🎥</button><button type="button" data-a="esc-global">Autorais e Parceiros 🌐</button><button type="button" data-a="bloqueados">Cancelar ❌</button></div></div>';
+    } else if (t === "desbloquear") {
+      h += '<form class="card" data-f="desbloquear" novalidate><p style="margin-top:0">🗑️ <b>Quem você quer desbloquear?</b></p>' +
+        '<label for="i-desb">Digite o <b>número</b> da lista (bloqueadas por você). Para vários, separe por vírgula. Ex.: 1, 3</label>' +
+        '<input type="text" id="i-desb" inputmode="numeric" autocomplete="off" aria-describedby="e-desb"><p class="err" id="e-desb" role="alert"></p>' +
+        '<div class="actions"><button type="button" data-a="bloqueados">Cancelar ❌</button><button type="submit" class="primary">Desbloquear</button></div></form>';
+    }
+    $("contas-corpo").innerHTML = h;
+  }
+
+  // Cadastrar Conta ➕: só as etapas. Nada digitado aqui é guardado nem enviado.
+  function cadastroHtml() {
+    return '<div class="card"><p style="margin-top:0">➕ <b>Cadastrar Conta</b></p>' +
+      '<p class="hint">O cadastro faz o login real da conta no Telegram, por isso só funciona com o servidor ligado. Aqui estão as etapas, como no bot. O que você digitar não é guardado em lugar nenhum e é apagado do campo na hora. Se ficar 5 min sem responder, o bot cancela o cadastro.</p></div>' +
+      '<form class="card" data-f="telefone" novalidate autocomplete="off"><p style="margin-top:0"><b>Etapa 1:</b> telefone</p>' +
+      '<label for="i-tel">Mande o <b>telefone</b> da conta, com DDI. Ex.: <code>+55...</code></label>' +
+      '<input type="text" id="i-tel" inputmode="tel" autocomplete="off" placeholder="+55..." aria-describedby="e-tel"><p class="err" id="e-tel" role="alert"></p>' +
+      '<div class="actions um"><button type="submit" class="primary">Pedir o código</button></div></form>' +
+      '<form class="card" data-f="codigo" novalidate autocomplete="off"><p style="margin-top:0"><b>Etapa 2:</b> código</p>' +
+      '<p class="hint">📨 O código vai para o app do Telegram dessa conta (ou por SMS).</p>' +
+      '<label for="i-cod">Mande o código <b>com espaços entre os números</b>, ex.: <code>1 2 3 4 5</code>.</label>' +
+      '<input type="text" id="i-cod" inputmode="numeric" autocomplete="off" placeholder="1 2 3 4 5" aria-describedby="e-cod"><p class="hint">Sem os espaços, o Telegram percebe o código numa mensagem e o invalida.</p><p class="err" id="e-cod" role="alert"></p>' +
+      '<div class="actions um"><button type="submit" class="primary">Confirmar o código</button></div></form>' +
+      '<form class="card" data-f="senha" novalidate autocomplete="off"><p style="margin-top:0"><b>Etapa 3:</b> senha (só se a conta tiver verificação em duas etapas)</p>' +
+      '<label for="i-senha">🔐 Mande a senha. No bot ela é apagada assim que lida e fica guardada cifrada.</label>' +
+      '<input type="password" id="i-senha" autocomplete="new-password" aria-describedby="e-senha"><p class="err" id="e-senha" role="alert"></p>' +
+      '<div class="actions um"><button type="submit" class="primary">Confirmar a senha</button></div></form>' +
+      '<div class="card"><p style="margin-top:0"><b>Etapa 4:</b> para que serve esta conta?</p>' +
+      "<p>🎯 <b>Captura</b>: pega os vídeos do grupo de origem e publica no canal de destino (uma conta só; precisa ser admin do canal).<br>🔁 <b>Repostagem</b>: devolve os vídeos ao grupo de origem, revezando com as outras (se uma cair, as outras seguem).</p>" +
+      '<div class="actions um"><button type="button" data-a="soserv-captura">Usar na Captura 🎯</button><button type="button" data-a="soserv-repost">Usar na Repostagem 🔁</button></div>' +
+      '<div class="actions um"><button type="button" data-a="cancelar-cadastro">Cancelar ❌</button></div></div>';
+  }
+
+  // ---------- ações das Contas ----------
+  function irC(t) { telaContas = t; desenharContas(); var s = document.querySelector('[data-view="contas"] h2'); if (s && s.scrollIntoView) { try { s.scrollIntoView({ block: "start" }); } catch (e) {} } }
+
+  function definirPapel(c, papel) {
+    var msg;
+    if (papel === "captura") {
+      demo.forEach(function (o) { if (o !== c && o.papel === "captura") o.papel = "repostagem"; });
+    }
+    c.papel = papel;
+    if (papel === "captura") msg = apta(c) ? "assumiu a captura" : "assume a captura assim que puder (" + motivoInapta(c) + ")";
+    else msg = "entra no revezamento da repostagem assim que puder";
+    P.aviso(nomeConta(c) + ": " + ROTULO_PAPEL[papel] + " - " + msg + ".");
+    desenhar(); irC("conta");
+  }
+
+  document.getElementById("contas-corpo").addEventListener("click", function (e) {
+    var b = e.target.closest("[data-a]");
+    if (!b) return;
+    var a = b.getAttribute("data-a"), c = contaAberta ? achar(contaAberta) : null;
+    switch (a) {
+      case "com-demo": criarDemo(); desenhar(); desenharContas(); P.aviso("Contas de exemplo ligadas (só nesta aba)."); break;
+      case "sem-demo": demo = []; contaAberta = null; desenhar(); desenharContas(); break;
+      case "painel": contaAberta = null; irC("painel"); break;
+      case "cadastrar": irC("cadastro"); break;
+      case "cancelar-cadastro": P.aviso("Cadastro de conta cancelado."); irC("painel"); break;
+      case "soserv-captura": P.soServidor("Usar na Captura 🎯 (fim do cadastro)"); break;
+      case "soserv-repost": P.soServidor("Usar na Repostagem 🔁 (fim do cadastro)"); break;
+      case "gerenciar":
+        if (demo.length === 1) { contaAberta = demo[0].id; irC("conta"); }
+        else { modoNumero = "gerenciar"; irC("escolher"); }
+        break;
+      case "remover": modoNumero = "remover"; irC("escolher"); break;
+      case "bloqueados": irC("bloqueados"); break;
+      case "bloquear": irC("bloquear"); break;
+      case "desbloquear": irC("desbloquear"); break;
+      case "voltar-conta": irC("conta"); break;
+      case "papel-captura": if (c) definirPapel(c, "captura"); break;
+      case "papel-repostagem": if (c) definirPapel(c, "repostagem"); break;
+      case "colocar": irC("convite"); break;
+      case "situacao": irC("situacao"); break;
+      case "nome": irC("nome"); break;
+      case "nome-auto": if (c) { c.nome = ""; P.aviso("Nome da conta: " + nomeConta(c) + "."); desenhar(); irC("conta"); } break;
+      case "pausar":
+        if (c) {
+          c.hab = !c.hab;
+          P.aviso(c.hab ? nomeConta(c) + " voltou a ser usada pelo robô." : nomeConta(c) + " pausada: o robô não a usa até você reativar.");
+          desenhar(); irC("conta");
+        }
+        break;
+      case "excluir": if (c) pedirExclusao(c, false); break;
+      case "sit-BANIDA": case "sit-SAIU": case "sit-auto":
+        if (c) {
+          c.manual = a === "sit-auto" ? null : a.slice(4);
+          P.aviso("Grupo de origem: " + textoGrupo(c).replace(/<[^>]+>/g, "") + ".");
+          desenhar(); irC("conta");
+        }
+        break;
+      case "esc-autorais": case "esc-global": adicionarBloqueio(a === "esc-global" ? "global" : "autorais"); break;
+    }
+  });
+
+  function pedirExclusao(c, deLista) {
+    P.confirmar("Excluir a conta " + nomeConta(c) + "? Ela deixa de capturar e de repostar. A conta continua existindo no Telegram: só sai deste robô. Para usar de novo, é preciso cadastrar outra vez (com o código do Telegram).", function () {
+      demo = demo.filter(function (o) { return o !== c; });
+      contaAberta = null;
+      P.aviso("Conta " + nomeConta(c) + " excluída.");
+      desenhar(); irC("painel");
+    });
+    $("dlg-nao").onclick = function () { P.aviso("Nada foi alterado."); };
+  }
+
+  function extrairAlvo(texto) {
+    var bruto = (texto || "").trim(), m;
+    if (!bruto) return { erro: "Não veio nada para bloquear." };
+    m = /tg:\/\/user\?id=(\d+)/i.exec(bruto);
+    if (m) return { id: m[1] };
+    function limpar(v) { return String(v).trim().replace(/^@+/, "").trim().toLowerCase(); }
+    if (/web\.telegram\.org/i.test(bruto)) {
+      var frag = bruto.indexOf("#") >= 0 ? bruto.split("#").slice(1).join("#").trim() : "";
+      if (!frag) return { erro: "Esse link do Telegram Web não tem a parte do #. Abra a conversa com a pessoa e copie a barra de endereço inteira." };
+      if (/^-?\d+$/.test(frag)) {
+        if (parseInt(frag, 10) < 0) return { erro: "Esse link aponta para um grupo ou canal, não para uma pessoa. Abra a conversa privada com ela e copie de lá." };
+        return { id: String(parseInt(frag, 10)) };
+      }
+      return { user: limpar(frag) };
+    }
+    m = /(?:https?:\/\/)?t\.me\/([^/?#\s]+)/i.exec(bruto);
+    if (m) {
+      if (m[1].charAt(0) === "+" || ["joinchat", "c", "s", "proxy", "share", "addstickers"].indexOf(m[1].toLowerCase()) >= 0)
+        return { erro: "Esse é um link de convite ou de canal, não o perfil de uma pessoa." };
+      return { user: limpar(m[1]) };
+    }
+    if (/^-?\d+$/.test(bruto)) {
+      if (parseInt(bruto, 10) < 0) return { erro: "Isso é ID de grupo/canal, não de pessoa." };
+      return { id: String(parseInt(bruto, 10)) };
+    }
+    var l = limpar(bruto);
+    if (l && /^[a-z0-9_]{3,32}$/.test(l)) return { user: l };
+    return { erro: "Não entendi. Mande o @usuario, o ID numérico, ou cole o link do perfil da pessoa." };
+  }
+
+  function adicionarBloqueio(escopo) {
+    var r = extrairAlvo(alvoBloqueio), msg, ok = true;
+    if (r.erro) { ok = false; msg = r.erro; }
+    else {
+      est.alterar(function (o) {
+        var lista = o.bloqueados || [];
+        var ex = lista.filter(function (x) { return (r.id && x.id === r.id) || (r.user && x.user === r.user); })[0];
+        if (ex) { if (escopo === "global") ex.escopo = "global"; }
+        else lista.push({ id: r.id || "", user: r.user || "", escopo: escopo });
+        o.bloqueados = lista;
+      });
+      msg = r.id ? "ID " + r.id + " bloqueado ✅" : "@" + r.user + " bloqueado (ID ainda não resolvido — vale pelo @ mesmo assim)";
+    }
+    P.aviso((ok ? "✅ " : "❌ ") + msg);
+    irC("bloqueados");
+  }
+
+  document.getElementById("contas-corpo").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var f = e.target.getAttribute("data-f"), c = contaAberta ? achar(contaAberta) : null;
+    function val(id) { var el = $(id); return el ? el.value : ""; }
+    function erro(id, t) { $(id).textContent = t; }
+    if (f === "numero") {
+      var t = val("i-num").trim(), n = parseInt(t, 10);
+      if (!/^\d+$/.test(t) || n < 1 || n > demo.length) { erro("e-num", "⚠️ Envie apenas o número da conta (de 1 a " + demo.length + ")."); return; }
+      var alvo = demo[n - 1];
+      if (modoNumero === "remover") pedirExclusao(alvo, true);
+      else { contaAberta = alvo.id; irC("conta"); }
+    } else if (f === "nome" && c) {
+      var nome = val("i-nome").trim();
+      if (!nome) { erro("e-nome", "⚠️ Mande o nome em texto."); return; }
+      if (nome.length > LIMITE_NOME) { erro("e-nome", "⚠️ Nome longo demais: use até " + LIMITE_NOME + " letras."); return; }
+      c.nome = nome;
+      P.aviso("Nome da conta: " + nomeConta(c) + ".");
+      desenhar(); irC("conta");
+    } else if (f === "convite" && c) {
+      var link = val("i-convite").trim();
+      if (link.indexOf("t.me/+") < 0 && link.indexOf("joinchat/") < 0) {
+        erro("e-convite", "⚠️ Isso não parece um link de convite. Mande algo como https://t.me/+AbCdEf."); return;
+      }
+      $("i-convite").value = "";
+      P.soServidor("Colocar no Grupo 🚪");
+      irC("conta");
+    } else if (f === "telefone") {
+      var tel = "+" + val("i-tel").replace(/\D/g, "");
+      $("i-tel").value = "";
+      if (!(tel.length - 1 >= 10 && tel.length - 1 <= 15)) { erro("e-tel", "⚠️ Telefone inválido. Mande com DDI, ex.: +55..."); return; }
+      erro("e-tel", ""); P.soServidor("Cadastrar Conta ➕ (pedir o código ao Telegram)");
+    } else if (f === "codigo") {
+      var cod = val("i-cod").replace(/\D/g, "");
+      $("i-cod").value = "";
+      if (cod.length < 5) { erro("e-cod", "⚠️ Código incompleto. Mande de novo, com espaços: 1 2 3 4 5"); return; }
+      erro("e-cod", ""); P.soServidor("Cadastrar Conta ➕ (confirmar o código)");
+    } else if (f === "senha") {
+      $("i-senha").value = "";
+      P.soServidor("Cadastrar Conta ➕ (confirmar a senha)");
+    } else if (f === "bloquear") {
+      var partes = val("i-bloq").trim().split(/\s+/).filter(Boolean);
+      if (!partes.length) { erro("e-bloq", "❌ Não entendi. Envie algo como @usuario."); return; }
+      alvoBloqueio = partes[0];
+      irC("alcance");
+    } else if (f === "desbloquear") {
+      var lista = est.ler().bloqueados || [];
+      var nums = val("i-desb").replace(/\s/g, "").split(",").filter(Boolean);
+      var okNums = nums.length && nums.every(function (p) { return /^\d+$/.test(p) && parseInt(p, 10) >= 1 && parseInt(p, 10) <= lista.length; });
+      if (!okNums) { erro("e-desb", "⚠️ Envie o número da pessoa (de 1 a " + lista.length + "). Ex.: 1 ou 1, 3"); return; }
+      var idx = {};
+      nums.forEach(function (p) { idx[parseInt(p, 10) - 1] = true; });
+      est.alterar(function (o) { o.bloqueados = (o.bloqueados || []).filter(function (x, i) { return !idx[i]; }); });
+      P.aviso("✅ removido (" + Object.keys(idx).length + ")");
+      irC("bloqueados");
+    }
+  });
+
+  desenhar();
+})();
+</script>
+</body>
+</html>

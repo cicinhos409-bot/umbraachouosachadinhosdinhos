@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Painel - Início</title>
+<meta name="description" content="Painel web do robô de achadinhos: as mesmas áreas do painel do Telegram (protótipo).">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23ee4d2d'/%3E%3Cpath d='M20 24h24l-2 22H22z' fill='none' stroke='%23fff' stroke-width='4' stroke-linejoin='round'/%3E%3Cpath d='M26 24a6 6 0 0 1 12 0' fill='none' stroke='%23fff' stroke-width='4'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="/assets/painel.css">
+</head>
+<body>
+<div class="wrap">
+  <div id="topo"></div>
+
+  <h1>Painel do robô</h1>
+  <p class="lead">O mesmo menu do bot no Telegram, em páginas web. Escolha uma área.</p>
+
+  <h2>Menu inicial</h2>
+  <div class="menu-grid">
+    <a class="btn" href="/canal-afiliados">Canal Afiliados 📺</a>
+    <a class="btn" href="#outros">Outros Canais 🗂️</a>
+    <a class="btn" href="/relatorios">Relatório Geral 📊</a>
+    <a class="btn" href="/servidor">Opções do Servidor ⚙️</a>
+  </div>
+
+  <h2 id="outros">Outros Canais 🗂️</h2>
+  <div class="menu-grid">
+    <a class="btn" href="/espiao">Espião Afiliados 🕵️</a>
+    <a class="btn" href="/espelhador">Espelhador de Canais 🔄</a>
+    <a class="btn" href="/autorais">Vídeos Autorais 🎥</a>
+    <a class="btn" href="/publico">Grupo Público 📬</a>
+    <a class="btn" href="/achadinhos">Gerador de Achadinhos 🛍️</a>
+    <a class="btn" href="/shopee-video">Shopee Vídeo 🎬</a>
+  </div>
+
+  <h2>Dentro de outras áreas</h2>
+  <div class="menu-grid">
+    <a class="btn" href="/parceiros">Parceiros Afiliados 👥<br><small class="muted">em Grupo Público</small></a>
+    <a class="btn" href="/notas">Disparador de Notas 🧾<br><small class="muted">em Relatório Geral</small></a>
+  </div>
+
+  <div class="card" style="margin-top:32px">
+    <h3 style="margin-top:0">Como isto se liga ao robô</h3>
+    <p class="hint" style="margin:0">Estas páginas são um protótipo da tela: nada do que você muda aqui chega ao servidor. Para o painel mexer no robô de verdade, falta uma API com login no servidor, que ainda não existe. Enquanto isso, o painel do Telegram (mande <code>/start</code> ao bot) continua sendo o que vale.</p>
+  </div>
+</div>
+<script src="/assets/painel.js"></script>
+<script>Painel.topo("painel");</script>
+</body>
+</html>

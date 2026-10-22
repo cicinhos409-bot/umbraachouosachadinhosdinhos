@@ -1,0 +1,383 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Relatório Geral - Painel</title>
+<meta name="description" content="Painel web do Relatório Geral: financeiro, diagnóstico de IA, filas e logs de erros, com a mesma estrutura do painel do Telegram.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23ee4d2d'/%3E%3Cpath d='M26 20l20 12-20 12z' fill='%23fff'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="/assets/painel.css">
+<style>
+  .sem-dados { color: var(--muted); font-style: italic; }
+  .cartao-ex { background: var(--card-2); border: 1px dashed var(--line); border-radius: 12px; padding: 12px; line-height: 1.7; overflow-wrap: anywhere; }
+  .meses { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; margin: 8px 0 0; padding: 0; list-style: none; }
+  .meses li { background: var(--card-2); border: 1px solid var(--line); border-radius: 8px; padding: 6px 0; text-align: center; font-size: 13px; }
+  .navbar { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 0; }
+  blockquote { margin: 12px 0 0; padding: 8px 12px; border-left: 3px solid var(--line); color: var(--muted); font-size: 13.5px; }
+  @media (max-width: 420px) { .meses { grid-template-columns: repeat(4, 1fr); } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div id="topo"></div>
+  <h1>📊 Relatório Geral</h1>
+  <p class="lead">Central de Relatórios: escolha qual métrica deseja analisar. Aqui cada relatório mostra a estrutura que o robô monta; os números vêm do servidor.</p>
+
+  <!-- Central de Relatórios (obter_teclado_relatorios) -->
+  <section class="vista" data-vista="menu" aria-labelledby="t-menu">
+    <h2 id="t-menu">Central de Relatórios</h2>
+    <div class="menu-grid">
+      <button type="button" data-ir="financeiro">Relatório Financeiro 💰</button>
+      <button type="button" data-ir="ia">Diagnóstico de IA 🧠</button>
+      <button type="button" data-ir="filas">Relatórios de Filas 📋</button>
+      <button type="button" data-ir="logs">Logs de Erros ⚠️</button>
+      <a class="btn" href="/notas">Disparador de Notas 🧾</a>
+      <a class="btn" href="/painel">Voltar ao Início 🔙</a>
+    </div>
+  </section>
+
+  <!-- Relatório Financeiro -->
+  <section class="vista" data-vista="financeiro" hidden aria-labelledby="t-fin">
+    <div class="navbar"><button type="button" data-ir="menu">Voltar aos Relatórios 🔙</button></div>
+    <h2 id="t-fin">Relatório Financeiro 💰</h2>
+    <div class="card">
+      <p style="margin-top:0">Ao abrir, o robô sincroniza os pedidos com a API de afiliados da Shopee (últimos 30 dias), refaz o histórico por dia (confirmado, pendente, cancelado) e monta o balanço abaixo, seguido do gráfico.</p>
+      <p class="sem-dados" id="fin-vazio">Sem dados: o painel ligado ao servidor preenche.</p>
+      <div class="actions"><button type="button" class="primary full" data-servidor="Relatório Financeiro 💰">Sincronizar e gerar o relatório 💰</button></div>
+      <p class="hint">No Telegram aparece "💰 Sincronizando API Financeira com a Shopee e processando relatório... Aguarde ⏳".</p>
+    </div>
+
+    <h3 id="fin-mes-titulo">📅 BALANÇO DO MÊS</h3>
+    <div class="card">
+      <dl class="status">
+        <div><dt>🚀 Projeção mensal estimada</dt><dd>Calculando...</dd></div>
+        <div><dt>⚖️ Média diária</dt><dd class="sem-dados">sem dados</dd></div>
+        <div><dt>Ontem</dt><dd class="sem-dados">sem dados</dd></div>
+      </dl>
+      <p class="hint" id="fin-proj-dica"></p>
+    </div>
+
+    <h3>🗓️ HISTÓRICO MENSAL E CRESCIMENTO</h3>
+    <div class="table-box"><table>
+      <thead><tr><th>Mês</th><th>Total</th><th>Conf</th><th>Pend</th><th>Canc</th></tr></thead>
+      <tbody><tr><td colspan="5" class="vazio">Sem dados: o painel ligado ao servidor preenche.</td></tr></tbody>
+    </table></div>
+    <p class="hint">Cada mês mostra o total (confirmado + pendente + cancelado) e a variação sobre o mês anterior (📈 + ou 📉). Em Conf, Pend e Canc vão o valor em R$, a quantidade de pedidos e a parte do total em %.</p>
+
+    <h3>🗓️ HISTÓRICO ANUAL E CRESCIMENTO</h3>
+    <div class="table-box"><table>
+      <thead><tr><th>Ano</th><th>Total</th><th>Conf</th><th>Pend</th><th>Canc</th></tr></thead>
+      <tbody><tr><td colspan="5" class="vazio">Sem dados: o painel ligado ao servidor preenche.</td></tr></tbody>
+    </table></div>
+
+    <h3>📊 MÉTRICAS DA VARREDURA (Últimos 30 Dias)</h3>
+    <div class="card">
+      <dl class="status">
+        <div><dt>Taxa de Conversão</dt><dd class="sem-dados">sem dados</dd></div>
+        <div><dt>Pedidos Totais</dt><dd class="sem-dados">Pagos | Pendentes | Cancel.</dd></div>
+      </dl>
+      <blockquote>A Taxa de Conversão indica a porcentagem de pedidos que foram efetivamente PAGOS (Confirmados) em relação ao volume total de pedidos gerados, ajudando a medir a qualidade e o poder de compra do seu tráfego atual.</blockquote>
+    </div>
+
+    <h3>🏆 RECORDES GLOBAIS (Todo o Histórico)</h3>
+    <div class="card">
+      <dl class="status">
+        <div><dt>🥇 Melhor Dia</dt><dd class="sem-dados">sem dados</dd></div>
+        <div><dt>📉 Pior Dia</dt><dd class="sem-dados">sem dados</dd></div>
+        <div><dt>⚖️ Média Diária</dt><dd class="sem-dados">sem dados</dd></div>
+      </dl>
+      <p class="hint">O bloco só aparece quando há dias com comissão. Os valores consideram confirmado + pendente, até hoje.</p>
+    </div>
+
+    <h3>📈 DESEMPENHO DIÁRIO (Últimos 7 Dias)</h3>
+    <div class="table-box"><table>
+      <thead><tr><th>Dia</th><th>Total</th><th>Conf</th><th>Pend</th><th>Canc</th></tr></thead>
+      <tbody id="fin-7dias"></tbody>
+    </table></div>
+    <p class="hint">Do dia anterior a hoje até 7 dias atrás. Cada dia mostra a variação sobre o dia anterior a ele.</p>
+
+    <h3 id="fin-grafico-titulo">Gráfico: Evolução de Faturamento e Vendas</h3>
+    <div class="card">
+      <p style="margin-top:0">Imagem enviada logo após o relatório, com os 12 meses do ano atual:</p>
+      <ul>
+        <li><b>Barras:</b> Comissão Atual (R$), confirmado + pendente de cada mês.</li>
+        <li><b>Linha tracejada vermelha:</b> Projeção / Fechamento (no mês atual, a projeção mensal; nos anteriores, o valor do mês).</li>
+        <li><b>Linha verde:</b> Pedidos Gerados (meses futuros ficam sem ponto, para não parecer queda).</li>
+      </ul>
+      <ul class="meses" id="fin-meses" aria-label="Meses do gráfico"></ul>
+      <p class="hint sem-dados">Gráfico sem dados: o painel ligado ao servidor desenha.</p>
+    </div>
+  </section>
+
+  <!-- Diagnóstico de IA -->
+  <section class="vista" data-vista="ia" hidden aria-labelledby="t-ia">
+    <div class="navbar"><button type="button" data-ir="menu">Voltar aos Relatórios 🔙</button></div>
+    <h2 id="t-ia">Diagnóstico de IA 🧠</h2>
+    <div class="card">
+      <p style="margin-top:0"><b>STATUS DA CASCATA DE IA (GEMINI)</b></p>
+      <p class="hint" style="margin-top:0">O robô manda um teste ("Responda apenas 'ok'") a cada motor, em ordem. O primeiro que responde vence na hora de analisar um vídeo. Durante o teste mostra "Verificando motor (n/10)".</p>
+      <ul class="list" id="ia-lista"></ul>
+      <p class="sem-dados">Sem dados: o painel ligado ao servidor testa e preenche.</p>
+      <div class="actions"><button type="button" class="primary full" data-servidor="Diagnóstico de IA 🧠">Testar os motores 🧠</button></div>
+    </div>
+    <h3>Resultados possíveis</h3>
+    <div class="card">
+      <ul class="list">
+        <li class="item"><div class="info"><b>🟢 Online</b></div></li>
+        <li class="item"><div class="info"><b>🟡 Resposta Vazia</b></div></li>
+        <li class="item"><div class="info"><b>🟡 Cota Esgotada (Renova aprox. 04h00)</b><span>erro 429, "quota" ou "exhausted"</span></div></li>
+        <li class="item"><div class="info"><b>🔴 Descontinuado</b><span>erro 404 ou "not found"</span></div></li>
+        <li class="item"><div class="info"><b>🔴 Servidor Indisponível</b><span>erro 503 ou "overloaded"</span></div></li>
+        <li class="item"><div class="info"><b>🔴 Erro (...)</b><span>qualquer outro erro, com os primeiros 30 caracteres</span></div></li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- Central de Filas (obter_teclado_relatorios_filas) -->
+  <section class="vista" data-vista="filas" hidden aria-labelledby="t-filas">
+    <h2 id="t-filas">📋 Central de Filas</h2>
+    <p class="lead">Escolha qual fila ou radar deseja analisar.</p>
+    <div class="menu-grid">
+      <button type="button" data-ir="f-espiao">Fila do Espião 🕵️</button>
+      <button type="button" data-ir="f-espelhador">Fila do Espelhador 🔄</button>
+      <button type="button" data-ir="f-autorais">Fila de Autorais 🎥</button>
+      <button type="button" data-ir="f-publico">Fila do Grupo Público 📬</button>
+      <button type="button" data-ir="f-parceiros">Fila dos Parceiros 🔍</button>
+      <button type="button" data-ir="menu">Voltar aos Relatórios 🔙</button>
+    </div>
+  </section>
+
+  <!-- Cada fila -->
+  <section class="vista fila" data-vista="f-espiao" hidden aria-labelledby="t-f-espiao"></section>
+
+  <section class="vista fila" data-vista="f-espelhador" hidden aria-labelledby="t-f-espelhador"></section>
+
+  <section class="vista fila" data-vista="f-autorais" hidden aria-labelledby="t-f-autorais"></section>
+
+  <section class="vista fila" data-vista="f-publico" hidden aria-labelledby="t-f-publico"></section>
+
+  <section class="vista" data-vista="f-parceiros" hidden aria-labelledby="t-f-parceiros">
+    <div class="navbar">
+      <button type="button" data-ir="filas">Central de Filas 📋</button>
+      <button type="button" data-ir="menu">Voltar aos Relatórios 🔙</button>
+    </div>
+    <h2 id="t-f-parceiros">Fila dos Parceiros 🔍</h2>
+    <p class="lead">Com um parceiro só, a fila abre direto. Com mais de um, o robô pergunta qual abrir.</p>
+    <div class="card">
+      <p style="margin-top:0" id="parc-estado">⚠️ Nenhum parceiro cadastrado ainda.</p>
+      <p class="hint">A lista de parceiros vem do servidor (Parceiros 👥). Neste protótipo ela começa vazia.</p>
+    </div>
+    <form class="card" id="f-parc" novalidate style="margin-top:12px">
+      <p style="margin-top:0"><b>🔍 Qual fila você quer abrir?</b></p>
+      <p class="hint" style="margin-top:0">A lista aparece assim: "número — nome 🟢 (ativo) ou ⏸️ (pausado)". Envie apenas o número correspondente.</p>
+      <label for="i-parc">Número do parceiro</label>
+      <div class="row">
+        <input type="text" id="i-parc" inputmode="numeric" autocomplete="off" placeholder="1" aria-describedby="e-parc">
+        <button type="submit" class="primary">Abrir fila</button>
+      </div>
+      <p class="err" id="e-parc" role="alert"></p>
+    </form>
+    <h3>📊 Relatório da Fila do Parceiro (D+X)</h3>
+    <div class="card">
+      <p style="margin-top:0">O topo resume o parceiro; depois vêm os vídeos, um a um.</p>
+      <div class="cartao-ex">
+        <b>🟢 ou ⏸️ nome do parceiro · #número</b><br>
+        📦 Na fila: <b>—</b> vídeo(s) · 💾 — MB (— de 10 GB de todos os parceiros)<br>
+        ⏳ Oculto por: <b>— dias</b><br>
+        📅 Cota Diária: <b>—</b><br>
+        🤖 Acesso à origem: ✅ ou ⏳ motivo ou ❌ nenhuma conta está capturando<br>
+        📥 Última captura: <b>dd/mm às hh:mm</b> ou "nenhuma ainda"<br>
+        👀 Origem hoje: mensagens · vídeos · com link · <b>capturados</b><br>
+        🚫 Recusados: motivo (quantidade)<br>
+        🕓 Última mensagem: dd/mm às hh:mm<br>
+        🗓️ por dia (até 4 dias, "+N dias" se houver mais): "dd/mm: N → sorteia X, descarta Y", "dd/mm: N (cabe na cota de X)" ou "(sem cota, publica tudo)"; 🔵 dia futuro, 🟢 hoje ou antes<br>
+        🚀 Próxima: <b>dd/mm às hh:mm</b>
+      </div>
+      <p class="hint">Fila vazia: "Fila vazia — aguardando novas capturas." O disco usa o teto de 10 GB somado entre todos os parceiros. O descarte é o fechamento das 23:55.</p>
+      <p class="sem-dados">Sem dados: o painel ligado ao servidor preenche.</p>
+    </div>
+  </section>
+
+  <!-- Logs de Erros -->
+  <section class="vista" data-vista="logs" hidden aria-labelledby="t-logs">
+    <div class="navbar"><button type="button" data-ir="menu">Voltar aos Relatórios 🔙</button></div>
+    <h2 id="t-logs">Logs de Erros ⚠️</h2>
+    <div class="card">
+      <p style="margin-top:0">Lê a tabela <code>erros_logs</code> do banco e mostra os <b>5 erros mais recentes</b> e o total.</p>
+      <p class="sem-dados">Sem dados: o painel ligado ao servidor preenche.</p>
+      <div class="actions">
+        <button type="button" class="primary" data-servidor="Logs de Erros ⚠️">Atualizar os logs ⚠️</button>
+        <button type="button" class="danger" data-servidor="Limpar Histórico de Erros 🧹">Limpar Histórico de Erros 🧹</button>
+      </div>
+      <p class="hint">Limpar apaga todos os registros e liga a trava de manutenção, que silencia o registro de erros até o próximo deploy.</p>
+    </div>
+    <h3>⚠️ Relatório de Erros Recentes (Últimos N de M)</h3>
+    <div class="table-box"><table>
+      <thead><tr><th>#</th><th>⏱️ Data e hora</th><th>📍 Origem</th><th>❌ Falha</th></tr></thead>
+      <tbody><tr><td colspan="4" class="vazio">Sem dados: o painel ligado ao servidor preenche.</td></tr></tbody>
+    </table></div>
+    <p class="hint">Cada erro mostra a hora (timestamp), a origem e a falha, cortada em 200 caracteres.</p>
+    <div class="card" style="margin-top:12px">
+      <p style="margin:0"><b>Quando a tabela está vazia</b><br>✅ Sistema Limpo! Não existe nenhum registo de erros no banco de dados. A automação está a funcionar perfeitamente.</p>
+    </div>
+  </section>
+</div>
+
+<script src="/assets/painel.js"></script>
+<script>
+(function () {
+  "use strict";
+  var $ = Painel.$, esc = Painel.esc;
+  var est = Painel.estado("relatorios", { vista: "menu", rota: "todos" });
+
+  var MESES = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+  var ABREV = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+  var MODELOS = ["gemini-3.1-pro-preview", "gemini-3.7-flash", "gemini-3.6-flash", "gemini-3.5-flash", "gemini-3.5-flash-lite",
+    "gemini-3-flash-preview", "gemini-3.1-flash-lite", "gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-3.1-flash-lite-preview"];
+
+  var CARD_EXEMPLO =
+    '<div class="cartao-ex"><b>1.</b> 🟢 Agendado p/ Hoje | 📡 nome do canal de origem<br>' +
+    '&nbsp;&nbsp;&nbsp;└ Nome: nome do produto<br>' +
+    '&nbsp;&nbsp;&nbsp;└ 📥 Cap: dd/mm às hh:mm ➡️ 📤 Prev: dd/mm às hh:mm<br>' +
+    '&nbsp;&nbsp;&nbsp;└ 🔗 Ver Post no Telegram (Origem)<br>' +
+    '&nbsp;&nbsp;&nbsp;└ 🔗 Aguardando postagem (Destino)</div>' +
+    '<p class="hint">Estrutura do card (sem dados reais). O nome do produto vem da linha "📦 Item:" da legenda; sem ela, da primeira linha do texto, sem hashtags; sem texto, "Aguardando análise da IA 🧠". Publicado mostra "Prev" com a hora em que saiu e o link do post no destino (sem o id da mensagem, "Link indisponível"). Link de origem de produto mostra "Ver Produto na Shopee (Origem)".</p>';
+
+  var LEGENDA =
+    '<ul class="list">' +
+    '<li class="item"><div class="info"><b>✅ Postado</b><span>saiu hoje; fica na tela até o dia acabar</span></div></li>' +
+    '<li class="item"><div class="info"><b>🟢 Agendado p/ Hoje · 🟡 Agendado p/ Amanhã · 🔵 Agendado p/ dd/mm</b><span>pelo horário sorteado; sem horário, pela data-alvo (captura + D+X)</span></div></li>' +
+    '<li class="item"><div class="info"><b>🔴 Atrasado</b><span>a data já passou: "Pendente (Atrasado)"</span></div></li>' +
+    '<li class="item"><div class="info"><b>🛑 Pausado</b><span>fila pausada: "Retido (Pausado)" ou "dd/mm (Se Ativo)"</span></div></li>' +
+    '<li class="item"><div class="info"><b>⚪ Indefinido</b><span>sem data de captura legível ("Aguardando...")</span></div></li></ul>' +
+    '<p class="hint">Ordem: publicados primeiro, depois pelo dia em que cada vídeo vai ao ar (horário sorteado, data-alvo ou captura + D+X).</p>';
+
+  function nav(voltaFilas) {
+    return '<div class="navbar">' + (voltaFilas ? '<button type="button" data-ir="filas">Central de Filas 📋</button>' : "") +
+      '<button type="button" data-ir="menu">Voltar aos Relatórios 🔙</button></div>';
+  }
+  function botaoFila(rotulo) {
+    return '<div class="actions"><button type="button" class="primary full" data-servidor="' + esc(rotulo) + '">Atualizar o relatório 🔄</button></div>';
+  }
+  // Monta uma fila: titulo (h2), cabeçalho do relatório, cabeçalho da rota, regras e mensagem de fila vazia.
+  function montarFila(c) {
+    var h = nav(true) + '<h2 id="t-' + c.id + '">' + c.rotulo + '</h2>';
+    if (c.antes) h += c.antes;
+    h += '<div class="card"><p style="margin-top:0"><b>' + c.titulo + '</b></p>';
+    h += '<p style="margin:0">' + c.rota.join("<br>") + '</p>';
+    h += '<p class="sem-dados">Sem dados: o painel ligado ao servidor preenche.</p>';
+    h += '<p style="margin-bottom:0"><b>Quando a fila está vazia:</b><br>' + c.vazio + '</p>';
+    h += botaoFila(c.rotulo) + '</div>';
+    h += '<h3>Como cada vídeo aparece</h3><div class="card">' + CARD_EXEMPLO + '</div>';
+    h += '<h3>Status do dia</h3><div class="card">' + LEGENDA + '</div>';
+    h += '<h3>Limpeza ao abrir o relatório</h3><div class="card"><ul style="margin:0;padding-left:20px">' +
+      c.limpeza.map(function (t) { return "<li>" + t + "</li>"; }).join("") + '</ul></div>';
+    return h;
+  }
+
+  var FILAS = {
+    "f-espiao": {
+      id: "f-espiao", rotulo: "Fila do Espião 🕵️",
+      titulo: "📊 Relatório da Fila Espião (D+X)",
+      rota: ["📡 <b>Rota: Radar Global</b> (N vídeos agendados)", "🕒 <b>Postagem:</b> D+X, entre Ih e Fh (padrão 10h e 22h)"],
+      vazio: "📭 A fila do Espião está vazia no momento.",
+      limpeza: ["Clone parado além do prazo (D+X mais 1 dia, ex.: D+1 vale 48 h) sai da fila e do disco.",
+        "Vídeo publicado hoje fica na tela; publicado em outro dia sai da lista.",
+        "O link de destino usa o canal de destino do Espião."]
+    },
+    "f-espelhador": {
+      id: "f-espelhador", rotulo: "Fila do Espelhador 🔄",
+      titulo: "📊 Relatório da Fila Espelhador",
+      rota: ["📡 <b>Rota: nome da rota</b> (N vídeos agendados)", "🕒 <b>Postagem:</b> D+X, entre Ih e Fh, ou \"Imediata (D+0)\"",
+        "Entre uma rota e a próxima: ➖➖➖ 🔄 Próximo Espelho... ➖➖➖"],
+      vazio: "📭 A fila do Espelhador está vazia no momento.",
+      limpeza: ["Cada vídeo é ligado à rota pela origem ou pelo nome; o nome da rota é atualizado se mudou.",
+        "Vídeo de rota excluída (órfão) sai da fila e do disco.",
+        "Clone parado além do D+X da rota mais 1 dia sai da fila e do disco.",
+        "Vídeo publicado hoje fica na tela; publicado em outro dia sai da lista."],
+      antes:
+        '<div class="card"><label for="s-rota">🔄 Qual fila do Espelhador deseja analisar?</label>' +
+        '<select id="s-rota"><option value="todos">Todos os Espelhos 🌐</option></select>' +
+        '<p class="hint">Com mais de uma rota, o robô mostra este seletor: Todos os Espelhos 🌐 e uma opção por rota. Com uma rota só, abre direto. Os nomes das rotas vêm do Espelhador 🔄 no servidor; aqui só há a opção geral. Escolhendo uma rota, aparecem só os vídeos dela.</p></div>'
+    },
+    "f-autorais": {
+      id: "f-autorais", rotulo: "Fila de Autorais 🎥",
+      titulo: "📊 Relatório da Fila Autorais (D+X)",
+      rota: ["📡 <b>Rota: Repostagem Autoral</b> (N vídeos agendados)", "🕒 <b>Postagem:</b> D+X (padrão 15), entre Ih e Fh (padrão 10h e 20h)",
+        "Se a repostagem ou o robô todo estiver pausado, os itens aparecem como 🛑 Pausado."],
+      vazio: "📭 A fila do Autorais está vazia no momento.",
+      limpeza: ["Vídeo publicado hoje fica na tela; publicado em outro dia sai do banco, para não acumular.",
+        "O retorno autoral é publicado no grupo de origem: é ele o destino do link no relatório.",
+        "Ordenada pela data-alvo e pelo horário do disparo."]
+    },
+    "f-publico": {
+      id: "f-publico", rotulo: "Fila do Grupo Público 📬",
+      titulo: "📊 Relatório da Fila Grupo Público (D+X)",
+      rota: ["📡 <b>Rota: Repostagem Pública</b> (N vídeos agendados)", "🕒 <b>Postagem:</b> D+X, entre Ih e Fh (padrão 10h e 20h)",
+        "📦 <b>Cota Diária:</b> cota · ⚙️ 🟢 ATIVO ou 🔴 PAUSADO"],
+      vazio: "📭 <b>A fila do Grupo Público está vazia no momento.</b><br><i>Ela é preenchida pelo sorteio no momento da captura. Assim que um vídeo novo for sorteado, ele aparece aqui com a data prevista.</i>",
+      limpeza: ["Mostra os vídeos ainda não publicados e os publicados hoje, com link de origem e de destino.",
+        "Publicados hoje primeiro; depois os agendados, por data.",
+        "A origem é a configurada na repostagem ou, sem ela, o destino dos Autorais. Está PAUSADO se a repostagem está pausada ou o Grupo Público está desligado.",
+        "Relatório longo é dividido em várias mensagens (\"Continuação\")."]
+    }
+  };
+  Object.keys(FILAS).forEach(function (k) {
+    document.querySelector('[data-vista="' + k + '"]').innerHTML = montarFila(FILAS[k]);
+  });
+
+  // IA
+  $("ia-lista").innerHTML = MODELOS.map(function (m, i) {
+    return '<li class="item"><div class="info"><b>' + (i + 1) + 'º <code>' + esc(m) + '</code></b></div><span class="pill aviso">não testado</span></li>';
+  }).join("");
+
+  // Financeiro: textos que dependem da data de hoje (nenhum número de valor)
+  var hoje = new Date();
+  var diasMes = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0).getDate();
+  $("fin-mes-titulo").textContent = "📅 BALANÇO DO MÊS DE " + MESES[hoje.getMonth()].toUpperCase();
+  $("fin-proj-dica").textContent = "Projeção = média diária dos dias com dados (confirmado + pendente) × " + diasMes + " dias do mês. Sem dados fica \"Calculando...\".";
+  $("fin-grafico-titulo").textContent = "Gráfico: Evolução de Faturamento e Vendas (" + hoje.getFullYear() + ")";
+  $("fin-meses").innerHTML = ABREV.map(function (m) { return "<li>" + m + "</li>"; }).join("");
+  function dd(d) { return ("0" + d.getDate()).slice(-2) + "/" + ("0" + (d.getMonth() + 1)).slice(-2); }
+  var linhas = "";
+  for (var i = 1; i <= 7; i++) {
+    var d = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() - i);
+    linhas += "<tr><td><b>" + dd(d) + "</b></td><td class=\"sem-dados\">sem dados</td><td>—</td><td>—</td><td>—</td></tr>";
+  }
+  $("fin-7dias").innerHTML = linhas;
+
+  // Seletor de rota do Espelhador
+  var selRota = $("s-rota");
+  selRota.value = est.ler().rota;
+  if (selRota.value !== est.ler().rota) selRota.value = "todos";
+  selRota.addEventListener("change", function () { est.alterar(function (o) { o.rota = selRota.value; }); });
+
+  // Parceiros: validações do detalhar_fila_parceiro
+  $("f-parc").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var t = $("i-parc").value.trim(), er = $("e-parc");
+    if (!/^[0-9]+$/.test(t)) { er.textContent = "⚠️ Envie apenas o número do parceiro."; return; }
+    er.textContent = "⚠️ Parceiro não encontrado.";
+  });
+
+  // Navegação entre as telas
+  var VISTAS = Painel.$$(".vista");
+  function ir(v, sem) {
+    if (!VISTAS.some(function (s) { return s.dataset.vista === v; })) v = "menu";
+    VISTAS.forEach(function (s) { s.hidden = s.dataset.vista !== v; });
+    est.alterar(function (o) { o.vista = v; });
+    if (!sem) window.scrollTo(0, 0);
+  }
+  document.addEventListener("click", function (e) {
+    var b = e.target.closest("[data-ir]");
+    if (b) { ir(b.dataset.ir); return; }
+    var s = e.target.closest("[data-servidor]");
+    if (s) Painel.soServidor(s.dataset.servidor);
+  });
+
+  Painel.topo("relatorios");
+  ir(est.ler().vista, true);
+})();
+</script>
+</body>
+</html>

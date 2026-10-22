@@ -1,0 +1,382 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Disparador de Notas - Painel</title>
+<meta name="description" content="Painel web do Disparador de Notas: CSV de comissões, ZIP com os PDFs, casamento, aprovação e envio por e-mail, como no painel do Telegram.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23ee4d2d'/%3E%3Cpath d='M26 20l20 12-20 12z' fill='%23fff'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="/assets/painel.css">
+<style>
+  .cartao-ex { background: var(--card-2); border: 1px dashed var(--line); border-radius: 12px; padding: 12px; line-height: 1.7; overflow-wrap: anywhere; }
+  .cartao-ex + .cartao-ex { margin-top: 8px; }
+  .sem-dados { color: var(--muted); font-style: italic; }
+  .msg { min-height: 24px; margin: 12px 0 0; }
+  details.card ul, details.card ol { padding-left: 20px; margin: 12px 0 0; }
+  details.card li { margin-bottom: 8px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div id="topo"></div>
+  <h1>🧾 Disparador de Notas</h1>
+  <p class="lead">Você envia o CSV de comissões da Shopee e um ZIP com os PDFs das notas. O robô casa cada loja com o seu PDF, mostra o resumo e, aprovado, manda um e-mail por loja com a nota anexada.</p>
+
+  <section aria-labelledby="t-menu">
+    <h2 id="t-menu">Painel do Disparador de Notas</h2>
+    <p class="hint" style="margin-top:-6px">Selecione uma das opções abaixo:</p>
+    <div class="menu-grid">
+      <button type="button" id="b-iniciar">Iniciar Envios 🚀</button>
+      <button type="button" id="b-filtro"></button>
+      <button type="button" id="b-info">Informações de Acesso ℹ️</button>
+      <a class="btn" href="/relatorios">Voltar aos Relatórios 🔙</a>
+    </div>
+    <p class="msg" id="msg-filtro" role="status"></p>
+    <p class="hint" id="filtro-relogio"></p>
+
+    <div class="card" id="box-info" hidden style="margin-top:12px">
+      <p style="margin-top:0"><b>🔐 Informações de Acesso (Privado)</b></p>
+      <p style="margin-bottom:6px"><b>✉️ Plataforma Brevo (Disparos API):</b><br>🔗 Link: <a href="https://app.brevo.com/" rel="noopener noreferrer">app.brevo.com</a><br>👤 Login: <span class="sem-dados">cadastrado no servidor</span><br>🔑 Senha: <span class="sem-dados">escondida, só no servidor</span></p>
+      <p style="margin-bottom:6px"><b>📧 Conta Gmail (E-mail Remetente):</b><br>🔗 Link: <a href="https://mail.google.com/" rel="noopener noreferrer">mail.google.com</a><br>👤 Login: <span class="sem-dados">cadastrado no servidor</span><br>🔑 Senha: <span class="sem-dados">escondida, só no servidor</span></p>
+      <p class="hint">No Telegram, as senhas ficam escondidas (toque para revelar) e os logins podem ser copiados. Por segurança, este protótipo não guarda nem mostra login nem senha.</p>
+      <div class="actions"><button type="button" id="b-ver-acesso" class="full">Ver login e senha 🔐</button></div>
+    </div>
+  </section>
+
+  <section aria-labelledby="t-env">
+    <h2 id="t-env">Iniciar Envios 🚀</h2>
+    <form class="card" id="f-arquivo" novalidate>
+      <p style="margin-top:0"><b id="env-titulo">🧾 Disparador Automático de Notas Fiscais</b></p>
+      <p id="env-pedido" style="margin-top:0">Clique em <b>Iniciar Envios 🚀</b> antes de anexar as planilhas.</p>
+      <label for="i-arquivo" id="l-arquivo">Arquivo</label>
+      <input type="file" id="i-arquivo" aria-describedby="e-arquivo">
+      <p class="err" id="e-arquivo" role="alert"></p>
+      <p class="hint">O protótipo só confere o nome e a extensão do arquivo. O conteúdo nunca é lido nem guardado: quem lê o CSV e abre o ZIP é o servidor.</p>
+      <div class="actions">
+        <button type="submit" class="primary" id="b-enviar-arq">Enviar arquivo</button>
+        <button type="button" id="b-abortar">Abortar ❌</button>
+      </div>
+      <p class="msg" id="msg-env" role="status"></p>
+    </form>
+    <details class="card" style="margin-top:12px">
+      <summary>O que o CSV precisa ter</summary>
+      <ul>
+        <li><b>Nome da loja</b>: casa com o PDF.</li>
+        <li><b>E-mail</b>: para onde a nota vai.</li>
+        <li><b>Comissão Total do Vendedor</b>: o valor citado no e-mail (sem o "R$"; sem a coluna, usa 0,00).</li>
+        <li>Linhas sem nome da loja ou sem e-mail são puladas. O separador do CSV é detectado sozinho.</li>
+        <li>O ZIP traz os PDFs, com nomes no formato <code>RNM &lt;loja&gt;.pdf</code>.</li>
+      </ul>
+    </details>
+  </section>
+
+  <section aria-labelledby="t-regras">
+    <h2 id="t-regras">Como o robô casa lojas e PDFs</h2>
+    <div class="card">
+      <ol style="margin:0;padding-left:20px">
+        <li><b>Nome exato:</b> sem acento, em minúsculas e só com letras e números, o nome do PDF (depois de "RNM") contido no nome da loja, ou o contrário. Ícone 📄.</li>
+        <li><b>Semelhança:</b> para as lojas que sobraram, o PDF mais parecido acima de 75%. Você confirma cada par com <b>Sim ✅</b> ou <b>Não ❌</b>. Ícone 🔍.</li>
+        <li><b>Manual:</b> uma loja por vez, e você digita a <b>LETRA</b> do PDF (A, B, C...; depois de Z vêm A1, B1...). Ícone ✍️. Há <b>Pular Loja ⏭️</b> (vai para o fim da fila), <b>Ver PDF 👁️</b> e <b>Encerrar e Ir para o Resumo ⏭️</b>.</li>
+      </ol>
+      <p class="hint">Filtro Anti-Duplicidade ligado: PDF com nome já ENVIADO ou PENDENTE é ignorado (e apagado do lote), porque os nomes mudam a cada mês. O resumo diz quantos foram ignorados.</p>
+    </div>
+  </section>
+
+  <section aria-labelledby="t-demo">
+    <h2 id="t-demo">Etapas seguintes (demonstração)</h2>
+    <p class="hint" style="margin-top:-6px">Estas telas só existem depois que o servidor cruza o CSV com o ZIP. Aqui você percorre as mesmas telas com <b>lojas e arquivos de exemplo</b>, só para ver o pedido, as validações e as mensagens. Nada é enviado.</p>
+    <div class="card">
+      <div class="actions"><button type="button" class="primary full" id="b-demo">Ver as etapas com dados de exemplo</button></div>
+      <div id="demo" aria-live="polite"></div>
+    </div>
+  </section>
+
+  <section aria-labelledby="t-fila">
+    <h2 id="t-fila">Fila de notas (fila_notas)</h2>
+    <div class="card">
+      <p style="margin-top:0">Estados de cada nota:</p>
+      <ul class="list">
+        <li class="item"><div class="info"><b>RASCUNHO</b><span>lote montado, esperando aprovação. Só existe um lote em aprovação por vez: rascunho de lote abortado é apagado quando o próximo lote é montado.</span></div></li>
+        <li class="item"><div class="info"><b>PENDENTE</b><span>aprovado, na fila para sair.</span></div></li>
+        <li class="item"><div class="info"><b>ENVIADO</b><span>e-mail aceito pelo Brevo (status 200 ou 201); o PDF é apagado do disco.</span></div></li>
+        <li class="item"><div class="info"><b>ERRO</b><span>com o motivo gravado: "PDF não encontrado no disco", "Erro API &lt;status&gt;: ..." ou "Erro Interno: ...".</span></div></li>
+      </ul>
+      <p class="hint">Colunas: id, nome_loja, email_destino, caminho_pdf, status, motivo_erro, valor.</p>
+      <p class="vazio">Sem dados: o painel ligado ao servidor preenche as contagens e a lista.</p>
+    </div>
+  </section>
+
+  <section aria-labelledby="t-rod">
+    <h2 id="t-rod">Regras do envio</h2>
+    <div class="card">
+      <ul style="margin:0;padding-left:20px">
+        <li>Ao aprovar, os RASCUNHO viram PENDENTE e o envio roda em segundo plano, um e-mail por segundo, com a mensagem de progresso: "🚀 Disparando notas fiscais... ⏳ Enviando nota (n/total)".</li>
+        <li>Um envio por vez. Lote aprovado durante outro envio espera ("⏳ Há um envio em andamento. Este lote sai assim que ele terminar."). Durante o envio o robô responde: "⚠️ Aguarde o fim do processo!".</li>
+        <li><b>Limite:</b> 290 e-mails por rodada. Ao chegar nele, <b>pausa de 26 horas</b> e retoma sozinho (o horário fica gravado e sobrevive a reinício). Aviso: "⏸️ PAUSA DE SEGURANÇA: Limite de 290 atingido. Retomada automática programada para dd/mm às hh:mm".</li>
+        <li>Com a pausa ativa, notas aprovadas ficam PENDENTE e saem na retomada: "⏸️ Pausa de segurança ativa até dd/mm às hh:mm. As notas aprovadas ficaram na fila e saem na retomada automática."</li>
+        <li>No fim: "✅ Operação finalizada! ... Sucessos / Erros". O robô também manda ao administrador um e-mail de resumo ("Processo Totalmente Concluído") ou de pausa, listando as falhas.</li>
+        <li>A pasta de extração é apagada ao terminar, mesmo com erros. Pastas de rodadas antigas (mais de 24 h) também, menos as com nota PENDENTE ou RASCUNHO.</li>
+      </ul>
+    </div>
+    <h3>E-mail enviado a cada loja</h3>
+    <div class="card">
+      <p style="margin-top:0"><b>Assunto:</b> Sua Nota Fiscal de Comissão Shopee - <i>nome da loja</i></p>
+      <div class="cartao-ex">Olá, equipe da <b>nome da loja</b>.<br>
+      Envio em anexo a Nota Fiscal de prestação de serviços referente às comissões geradas através do programa de afiliados da Shopee, no valor de R$ <i>valor</i>. O documento já está processado e pode ser direcionado para o controle contábil e financeiro da empresa.<br>
+      Fico à disposição caso precisem de algum esclarecimento.<br>
+      Atenciosamente,<br><b>nome da empresa</b></div>
+      <p class="hint">Enviado pelo Brevo, com o PDF anexado. Se o PDF sumiu do disco, a nota não sai: vira ERRO e aparece no resumo.</p>
+    </div>
+  </section>
+</div>
+
+<script src="/assets/painel.js"></script>
+<script>
+(function () {
+  "use strict";
+  var $ = Painel.$, esc = Painel.esc;
+  var est = Painel.estado("notas", { filtro: true, religa_em: 0 });
+  var CINCO_MIN = 5 * 60 * 1000;
+
+  // ---------- Filtro Anti-Duplicidade ----------
+  function rotuloFiltro(on) { return "Filtro Anti-Duplicidade: " + (on ? "LIGADO 🟢" : "DESLIGADO 🔴"); }
+  function desenharFiltro() {
+    var e = est.ler();
+    $("b-filtro").textContent = rotuloFiltro(e.filtro);
+    var rel = $("filtro-relogio");
+    if (!e.filtro && e.religa_em > Date.now()) {
+      var s = Math.max(0, Math.ceil((e.religa_em - Date.now()) / 1000));
+      rel.textContent = "Volta a ligar sozinho em " + Math.floor(s / 60) + ":" + ("0" + (s % 60)).slice(-2) + ", ou depois de um lote.";
+    } else { rel.textContent = e.filtro ? "Ligado: PDF com nome já ENVIADO ou PENDENTE é ignorado." : ""; }
+  }
+  function religarSePassou() {
+    var e = est.ler();
+    if (!e.filtro && e.religa_em && Date.now() >= e.religa_em) {
+      est.alterar(function (o) { o.filtro = true; o.religa_em = 0; });
+      $("msg-filtro").innerHTML = "🛡️ <b>Segurança Ativada:</b> O Filtro Anti-Duplicidade foi reativado automaticamente após 5 minutos de inatividade.";
+    }
+    desenharFiltro();
+  }
+  $("b-filtro").addEventListener("click", function () {
+    var e = est.ler(), novo = !e.filtro;
+    est.alterar(function (o) { o.filtro = novo; o.religa_em = novo ? 0 : Date.now() + CINCO_MIN; });
+    $("msg-filtro").innerHTML = "⚙️ O Filtro Anti-Duplicidade foi <b>" + (novo ? "ATIVADO ✅" : "DESATIVADO ⚠️ (Cuidado com duplicatas)") + "</b>.";
+    desenharFiltro();
+  });
+
+  // ---------- Informações de Acesso ----------
+  $("b-info").addEventListener("click", function () { $("box-info").hidden = !$("box-info").hidden; });
+  $("b-ver-acesso").addEventListener("click", function () { Painel.soServidor("Informações de Acesso ℹ️"); });
+
+  // ---------- Iniciar Envios: CSV -> ZIP ----------
+  var etapa = "menu"; // menu | csv | zip | cruzando
+  function limparArquivo() { $("i-arquivo").value = ""; $("e-arquivo").textContent = ""; }
+  function desenharEtapa() {
+    var ped = $("env-pedido"), l = $("l-arquivo");
+    if (etapa === "menu") {
+      ped.innerHTML = "Clique em <b>Iniciar Envios 🚀</b> antes de anexar as planilhas.";
+      l.textContent = "Arquivo";
+    } else if (etapa === "csv") {
+      ped.innerHTML = "Para iniciar, por favor envie o arquivo <b>CSV extraído da Shopee</b> contendo as comissões e os e-mails dos lojistas.";
+      l.textContent = "Arquivo CSV da Shopee";
+    } else if (etapa === "zip") {
+      ped.innerHTML = "✅ Arquivo CSV recebido!<br>Agora envie o arquivo <b>.ZIP</b> contendo todos os PDFs das Notas Fiscais.";
+      l.textContent = "Arquivo ZIP com os PDFs";
+    } else {
+      ped.innerHTML = "📦 Arquivo ZIP recebido. Descompactando e iniciando o cruzamento de dados... ⏳<br><span class=\"hint\">Aqui o servidor extrai o ZIP, lê o CSV e casa as lojas. As telas seguintes estão em Etapas seguintes (demonstração).</span>";
+      l.textContent = "Arquivo";
+    }
+    $("b-enviar-arq").disabled = etapa === "cruzando";
+  }
+  $("b-iniciar").addEventListener("click", function () {
+    etapa = "csv"; limparArquivo(); $("msg-env").textContent = ""; desenharEtapa();
+    $("i-arquivo").scrollIntoView({ block: "center" }); $("i-arquivo").focus();
+  });
+  $("b-abortar").addEventListener("click", function () {
+    etapa = "menu"; limparArquivo(); desenharEtapa();
+    $("msg-env").textContent = "Operação cancelada. Retornando ao menu do disparador...";
+  });
+  $("f-arquivo").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var er = $("e-arquivo"), arq = $("i-arquivo").files && $("i-arquivo").files[0];
+    $("msg-env").textContent = "";
+    if (etapa === "menu") { limparArquivo(); er.textContent = "⚠️ Ação Inválida: Por favor, clique no botão Iniciar Envios 🚀 antes de anexar as planilhas."; return; }
+    if (etapa === "cruzando") return;
+    var pede = etapa === "csv" ? ".csv" : ".zip";
+    if (!arq) { er.textContent = "⚠️ Ação Inválida: Eu estou aguardando o arquivo " + pede + ". Por favor, anexe o documento ou clique em Abortar ❌."; return; }
+    // Só o nome do arquivo é conferido; o conteúdo não é lido.
+    if (!arq.name.toLowerCase().endsWith(pede)) {
+      er.textContent = etapa === "csv"
+        ? "⚠️ O arquivo enviado não é válido. Por favor, envie um arquivo com o formato .csv."
+        : "⚠️ O arquivo enviado não é válido. Por favor, envie um arquivo compactado .zip.";
+      return;
+    }
+    limparArquivo();
+    if (etapa === "csv") { etapa = "zip"; desenharEtapa(); return; }
+    etapa = "cruzando"; desenharEtapa();
+    Painel.soServidor("Cruzar o CSV com os PDFs do ZIP");
+  });
+
+  // ---------- Demonstração das etapas seguintes (dados de exemplo) ----------
+  var demo = null, aviso = "";
+  function letra(i) { return String.fromCharCode(65 + (i % 26)) + (i >= 26 ? String(Math.floor(i / 26)) : ""); }
+  function listaPdfs(pdfs) { return pdfs.map(function (p, i) { return "<b>" + letra(i) + "</b> - " + esc(p); }).join("<br>"); }
+  function tela(corpo, controles) {
+    $("demo").innerHTML = '<p class="hint"><b>Dados de exemplo.</b> Nada aqui é real nem é enviado.</p>' +
+      (aviso ? '<p class="msg" role="status">' + aviso + "</p>" : "") +
+      '<div class="cartao-ex">' + corpo + "</div>" + controles;
+    aviso = "";
+  }
+  function btn(id, rotulo, classe) { return '<button type="button" data-d="' + id + '"' + (classe ? ' class="' + classe + '"' : "") + ">" + rotulo + "</button>"; }
+  function campo(rotulo, ph, id) {
+    return '<form data-form="' + id + '" novalidate style="margin-top:12px"><label for="d-' + id + '">' + rotulo + '</label><div class="row"><input type="text" id="d-' + id + '" autocomplete="off" placeholder="' + ph + '"><button type="submit" class="primary">Enviar</button></div></form>';
+  }
+  function sair(msg) { demo = null; aviso = msg || ""; $("demo").innerHTML = aviso ? '<p class="msg" role="status">' + aviso + "</p>" : ""; aviso = ""; }
+
+  function iniciarDemo() {
+    var e = est.ler();
+    demo = {
+      st: "", validadas: [{ loja: "Exemplo Um", email: "loja1@example.com", pdf: "RNM Exemplo Um.pdf", tipo: "exato" }],
+      pares: [{ loja: { loja: "Exemplo Dois", email: "loja2@example.com" }, pdf: "RNM Exemplo 2.pdf" }],
+      lojas: [{ loja: "Exemplo Tres", email: "loja3@example.com" }, { loja: "Exemplo Quatro", email: "loja4@example.com" }],
+      pdfs: ["RNM Solta Alfa.pdf", "RNM Solta Beta.pdf"]
+    };
+    if (e.filtro) {
+      aviso = "✅ Extração concluída. Verificando histórico de envios e cruzando dados...";
+    } else {
+      est.alterar(function (o) { o.filtro = true; o.religa_em = 0; });
+      desenharFiltro();
+      aviso = "✅ Extração concluída. ⚠️ Filtro Anti-Duplicidade DESATIVADO. Cruzando todos os dados...<br>🛡️ <b>Segurança Reativada:</b> O Filtro Anti-Duplicidade voltou a ser ligado automaticamente após a importação deste lote.";
+    }
+    proximaSim();
+  }
+  function proximaSim() {
+    if (!demo.pares.length) { if (demo.lojas.length && demo.pdfs.length) return manual(); return resumo(); }
+    var p = demo.pares[0]; demo.st = "sim";
+    tela("🔍 <b>Similaridade Encontrada:</b><br><br>Loja na Planilha: <b>" + esc(p.loja.loja) + "</b><br>Arquivo PDF: <b>" + esc(p.pdf) + "</b><br><br>Deseja associar estes dois?",
+      '<div class="actions">' + btn("sim", "Sim ✅", "primary") + btn("nao", "Não ❌") + "</div>" + abortar());
+  }
+  function abortar() { return '<div class="actions">' + btn("abortar", "Abortar ❌") + "</div>"; }
+  function manual() {
+    if (!demo.lojas.length || !demo.pdfs.length) return resumo();
+    var l = demo.lojas[0]; demo.st = "man";
+    tela("⚠️ <b>Auditoria Manual Passo a Passo</b><br><br>🏬 <b>Loja Pendente:</b> " + esc(l.loja) + "<br>✉️ <b>E-mail:</b> " + esc(l.email) +
+      "<br><br>📄 <b>PDFs Disponíveis:</b><br>" + listaPdfs(demo.pdfs) +
+      "<br><br>👉 <b>Digite a LETRA</b> correspondente ao PDF desta loja.<br>🔎 <i>Dica: Para visualizar um PDF antes de associar, clique em <b>Ver PDF 👁️</b>.</i>",
+      campo("Letra do PDF desta loja", "A", "letra") +
+      '<div class="actions">' + btn("pular", "Pular Loja ⏭️") + btn("encerrar", "Encerrar e Ir para o Resumo ⏭️") + btn("verpdf", "Ver PDF 👁️") + btn("abortar", "Abortar ❌") + "</div>");
+  }
+  function indiceLetra(txt) {
+    txt = txt.trim().toUpperCase();
+    for (var i = 0; i < demo.pdfs.length; i++) if (letra(i) === txt) return i;
+    return -1;
+  }
+  function resumo() {
+    var v = demo.validadas, sem = demo.lojas;
+    if (!v.length) {
+      var f = "⚠️ <b>Nenhuma nota foi combinada com sucesso.</b><br><br>❌ <b>Lojas pendentes (" + sem.length + "):</b><br>" + sem.map(function (x) { return "&nbsp;&nbsp;- " + esc(x.loja); }).join("<br>");
+      $("demo").innerHTML = '<div class="cartao-ex">' + f + '</div><p class="msg">Operação abortada.</p>';
+      demo = null; return;
+    }
+    demo.st = "res";
+    var t = "✅ <b>Validação finalizada!</b><br><br>📊 <b>Balanço Geral:</b><br>✅ Notas prontas para envio: <b>" + v.length + "</b><br>❌ Lojas sem PDF: <b>" + sem.length + "</b><br><br>";
+    if (sem.length) t += "⚠️ <b>Não localizadas na auditoria:</b><br>" + sem.map(function (x) { return "&nbsp;&nbsp;&nbsp;❌ " + esc(x.loja); }).join("<br>") + "<br><br>";
+    t += "📋 <b>Resumo do que será enviado:</b><br>" + v.map(function (n) {
+      var ic = n.tipo === "similar" ? "🔍" : n.tipo === "manual" ? "✍️" : "📄";
+      return ic + " <b>" + esc(n.pdf) + "</b><br>&nbsp;&nbsp;&nbsp;└ Loja: " + esc(n.loja) + " | E-mail: " + esc(n.email);
+    }).join("<br><br>") + "<br><br>Deseja aprovar e iniciar os envios agora?";
+    tela(t + '<p class="hint">Neste ponto o lote fica gravado como <b>RASCUNHO</b>; o CSV e o ZIP são apagados.</p>',
+      '<div class="actions">' + btn("aprovar", "Aprovar Envio ✅", "primary") + btn("abortar", "Abortar ❌") + btn("verfinal", "Ver PDF 👁️", "full") + "</div>");
+  }
+  function telaInspFinal() {
+    demo.st = "final";
+    tela("🔎 <b>Qual nota você deseja visualizar?</b><br>Digite o <b>NÚMERO</b> correspondente:<br><br>" +
+      demo.validadas.map(function (n, i) { return "<b>" + (i + 1) + "</b> - " + esc(n.pdf); }).join("<br>"),
+      campo("Número da nota", "1", "num") + '<div class="actions">' + btn("aprovar", "Aprovar Envio ✅", "primary") + btn("verfinal2", "Ver PDF 👁️") + btn("abortar", "Abortar ❌", "full") + "</div>");
+  }
+
+  function acao(a) {
+    if (!demo) return;
+    if (a === "abortar") return sair("Operação cancelada. Retornando ao menu do disparador...");
+    if (a === "sim" || a === "nao") {
+      var p = demo.pares.shift();
+      if (a === "sim") demo.validadas.push({ loja: p.loja.loja, email: p.loja.email, pdf: p.pdf, tipo: "similar" });
+      else { demo.lojas.push(p.loja); demo.pdfs.push(p.pdf); }
+      return proximaSim();
+    }
+    if (a === "encerrar") return resumo();
+    if (a === "pular") {
+      var x = demo.lojas.shift(); demo.lojas.push(x);
+      aviso = "⏭️ Loja <b>" + esc(x.loja) + "</b> movida para o final da fila.";
+      return manual();
+    }
+    if (a === "verpdf") {
+      if (demo.st === "insp") { aviso = "🔎 Digite a <b>LETRA</b> do PDF que você deseja visualizar (Ex: A, B, C):"; return inspTela(); }
+      if (demo.pdfs.length === 1) { Painel.soServidor("Ver PDF 👁️"); aviso = "🔎 <b>Arquivo:</b> " + esc(demo.pdfs[0]) + "<br>👉 Digite <b>A</b> para associar ou pule a loja."; return manual(); }
+      aviso = "🔎 <b>Qual PDF você deseja visualizar?</b><br>Digite a <b>LETRA</b> correspondente (Ex: A, B, C).";
+      return inspTela();
+    }
+    if (a === "aprovar") { Painel.soServidor("Aprovar Envio ✅"); return; }
+    if (a === "verfinal") {
+      if (!demo.validadas.length) { aviso = "⚠️ Nenhuma nota validada para visualizar."; return resumo(); }
+      if (demo.validadas.length === 1) { Painel.soServidor("Ver PDF 👁️"); return; }
+      return telaInspFinal();
+    }
+    if (a === "verfinal2") { aviso = "🔎 Digite o <b>NÚMERO</b> da nota que deseja visualizar (Ex: 1, 2):"; return telaInspFinal(); }
+  }
+  function inspTela() {
+    demo.st = "insp";
+    tela("📄 <b>PDFs Disponíveis:</b><br>" + listaPdfs(demo.pdfs),
+      campo("Letra do PDF a visualizar", "A", "insp") +
+      '<div class="actions">' + btn("pular", "Pular Loja ⏭️") + btn("encerrar", "Encerrar e Ir para o Resumo ⏭️") + btn("verpdf", "Ver PDF 👁️") + btn("abortar", "Abortar ❌") + "</div>");
+  }
+  function pular() { var x = demo.lojas.shift(); demo.lojas.push(x); aviso = "⏭️ Loja <b>" + esc(x.loja) + "</b> movida para o final da fila."; manual(); }
+
+  $("b-demo").addEventListener("click", iniciarDemo);
+  $("demo").addEventListener("click", function (e) {
+    var b = e.target.closest("[data-d]");
+    if (!b || !demo) return;
+    var a = b.dataset.d;
+    if (demo.st === "insp" && a === "pular") { return pular(); }
+    if (demo.st === "insp" && a === "encerrar") { return resumo(); }
+    acao(a);
+  });
+  $("demo").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var f = e.target.closest("[data-form]");
+    if (!f || !demo) return;
+    var txt = f.querySelector("input").value, id = f.dataset.form;
+    if (id === "letra") {
+      var i = indiceLetra(txt);
+      if (i === -1) { aviso = "⚠️ Letra inválida. Digite apenas a letra correspondente ao PDF (Ex: A, B, C) ou use os botões."; return manual(); }
+      var l = demo.lojas.shift(), pdf = demo.pdfs.splice(i, 1)[0];
+      demo.validadas.push({ loja: l.loja, email: l.email, pdf: pdf, tipo: "manual" });
+      aviso = "✅ <b>Associado com sucesso:</b><br>" + esc(l.loja) + " ↔️ " + esc(pdf);
+      return (demo.lojas.length && demo.pdfs.length) ? manual() : resumo();
+    }
+    if (id === "insp") {
+      var j = indiceLetra(txt);
+      if (j === -1) { aviso = "⚠️ Letra não encontrada.<br>Digite a letra correta para visualizar ou clique em um dos botões abaixo."; return inspTela(); }
+      Painel.soServidor("Ver PDF 👁️");
+      aviso = "✅ <b>Visualização concluída.</b><br>👉 <b>Atenção:</b> Você voltou para o modo de Associação.<br>Digite a <b>LETRA</b> da nota se quiser associar à loja.";
+      return manual();
+    }
+    if (id === "num") {
+      var t = txt.trim();
+      if (!/^[+-]?\d+$/.test(t)) { aviso = "⚠️ Por favor, digite apenas o <b>NÚMERO</b> correspondente à nota (Ex: 1, 2)."; return telaInspFinal(); }
+      var k = parseInt(t, 10) - 1;
+      if (k < 0 || k >= demo.validadas.length) { aviso = "⚠️ Número não encontrado. Digite um número válido para visualizar."; return telaInspFinal(); }
+      Painel.soServidor("Ver PDF 👁️");
+      aviso = "✅ <b>Visualização concluída.</b>";
+      return resumo();
+    }
+  });
+
+  Painel.topo("notas");
+  desenharEtapa();
+  religarSePassou();
+  setInterval(religarSePassou, 1000);
+})();
+</script>
+</body>
+</html>

@@ -6,6 +6,7 @@
 <title>Shopee Vídeo - Painel</title>
 <meta name="description" content="Painel web da Shopee Vídeo (modo assistente): as mesmas configurações do painel do Telegram.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23ee4d2d'/%3E%3Cpath d='M26 20l20 12-20 12z' fill='%23fff'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="/assets/painel.css">
 <style>
   :root {
     --bg: #0f1115;
@@ -90,14 +91,7 @@
 </head>
 <body>
 <div class="wrap">
-  <nav aria-label="Páginas">
-    <a href="/">Visão geral</a>
-    <a href="/shopee-video" aria-current="page">Shopee Vídeo</a>
-  </nav>
-
-  <div class="banner" role="note">
-    <b>Protótipo da tela.</b> Este painel ainda não está ligado ao robô: o que você muda aqui fica só neste navegador e não altera nada no servidor nem no Telegram. Os números de exemplo estão marcados.
-  </div>
+  <div id="topo"></div>
 
   <h1>🎬 Shopee Vídeo</h1>
   <p class="lead">Modo assistente: o robô prepara cada postagem (vídeo, título, produtos e comentário) e manda no seu privado do Telegram, para você postar pelo seu celular.</p>
@@ -212,8 +206,10 @@
 </dialog>
 <div id="toast" role="status" aria-live="polite"></div>
 
+<script src="/assets/painel.js"></script>
 <script>
 (function () {
+  Painel.topo("shopee-video");
   "use strict";
   // Mesmos padrões e limites do painel do Telegram (painel_shopee_video.py).
   var PADRAO = { pausado: true, limite_min: 5, limite_max: 10, inicio: 13, fim: 22, fonte: "autorais" };

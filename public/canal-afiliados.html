@@ -1,0 +1,1037 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Canal Afiliados - Painel</title>
+<meta name="description" content="Painel web do Canal Afiliados: as mesmas configurações e fluxos do painel do Telegram.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23ee4d2d'/%3E%3Cpath d='M26 20l20 12-20 12z' fill='%23fff'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="/assets/painel.css">
+<style>
+  .bot { white-space: pre-line; overflow-wrap: anywhere; }
+  .ok { color: var(--ok); font-size: 14px; margin: 6px 0 0; white-space: pre-line; }
+  .err { white-space: pre-line; }
+  .sub { margin-top: 12px; }
+  .fila-linha { margin: 0 0 10px; overflow-wrap: anywhere; }
+  .fila-linha small { display: block; color: var(--muted); }
+  .divisoria { border: 0; border-top: 1px solid var(--line); margin: 10px 0; }
+  .menu-grid .full { grid-column: 1 / -1; }
+  .lista-num { margin: 0; padding: 0; list-style: none; overflow-wrap: anywhere; }
+  .lista-num li { padding: 4px 0; }
+  textarea.legenda { min-height: 160px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 14px; }
+  @media (max-width: 420px) { .menu-grid .full { grid-column: auto; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div id="topo"></div>
+  <h1>📺 Canal Afiliados</h1>
+  <p class="lead">Postagens do canal principal, fila de vídeos e configurações avançadas: os mesmos botões e fluxos do painel do Telegram.</p>
+  <a class="voltar" id="voltar" href="#" hidden>🔙 Voltar</a>
+  <div id="tela" aria-live="polite"></div>
+</div>
+<script src="/assets/painel.js"></script>
+<script>
+(function () {
+  "use strict";
+  var $ = Painel.$, esc = Painel.esc;
+
+  /* ===== Estado (só neste navegador) ===== */
+  var PADRAO = {
+    contador: 1,
+    fila: [],                       // {id, legenda, data, prioridade, postado}
+    rotina: {                       // padrões de ler_config_rotina (canal principal)
+      bom_dia: { inicio: 6, fim: 9, frequencia: 1 },
+      incentivo: { inicio: 10, fim: 20, frequencia: 2 },
+      boa_noite: { inicio: 21, fim: 23, frequencia: 1 },
+      link_grupo: { inicio: 9, fim: 21, frequencia: 3 },
+      divulgar_gem: { inicio: 8, fim: 22, frequencia: 1 },
+      promo_viral: { inicio: 10, fim: 20, frequencia: 1 },
+      promo_publico: { inicio: 10, fim: 20, frequencia: 1 },
+      promo_achadinhos: { inicio: 10, fim: 20, frequencia: 1 },
+      pausado: false
+    },
+    spam: { alvos: [], frequencia: 0, repeticoes: 6, replicas: 5, pausado: false, config_alvos: {} },
+    pausa: { ativa: false, data_retorno: null, servicos_pausados: [] },
+    sim: { bomDia: false, boaNoite: false },   // o que o servidor saberia: Bom Dia / Boa Noite de hoje já saíram
+    fluxo: null                                // Criar Postagem em andamento
+  };
+  var S = Painel.estado("canal-afiliados", PADRAO);
+  function ler() { return S.ler(); }
+  function alt(fn) { return S.alterar(fn); }
+
+  var NOMES_ROTINA = {
+    bom_dia: "Bom Dia ☀️", boa_noite: "Boa Noite 🌙", incentivo: "Incentivo 🔥", link_grupo: "Convite do Grupo 🔗",
+    divulgar_gem: "Prompt GEM 🤖", promo_viral: "Convite do Grupo Viral 🚀", promo_publico: "Promo Público 🗣️",
+    promo_achadinhos: "Achadinhos VIP 🛍️"
+  };
+  var ORDEM_ROTINA = ["bom_dia", "incentivo", "link_grupo", "divulgar_gem", "promo_viral", "promo_publico", "promo_achadinhos", "boa_noite"];
+  var EDITAR_ROTINA = [
+    ["Editar Bom Dia ☀️", "bom_dia"], ["Editar Incentivo 🔥", "incentivo"],
+    ["Editar Convite 🔗", "link_grupo"], ["Editar Prompt GEM 🤖", "divulgar_gem"],
+    ["Editar Convite Viral 🚀", "promo_viral"], ["Editar Promo Público 🗣️", "promo_publico"],
+    ["Editar Achadinhos 🛍️", "promo_achadinhos"], ["Editar Boa Noite 🌙", "boa_noite"]
+  ];
+
+  /* ===== Datas no horário de Brasília ===== */
+  function agoraBR() {
+    var p = {};
+    new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit",
+      hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(new Date()).forEach(function (x) { p[x.type] = x.value; });
+    return { y: +p.year, m: +p.month, d: +p.day, h: +p.hour, mi: +p.minute };
+  }
+  function z(n) { return (n < 10 ? "0" : "") + n; }
+  function ymd(o) { return o.y + "-" + z(o.m) + "-" + z(o.d); }
+  function somaDias(s, n) {
+    var a = s.split("-"), d = new Date(Date.UTC(+a[0], +a[1] - 1, +a[2] + n));
+    return d.getUTCFullYear() + "-" + z(d.getUTCMonth() + 1) + "-" + z(d.getUTCDate());
+  }
+  function brData(s) { var a = s.split("-"); return a[2] + "/" + a[1] + "/" + a[0]; }
+  function brCurta(s) { var a = s.split("-"); return a[2] + "/" + a[1]; }
+  var DIAS = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"];
+  function diaSemana(s) { var a = s.split("-"); return DIAS[new Date(Date.UTC(+a[0], +a[1] - 1, +a[2])).getUTCDay()]; }
+  function hoje() { return ymd(agoraBR()); }
+  function amanha() { return somaDias(hoje(), 1); }
+  function ehHoje(d) { return d === "2000-01-01" || d <= hoje(); }
+  function rotuloData(d) {
+    if (ehHoje(d)) return "Hoje 🟢";
+    if (d === amanha()) return "Amanhã 🟡";
+    return brData(d) + " 🔵";
+  }
+
+  /* ===== Texto da fila ===== */
+  function resumo(leg) { return String(leg || "").replace(/<[^>]+>/g, "").split("\n")[0] || "Vídeo sem descrição"; }
+  function ordenar(f) {
+    return f.map(function (x, i) { return [x, i]; }).sort(function (a, b) {
+      if (a[0].data !== b[0].data) return a[0].data < b[0].data ? -1 : 1;
+      if (a[0].prioridade !== b[0].prioridade) return a[0].prioridade - b[0].prioridade;
+      return a[1] - b[1];
+    }).map(function (x) { return x[0]; });
+  }
+  function tamanho(s) { return Array.from(s).length; }   // conta como o Telegram (caracteres, não pares UTF-16)
+  function menorNumero(f, ids) {
+    var menor = Infinity;
+    ids.forEach(function (id) {
+      var it = f.filter(function (x) { return x.id === id; })[0];
+      var m = it && /vídeo\s+(\d+)/i.exec(it.legenda);
+      if (m && +m[1] < menor) menor = +m[1];
+    });
+    return menor;
+  }
+  // Mesma regra de aplicar_renumeracao_e_salvar: grava a ordem (prioridade) e renumera "Vídeo N" em sequência.
+  function renumerar(d, ids, base) {
+    var n = base != null ? base : menorNumero(d.fila, ids);
+    if (n === Infinity) n = d.contador;
+    ids.forEach(function (id, i) {
+      var it = d.fila.filter(function (x) { return x.id === id; })[0];
+      if (!it) return;
+      it.legenda = it.legenda.replace(/(vídeo\s+)\d+/i, function (_, a) { return a + n; });
+      it.prioridade = i + 1;
+      n++;
+    });
+    d.contador = n;
+    d.fila = ordenar(d.fila);
+  }
+
+  /* ===== Mensagens e navegação ===== */
+  var MSG = null;            // {t, ok}
+  var PZ = null;             // fluxo da pausa programada (em memória, como o FSM do bot)
+  var FL = null;             // fluxo aberto em Gerenciar Fila
+  var CFG = null;            // fluxo aberto nas configurações (rotina, spam, número)
+  var RECIBO = null;
+  function dizer(t, ok) { MSG = { t: t, ok: !!ok }; }
+  function blocoMsg() {
+    if (!MSG) return '<div role="alert" class="err"></div>';
+    return MSG.ok ? '<p class="ok" role="status">' + esc(MSG.t) + "</p>" : '<p class="err" role="alert">' + esc(MSG.t) + "</p>";
+  }
+  function voltar(h, rot) { var a = $("voltar"); a.hidden = !h; a.setAttribute("href", h || "#"); a.textContent = rot || "🔙 Voltar"; }
+  function ir(h) { if (location.hash === h) render(); else location.hash = h; }
+  function resetarFluxos() { MSG = null; PZ = null; FL = null; CFG = null; RECIBO = null; }
+
+  var ACT = {}, FORM = {};
+  function btn(act, rot, extra, cls, arg) {
+    return '<button type="button" data-act="' + act + '"' + (arg != null ? ' data-arg="' + esc(arg) + '"' : "") +
+      (cls ? ' class="' + cls + '"' : "") + ">" + esc(rot) + "</button>";
+  }
+  function campo(id, rotulo, inner) { return '<div class="field"><label for="' + id + '">' + rotulo + "</label>" + inner + "</div>"; }
+
+  /* ================================================================
+     Menu do Canal Afiliados (obter_teclado_principal)
+     ================================================================ */
+  function vMenu() {
+    voltar(null);
+    var d = ler();
+    return '<div class="card"><p class="bot" style="margin-top:0"><b>📺 Menu do Canal Afiliados</b>\nGerencie as postagens e rotinas abaixo:</p>' +
+      '<div class="menu-grid"><a class="btn" href="#criar">Criar Postagem 📝</a><a class="btn" href="#fila">Gerenciar Fila 📋</a>' +
+      '<a class="btn full" href="#config">🛠️ Configurações Avançadas</a></div></div>' +
+      '<details class="card sub"><summary>Simulação do servidor (só no protótipo)</summary>' +
+      '<p class="hint">O robô sabe se o Bom Dia e a Boa Noite de hoje já saíram. Aqui você diz isso à mão, para ver o efeito na fila (data dos novos vídeos), nos disparos manuais e em Mover Posição.</p>' +
+      '<div class="switch"><label for="sim-bd" style="margin:0">O Bom Dia de hoje já saiu</label><input type="checkbox" id="sim-bd" data-sim="bomDia"' + (d.sim.bomDia ? " checked" : "") + "></div>" +
+      '<div class="switch"><label for="sim-bn" style="margin:0">A Boa Noite de hoje já saiu</label><input type="checkbox" id="sim-bn" data-sim="boaNoite"' + (d.sim.boaNoite ? " checked" : "") + "></div></details>";
+  }
+
+  /* ================================================================
+     Criar Postagem 📝 (PostagemFluxo)
+     ================================================================ */
+  function fluxoNovo() { return { passo: "video", fala: "Excelente! Envie o vídeo do produto e eu criarei a legenda de vendas para você.", links_shopee: [], links_tiktok: [] }; }
+  function setFluxo(fn) { alt(function (d) { if (!d.fluxo) d.fluxo = fluxoNovo(); fn(d.fluxo, d); }); }
+
+  function vCriar() {
+    voltar("#", "🔙 Voltar ao menu do Canal Afiliados");
+    var d = ler(), f = d.fluxo, h = "";
+    if (RECIBO) {
+      h += '<div class="card"><p class="bot" style="margin:0">' + RECIBO + "</p></div>" +
+        '<div class="actions"><button type="button" class="primary full" data-act="novaPostagem">Criar Postagem 📝</button></div>';
+      return h;
+    }
+    if (!f) {
+      f = fluxoNovo();
+      alt(function (x) { x.fluxo = f; });
+    }
+    h += '<div class="card"><p class="bot" style="margin-top:0">' + esc(f.fala) + "</p>";
+    var p = f.passo;
+    if (p === "video") {
+      h += campo("in-video", "Vídeo do produto", '<input type="file" id="in-video" accept="video/*">') +
+        '<p class="hint">O vídeo fica só neste navegador (nada é enviado). Tamanho máximo de 20MB, o limite do Telegram para bots.</p>' +
+        '<div class="actions"><button type="button" class="primary" data-act="enviarVideo">Enviar vídeo</button>' + btn("cancelarPost", "Cancelar ❌") + "</div>" +
+        '<p class="err" role="alert">' + (MSG ? esc(MSG.t) : "") + "</p>";
+    } else if (p === "erro") {
+      h += '<div class="actions">' + btn("tentarDeNovo", "Tentar Novamente 🔄") + btn("manualErro", "Digitar Manualmente ✍️") + btn("cancelarPost", "Cancelar ❌", null, "full") + "</div>" +
+        '<p class="hint">Protótipo: a análise do vídeo pela IA só roda no servidor. Para ver a tela de aprovação do nome:</p>' +
+        '<div class="actions">' + btn("exemploIA", "Ver a aprovação com um nome de exemplo", null, "full") + "</div>";
+    } else if (p === "confirmar") {
+      h += '<div class="actions">' + btn("aprovarNome", "Aprovar ✅", null, "primary") + btn("digitarNome", "Digitar Nome ✍️") + btn("cancelarPost", "Cancelar ❌", null, "full") + "</div>";
+    } else if (p === "manual") {
+      h += '<form data-form="nomeManual" novalidate>' + campo("in-nome", "Nome do produto", '<input type="text" id="in-nome" autocomplete="off">') +
+        '<div class="actions"><button type="submit" class="primary">Salvar nome</button>' + btn("cancelarPost", "Cancelar ❌") + "</div></form>" +
+        '<p class="err" role="alert">' + (MSG ? esc(MSG.t) : "") + "</p>";
+    } else if (p === "plataforma") {
+      h += '<div class="actions">' + btn("plat", "Ambos 🛒🎵", null, "full", "Ambos 🛒🎵") + btn("plat", "Apenas Shopee 🛒", null, "", "Apenas Shopee 🛒") +
+        btn("plat", "Apenas TikTok 🎵", null, "", "Apenas TikTok 🎵") + btn("cancelarPost", "Cancelar ❌", null, "full") + "</div>";
+    } else if (p === "link_video_shopee" || p === "link_video_tiktok") {
+      h += '<form data-form="linkVideo" novalidate>' + campo("in-link", "Link do vídeo", '<input type="text" id="in-link" autocomplete="off" placeholder="https://...">') +
+        '<div class="actions"><button type="submit" class="primary">Salvar link</button>' + btn("cancelarPost", "Cancelar ❌") + "</div></form>";
+    } else if (p === "links_shopee" || p === "links_tiktok") {
+      h += '<form data-form="linkProduto" novalidate>' + campo("in-link", "Link do produto", '<input type="text" id="in-link" autocomplete="off" placeholder="https://...">') +
+        '<div class="actions"><button type="submit" class="primary">Adicionar link</button>' + btn("finalizarLinks", "Finalizar ✅") + btn("cancelarPost", "Cancelar ❌", null, "full") + "</div></form>";
+    }
+    h += "</div>";
+    return h;
+  }
+
+  ACT.novaPostagem = function () { RECIBO = null; MSG = null; alt(function (d) { d.fluxo = null; }); render(); };
+  ACT.enviarVideo = function () {
+    var inp = $("in-video"), file = inp && inp.files && inp.files[0];
+    if (!file || !/^video\//.test(file.type || "")) {
+      dizer("Por favor, envie um arquivo de vídeo."); render(); return;
+    }
+    MSG = null;
+    var grande = file.size > 20 * 1024 * 1024;
+    alt(function (d) {
+      var f = d.fluxo;
+      f.numero = d.contador;                  // reserva o número já na entrada (o Cancelar devolve)
+      d.contador = d.contador + 1;
+      f.video = file.name;
+      f.passo = "erro";
+      f.origemErro = true;
+      f.fala = "⚠️ A IA não conseguiu processar este vídeo.\nMotivo: " +
+        (grande ? "O vídeo ultrapassa o limite de 20MB do Telegram para Bots." : "No protótipo a análise do vídeo pela IA não está disponível (só roda no servidor).") +
+        "\n\nO que você deseja fazer agora?";
+    });
+    render();
+  };
+  ACT.tentarDeNovo = function () { Painel.soServidor("Tentar Novamente 🔄"); };
+  ACT.manualErro = function () {
+    setFluxo(function (f) { f.passo = "manual"; f.vindo = "erro"; f.fala = "Sem problemas. Digite manualmente APENAS O NOME DO PRODUTO ou kit:"; }); render();
+  };
+  ACT.exemploIA = function () {
+    setFluxo(function (f) {
+      f.nome = "Vídeo " + f.numero + "\n📦 Item: Kit de exemplo (exemplo)";
+      f.passo = "confirmar";
+      f.fala = f.nome + "\n\n👉 Esta identificação está correta? Escolha uma opção abaixo:";
+    }); render();
+  };
+  ACT.aprovarNome = function () {
+    setFluxo(function (f) { f.passo = "plataforma"; f.fala = "Onde você postou/vai postar este vídeo?"; }); render();
+  };
+  ACT.digitarNome = function () {
+    setFluxo(function (f) { f.passo = "manual"; f.vindo = "confirmar"; f.fala = "Sem problemas. Digite manualmente APENAS O NOME DO PRODUTO:"; }); render();
+  };
+  FORM.nomeManual = function () {
+    var t = $("in-nome").value.trim();
+    if (!t) { dizer("Digite o nome do produto."); render(); return; }
+    MSG = null;
+    setFluxo(function (f) {
+      f.nome = "Vídeo " + f.numero + "\n📦 Item: " + t;
+      f.passo = "plataforma";
+      f.fala = "Identificação salva como:\n\n" + f.nome + "\n\nOnde você postou/vai postar este vídeo?";
+    }); render();
+  };
+  ACT.plat = function (b) {
+    var p = b.dataset.arg;
+    setFluxo(function (f) {
+      f.plataforma = p; f.links_shopee = []; f.links_tiktok = [];
+      if (p === "Ambos 🛒🎵" || p === "Apenas Shopee 🛒") {
+        f.passo = "link_video_shopee"; f.fala = "Certo! Agora envie o Link do Vídeo que você postou na SHOPEE.";
+      } else {
+        f.passo = "link_video_tiktok"; f.fala = "Certo! Agora envie o Link do Vídeo que você postou no TIKTOK.";
+      }
+    }); render();
+  };
+  FORM.linkVideo = function () {
+    var t = $("in-link").value.trim();
+    if (!t) { return; }
+    setFluxo(function (f) {
+      if (f.passo === "link_video_shopee") {
+        f.link_video_shopee = t; f.passo = "links_shopee";
+        f.fala = "Link do vídeo da Shopee salvo! 🛒\n\nAgora, envie os links dos produtos da SHOPEE um por um. Clique em 'Finalizar' quando terminar.";
+      } else {
+        f.link_video_tiktok = t; f.passo = "links_tiktok";
+        f.fala = "Link do vídeo do TikTok salvo! 🎵\n\nAgora, envie os links dos produtos do TIKTOK um por um. Clique em 'Finalizar' quando acabar.";
+      }
+    }); render();
+  };
+  function depoisShopee(f, auto) {
+    if (f.plataforma === "Ambos 🛒🎵") {
+      f.passo = "link_video_tiktok";
+      f.fala = (auto ? "Link Shopee 6/6 registrado.\nLimite atingido, avançando para a próxima etapa...\n\n" : "") +
+        "Links da Shopee salvos! 🛒\n\nAgora, envie o Link do Vídeo que você postou no TIKTOK.";
+      return false;
+    }
+    return true;
+  }
+  FORM.linkProduto = function () {
+    var t = $("in-link").value.trim();
+    if (!t) { return; }
+    var fim = false;
+    setFluxo(function (f) {
+      var tik = f.passo === "links_tiktok", lista = tik ? f.links_tiktok : f.links_shopee, nome = tik ? "TikTok" : "Shopee";
+      lista.push(t);
+      if (lista.length >= 6) {
+        if (tik) { f.fala = "Link TikTok 6/6 registrado.\nLimite atingido, finalizando a postagem..."; fim = true; }
+        else { fim = depoisShopee(f, true); }
+      } else {
+        f.fala = "Link " + nome + " " + lista.length + "/6 registrado. Envie o próximo ou clique em Finalizar.";
+      }
+    });
+    if (fim) concluir(); else render();
+  };
+  ACT.finalizarLinks = function () {
+    var fim = false;
+    setFluxo(function (f) {
+      if (f.passo === "links_tiktok") fim = true;
+      else fim = depoisShopee(f, false);
+    });
+    if (fim) concluir(); else render();
+  };
+  ACT.cancelarPost = function () {
+    alt(function (d) {
+      var f = d.fluxo;
+      if (f && f.numero != null && d.contador === f.numero + 1) d.contador = f.numero;   // devolve o número reservado
+      d.fluxo = null;
+    });
+    resetarFluxos();
+    dizer("Ação cancelada e memória limpa. Voltando ao menu...", true);
+    ir("#");
+  };
+
+  // finalizar_postagem: monta a legenda (3 níveis, 1024 caracteres) e põe o vídeo na fila.
+  function concluir() {
+    var d0 = ler(), f = d0.fluxo, plat = f.plataforma;
+    var titulo = f.nome.replace(/\n/g, " | ");
+    var DIV = "━━━━━━━━━━━━━━━";
+    var cab = "<b>" + titulo + "</b>\n\n" + DIV + "\n\n";
+    var longo = "<i>(💡 O nosso grupo é 100% gratuito. Para nos ajudar a continuar trazendo conteúdos, por favor, clique no link do vídeo acima, assista, curta, comente e siga o perfil! Isso nos ajuda muito!)</i>\n\n";
+    var curto = "<i>(💡 Grupo 100% gratuito. Curta e comente nos vídeos para ajudar!)</i>\n\n";
+    var rodape = "\n<i>(💡 Grupo 100% gratuito. Curta e comente nos vídeos para ajudar!)</i>";
+    function montar(apoio, isRodape, alvo) {
+      var p = alvo || plat, t = cab, i;
+      if (p === "Ambos 🛒🎵" || p === "Apenas Shopee 🛒") {
+        t += "🔶 <b>SHOPEE VÍDEO</b> 🔶\n\n🎬 Link do Vídeo:\n" + (f.link_video_shopee || "") + "\n";
+        if (!isRodape) t += apoio;
+        if (f.links_shopee.length) { t += "🔗 Links dos Produtos:\n"; for (i = 0; i < f.links_shopee.length; i++) t += "👉 " + (i + 1) + "º: " + f.links_shopee[i] + "\n"; }
+        t += p === "Ambos 🛒🎵" ? "\n" + DIV + "\n\n" : "\n";
+      }
+      if (p === "Ambos 🛒🎵" || p === "Apenas TikTok 🎵") {
+        t += "⬛ <b>TIKTOK</b> ⬛\n\n🎬 Link do Vídeo:\n" + (f.link_video_tiktok || "") + "\n";
+        if (!isRodape) t += apoio;
+        if (f.links_tiktok.length) { t += "🔗 Links dos Produtos:\n"; for (i = 0; i < f.links_tiktok.length; i++) t += "👉 " + (i + 1) + "º: " + f.links_tiktok[i] + "\n"; }
+        t += "\n";
+      }
+      if (isRodape) t += apoio;
+      return t;
+    }
+    var legenda = montar(longo, false), dividir = false;
+    if (tamanho(legenda) > 1024) {
+      legenda = montar(curto, false);
+      if (tamanho(legenda) > 1024) {
+        legenda = montar(rodape, true);
+        if (tamanho(legenda) > 1024 && plat === "Ambos 🛒🎵") dividir = true;
+      }
+    }
+    var h = hoje(), am = amanha(), base, criado, noDia = 0, proximo;
+    alt(function (d) {
+      base = d.sim.bomDia ? am : "2000-01-01";
+      if (d.fila.length) {
+        var ult = d.fila[d.fila.length - 1].data || "2000-01-01";
+        if (ult !== "2000-01-01" && ult > base) base = ult;     // ninguém fura a fila
+      }
+      function add(leg) {
+        var maxp = 0;
+        d.fila.forEach(function (x) { if (x.data === base && x.prioridade > maxp) maxp = x.prioridade; });
+        d.fila.push({ id: Date.now() + "_" + Math.floor(1000 + Math.random() * 9000), legenda: leg, data: base, prioridade: maxp + 1, postado: false });
+      }
+      if (dividir) { add(montar(longo, false, "Apenas Shopee 🛒")); add(montar(longo, false, "Apenas TikTok 🎵")); }
+      else add(legenda);
+      d.fila = ordenar(d.fila);
+      d.fila.forEach(function (x) { if (x.data === base) noDia++; });
+      proximo = d.contador;
+      d.fluxo = null;
+    });
+    criado = Math.max(1, proximo - 1);
+    var quando;
+    if (ehHoje(base)) quando = "🟢 hoje — " + brCurta(h);
+    else quando = (base === am ? "🟡 " + "amanhã" : "🔵 " + diaSemana(base)) + " — " + brCurta(base);
+    RECIBO = "✅ Vídeo #" + criado + " entrou na fila\n\n📦 " + (dividir ? "2 posts · Shopee + TikTok" : "1 post") +
+      "\n📅 Publica " + quando + (noDia ? "\n📋 " + noDia + " na fila desse dia" : "") +
+      "\n\nO horário exato é sorteado dentro da janela do dia. Próximo vídeo: #" + proximo + ".";
+    RECIBO = esc(RECIBO);
+    MSG = null;
+    render();
+  }
+
+  /* ================================================================
+     Gerenciar Fila 📋
+     ================================================================ */
+  function vFila() {
+    voltar("#", "🔙 Voltar ao menu do Canal Afiliados");
+    var d = ler(), fila = d.fila, h = hoje(), br = brCurta(h);
+    var pausado = d.pausa.ativa;
+    var bd = d.sim.bomDia ? "Indisponível" : "Não agendado";
+    var bn = d.sim.boaNoite ? "Indisponível" : "Não agendado";
+    var t = '<div class="card"><p style="margin-top:0"><b>📋 Gerenciador de Fila de Postagens</b><br>Total de vídeos agendados: <b>' + fila.length + "</b></p>" +
+      '<p class="fila-linha">☀️ <b>Bom Dia (' + br + "):</b> " + bd + "</p><hr class=\"divisoria\">";
+    var imprimiu = false;
+    function linhaBN() { return '<hr class="divisoria"><p class="fila-linha">🌙 <b>Boa Noite (' + br + "):</b> " + bn + "</p>"; }
+    if (fila.length) {
+      fila.forEach(function (it, i) {
+        if (it.postado) return;   // postados de hoje só vêm do servidor
+        var hojeIt = ehHoje(it.data);
+        if (!hojeIt && !it.postado && !imprimiu) { t += linhaBN(); imprimiu = true; }
+        var mv = /vídeo\s+\d+/i.exec(it.legenda), mi = /📦\s*Item:\s*([^\n<]+)/.exec(it.legenda);
+        var nomeV = mv ? mv[0].replace(/^./, function (c) { return c.toUpperCase(); }) : "Vídeo ?";
+        var nomeI = mi ? mi[1].trim() : "Sem descrição";
+        var dataBr = it.data === "2000-01-01" ? "Manual (Prioridade)" : brData(it.data);
+        var prev = pausado ? "Pausado 🛑" : (hojeIt ? "Hoje 🟢" : "Amanhã 🟡");
+        t += '<p class="fila-linha"><b>' + (i + 1) + ". " + esc(nomeV) + "</b> | 📦 " + esc(nomeI) +
+          "<small>└ Lote (Data-Alvo): " + esc(dataBr) + " | Previsão: " + esc(prev) + "</small></p>";
+      });
+      if (!imprimiu) t += linhaBN();
+    } else {
+      t += '<p class="vazio">A sua fila está completamente vazia no momento.</p>' + linhaBN();
+    }
+    t += '<p class="hint">A hora exata de cada vídeo de hoje vem do servidor (aqui não é sorteada). O que já foi postado hoje também só aparece com o servidor ligado.</p>';
+    t += "<p>O que deseja fazer com a fila?</p>" +
+      '<div class="menu-grid"><button type="button" class="full" data-act="filaBtn" data-arg="publicar">Publicar Agora 🚀</button>' +
+      '<button type="button" class="full" data-act="filaBtn" data-arg="excluir">Excluir Vídeo 🗑️</button>' +
+      '<button type="button" data-act="filaBtn" data-arg="numeracao">Editar Numeração 🔢</button>' +
+      '<button type="button" data-act="filaBtn" data-arg="mover">Mover Posição ↕️</button>' +
+      '<button type="button" data-act="filaBtn" data-arg="legenda">Editar Legenda ✏️</button>' +
+      '<a class="btn" href="#">Voltar 🔙</a></div>' + blocoMsg() + "</div>";
+    if (FL) t += '<div class="card sub" id="fl-box">' + vFluxoFila() + "</div>";
+    return t;
+  }
+
+  var ROTULO_FILA = { publicar: "Agora", excluir: "Vídeo", numeracao: "Numeração", mover: "Posição", legenda: "Legenda" };
+  ACT.filaBtn = function (b) {
+    var tipo = b.dataset.arg, d = ler();
+    MSG = null; FL = null;
+    var pend = d.fila.filter(function (x) { return !x.postado; });
+    if (!pend.length) {
+      dizer("⚠️ Ação Bloqueada: A sua fila de vídeos está vazia no momento.\n\nNão há nenhum vídeo agendado para poder utilizar a função de " + ROTULO_FILA[tipo] + ".");
+      render(); return;
+    }
+    if (tipo === "mover" && pend.length === 1) {
+      var idx = d.fila.indexOf(pend[0]);
+      FL = { tipo: "mover", passo: "data", origem: idx, nova: idx };
+    } else {
+      FL = { tipo: tipo, passo: "posicao" };
+    }
+    render();
+    var el = $("fl-box"); if (el && el.scrollIntoView) el.scrollIntoView({ block: "nearest" });
+  };
+
+  function opcoesDataUnico() {
+    var d = ler(), o = [];
+    if (!d.sim.boaNoite) o.push("Hoje 🟢");
+    o.push("Amanhã 🟡");
+    for (var i = 2; i < 5; i++) o.push(brData(somaDias(hoje(), i)) + " 🔵");
+    return o;
+  }
+  function vFluxoFila() {
+    var d = ler(), f = FL, h = "", cancel = btn("flCancelar", "Cancelar ❌");
+    var posForm = function (txt, rot) {
+      return '<p class="bot" style="margin-top:0">' + txt + "</p><form data-form=\"flPos\" novalidate>" +
+        campo("in-pos", "Número da posição", '<input type="text" id="in-pos" inputmode="numeric" autocomplete="off">') +
+        '<div class="actions"><button type="submit" class="primary">' + rot + "</button>" + cancel + "</div></form>";
+    };
+    if (f.passo === "posicao") {
+      if (f.tipo === "excluir") h = posForm("Digite o <b>NÚMERO</b> da posição do vídeo que deseja excluir:", "Continuar");
+      else if (f.tipo === "legenda") h = posForm("Digite o <b>NÚMERO</b> da posição do vídeo que deseja editar:", "Continuar");
+      else if (f.tipo === "mover") h = posForm("Digite o <b>NÚMERO</b> da posição atual do vídeo que deseja mover:", "Continuar");
+      else if (f.tipo === "numeracao") h = posForm("Digite o <b>NÚMERO</b> da posição do vídeo na fila que deseja alterar a numeração:", "Continuar");
+      else if (f.tipo === "publicar") h = posForm("Digite o <b>NÚMERO</b> da posição do vídeo na fila que deseja publicar imediatamente:", "Continuar");
+    } else if (f.passo === "confirmarExcluir") {
+      h = '<p class="bot" style="margin-top:0">Você selecionou o vídeo na posição <b>' + (f.pos + 1) + "</b>:\n📝 <i>" + esc(resumo(d.fila[f.pos].legenda)) + "...</i>\n\nTem certeza de que deseja excluir este vídeo da fila?</p>" +
+        '<div class="actions">' + btn("flExcluir", "Aprovar Exclusão ✅", null, "danger") + cancel + "</div>";
+    } else if (f.passo === "confirmarPublicar") {
+      h = '<p class="bot" style="margin-top:0">Você selecionou o vídeo na posição <b>' + (f.pos + 1) + "</b>:\n📝 <i>" + esc(resumo(d.fila[f.pos].legenda)) + "...</i>\n\nTem certeza de que deseja publicar este vídeo agora mesmo e recalcular o restante da fila?</p>" +
+        '<div class="actions">' + btn("flPublicar", "Publicar Vídeo 🚀", null, "primary") + cancel + "</div>";
+    } else if (f.passo === "novaLegenda") {
+      h = '<p class="bot" style="margin-top:0">Aqui está a legenda atual para copiar e editar. Envie agora a <b>NOVA LEGENDA COMPLETA</b>:</p><form data-form="flLegenda" novalidate>' +
+        campo("in-leg", "Legenda (aceita as marcas HTML do Telegram: &lt;b&gt;, &lt;i&gt;, &lt;a&gt;)", '<textarea class="legenda" id="in-leg">' + esc(d.fila[f.pos].legenda) + "</textarea>") +
+        '<div class="actions"><button type="submit" class="primary">Salvar legenda</button>' + cancel + "</div></form>";
+    } else if (f.passo === "novoNumero") {
+      h = '<p class="bot" style="margin-top:0">O vídeo selecionado na posição <b>' + (f.pos + 1) + "</b> é:\n📝 <i>" + esc(resumo(d.fila[f.pos].legenda)) + "...</i>\n\nQual será o <b>NOVO NÚMERO</b> deste vídeo?</p><form data-form=\"flNumero\" novalidate>" +
+        campo("in-num", "Novo número", '<input type="text" id="in-num" inputmode="numeric" autocomplete="off">') +
+        '<div class="actions"><button type="submit" class="primary">Salvar numeração</button>' + cancel + "</div></form>";
+    } else if (f.passo === "novaPosicao") {
+      h = '<p class="bot" style="margin-top:0">O vídeo selecionado na posição <b>' + (f.origem + 1) + "</b> é:\n📝 <i>" + esc(resumo(d.fila[f.origem].legenda)) + "...</i>\n\nPara qual posição deseja enviá-lo? (Ex: 1 para o topo)</p><form data-form=\"flNova\" novalidate>" +
+        campo("in-nova", "Nova posição", '<input type="text" id="in-nova" inputmode="numeric" autocomplete="off">') +
+        '<div class="actions"><button type="submit" class="primary">Continuar</button>' + cancel + "</div></form>";
+    } else if (f.passo === "data") {
+      var ops = opcoesDataUnico();
+      h = '<p class="bot" style="margin-top:0">Como há <b>apenas 1 vídeo pendente</b>, não é necessário escolher posições.\n\nPara quando deseja agendar este vídeo?</p><div class="actions">' +
+        ops.map(function (o, i) { return btn("flData", o, null, i === 0 ? "full" : "", o); }).join("") + cancel + "</div>";
+    } else if (f.passo === "limiar") {
+      h = '<p class="bot" style="margin-top:0">🤔 <b>Decisão de Limiar</b>\n\nA posição escolhida fica na divisa de datas ou no final da fila.\nVocê deseja que este vídeo seja agendado para <b>' + esc(rotuloData(f.prev)) + "</b> ou empurrado para <b>" + esc(rotuloData(f.next)) + "</b>?</p>" +
+        '<div class="actions">' + btn("flLimiar", rotuloData(f.prev), null, "", f.prev) + btn("flLimiar", rotuloData(f.next), null, "", f.next) + cancel + "</div>";
+    } else if (f.passo === "confirmarMover") {
+      var amig = f.dataNova === "2000-01-01" ? "Imediato/Hoje" : brData(f.dataNova);
+      h = '<p class="bot" style="margin-top:0">Você está prestes a alterar o agendamento do vídeo:\n📝 <i>' + esc(resumo(d.fila[f.origem].legenda)) + "...</i>\n\n" +
+        (f.origem !== f.nova ? "Da posição <b>" + (f.origem + 1) + "</b> ➡️ Para a posição <b>" + (f.nova + 1) + "</b>.\n" : "") +
+        "🗓️ Nova Data Alvo: <b>" + esc(amig) + "</b>\n\nConfirma essa alteração?</p>" +
+        '<div class="actions">' + btn("flMover", "Aprovar Mudança ✅", null, "primary") + cancel + "</div>";
+    }
+    return h + '<p class="err" role="alert" id="fl-err"></p>';
+  }
+  function flErro(t) { var e = $("fl-err"); if (e) e.textContent = t; }
+  ACT.flCancelar = function () { FL = null; dizer("Ação cancelada.", true); render(); };
+
+  FORM.flPos = function () {
+    var t = $("in-pos").value.trim(), f = FL;
+    if (!/^\d+$/.test(t)) { flErro("Por favor, digite apenas números."); return; }
+    var pos = parseInt(t, 10) - 1, d = ler();
+    if (!(pos >= 0 && pos < d.fila.length)) { flErro("Número de posição inválido. Tente novamente:"); return; }
+    if (d.fila[pos].postado) { flErro("⚠️ Ação Bloqueada: Este vídeo já foi postado e serve apenas como histórico. Por favor, escolha outro número ou clique em Cancelar ❌."); return; }
+    f.pos = pos;
+    if (f.tipo === "excluir") f.passo = "confirmarExcluir";
+    else if (f.tipo === "legenda") f.passo = "novaLegenda";
+    else if (f.tipo === "numeracao") f.passo = "novoNumero";
+    else if (f.tipo === "publicar") f.passo = "confirmarPublicar";
+    else if (f.tipo === "mover") { f.origem = pos; f.passo = "novaPosicao"; }
+    render();
+  };
+  ACT.flExcluir = function () {
+    var f = FL;
+    alt(function (d) {
+      var menor = menorNumero(d.fila, d.fila.map(function (x) { return x.id; }));
+      d.fila.splice(f.pos, 1);
+      renumerar(d, d.fila.map(function (x) { return x.id; }), menor === Infinity ? null : menor);
+    });
+    FL = null; dizer("✅ Operação concluída com sucesso! A fila foi atualizada e renumerada. O recálculo dos horários de hoje só acontece no servidor.", true); render();
+  };
+  ACT.flPublicar = function () { Painel.soServidor("Publicar Agora 🚀"); };
+  FORM.flLegenda = function () {
+    var t = $("in-leg").value;
+    if (!t.trim()) { flErro("Envie a nova legenda completa."); return; }
+    var f = FL;
+    alt(function (d) { d.fila[f.pos].legenda = t; });
+    FL = null; dizer("✅ Legenda atualizada com sucesso!", true); render();
+  };
+  FORM.flNumero = function () {
+    var t = $("in-num").value.trim(), f = FL;
+    if (!/^\d+$/.test(t)) { flErro("Por favor, digite apenas números."); return; }
+    var n = parseInt(t, 10);
+    alt(function (d) {
+      var ids = d.fila.slice(f.pos).map(function (x) { return x.id; });
+      renumerar(d, ids, n);
+    });
+    FL = null; dizer("✅ Operação concluída com sucesso! A fila foi atualizada e renumerada. O recálculo dos horários de hoje só acontece no servidor.", true); render();
+  };
+  ACT.flData = function (b) {
+    var o = b.dataset.arg, f = FL, nova;
+    if (o.indexOf("Hoje") >= 0) nova = "2000-01-01";
+    else if (o.indexOf("Amanhã") >= 0) nova = amanha();
+    else {
+      var m = /(\d{2})\/(\d{2})\/(\d{4})/.exec(o);
+      nova = m ? m[3] + "-" + m[2] + "-" + m[1] : somaDias(hoje(), 2);
+    }
+    f.dataNova = nova; f.passo = "confirmarMover"; render();
+  };
+  FORM.flNova = function () {
+    var t = $("in-nova").value.trim(), f = FL;
+    if (!/^\d+$/.test(t)) { flErro("Por favor, digite apenas números."); return; }
+    var d = ler(), fila = d.fila, nova = parseInt(t, 10) - 1, origem = f.origem;
+    if (nova >= 0 && nova < fila.length && fila[nova].postado) {
+      flErro("⚠️ Ação Bloqueada: Você não pode mover um vídeo pendente para o lugar de um vídeo que já foi postado.\n\nEscolha uma posição livre abaixo dos postados:"); return;
+    }
+    if (nova < 0) nova = 0;
+    f.nova = nova;
+    var sim = fila.slice(), item = sim.splice(origem, 1)[0], am = amanha();
+    if (!sim.length) {
+      f.dataNova = d.sim.boaNoite ? am : "2000-01-01"; f.passo = "confirmarMover"; render(); return;
+    }
+    var ultimo = false, virt, prev = null, next = null;
+    if (nova >= sim.length) { sim.push(item); virt = sim.length - 1; ultimo = true; } else { sim.splice(nova, 0, item); virt = nova; }
+    if (ultimo) { prev = sim[virt - 1].data || "2000-01-01"; next = am; }
+    else {
+      if (virt > 0) prev = sim[virt - 1].data || "2000-01-01";
+      if (virt < sim.length - 1) next = sim[virt + 1].data || "2000-01-01";
+      if (prev && prev > am) prev = am;
+      if (next && next > am) next = am;
+    }
+    if (prev && next && rotuloData(prev) !== rotuloData(next)) { f.prev = prev; f.next = next; f.passo = "limiar"; render(); return; }
+    f.dataNova = prev || next || "2000-01-01"; f.passo = "confirmarMover"; render();
+  };
+  ACT.flLimiar = function (b) { FL.dataNova = b.dataset.arg; FL.passo = "confirmarMover"; render(); };
+  ACT.flMover = function () {
+    var f = FL;
+    alt(function (d) {
+      var sim = d.fila.slice(), item = sim.splice(f.origem, 1)[0];
+      item.data = f.dataNova;
+      sim.splice(f.nova, 0, item);
+      renumerar(d, sim.map(function (x) { return x.id; }), null);
+    });
+    FL = null; dizer("✅ Operação concluída com sucesso! A fila foi atualizada e renumerada. O recálculo dos horários de hoje só acontece no servidor.", true); render();
+  };
+
+  /* ================================================================
+     🛠️ Configurações Avançadas (obter_teclado_configuracoes_gerais)
+     ================================================================ */
+  function vConfig() {
+    voltar("#", "🔙 Voltar ao menu do Canal Afiliados");
+    var d = ler();
+    return '<div class="card"><p class="bot" style="margin-top:0"><b>⚙️ Central de Configurações Gerais</b>\n\n📊 <b>Status Atual das Automações:</b>\n📢 SPAM em Grupos: ' +
+      (d.spam.pausado ? "🔴 PAUSADO" : "🟢 ATIVO") + "\n⏰ Mensagens de Rotina: " + (d.rotina.pausado ? "🔴 PAUSADAS" : "🟢 ATIVAS") +
+      "\n\nEscolha o módulo que deseja configurar abaixo:</p>" +
+      '<div class="menu-grid"><a class="btn" href="#config-rotina">Mensagens de Rotina ⏰</a><a class="btn" href="#config-spam">SPAM em Grupos 📢</a>' +
+      '<a class="btn" href="#config-numero">Editar Número da Postagem 🔢</a><a class="btn" href="#config-pausa">' + (d.pausa.ativa ? "Retomar Postagens ▶️" : "Pausar Postagens 🛑") + "</a>" +
+      btn("atualizarRotinas", "🔄 Atualizar Rotinas") + '<a class="btn" href="#config-zerar">Zerar Filas e Tarefas 🧹</a>' +
+      '<a class="btn full" href="#">Voltar 🔙</a></div>' + blocoMsg() + "</div>";
+  }
+  ACT.atualizarRotinas = function () {
+    var d = ler(), n = d.fila.filter(function (x) { return !x.postado && ehHoje(x.data); }).length;
+    Painel.confirmar("⚠️ Confirmar Recálculo da Grade\n\nOs horários agendados das rotinas serão apagados e sorteados de novo (a lista deles vem do servidor)." +
+      (n ? "\n\n🎬 Fila de vídeos: " + n + " vídeo(s) serão redistribuídos." : "") + "\n\nDeseja continuar?",
+      function () { Painel.soServidor("🔄 Atualizar Rotinas"); });
+  };
+
+  /* ---------- Mensagens de Rotina ⏰ ---------- */
+  function vRotina() {
+    voltar("#config", "🔙 Voltar às Configs");
+    var d = ler(), t = '<div class="card"><p class="bot" style="margin-top:0"><b>⏰ Configuração de Janelas e Frequência</b></p>';
+    ORDEM_ROTINA.forEach(function (k) {
+      var c = d.rotina[k];
+      t += '<p class="fila-linha">🔹 <b>' + esc(NOMES_ROTINA[k]) + "</b><small>Janela de Sorteio: " + c.inicio + "h às " + c.fim + "h</small><small>Disparos por Dia: " + c.frequencia + "x</small></p>";
+    });
+    t += "<p>Selecione o que deseja gerir abaixo:</p>" +
+      '<div class="menu-grid"><a class="btn" href="#config-rotina-editar">Editar Rotinas ✏️</a><a class="btn" href="#config-rotina-disparos">Disparos Manuais 🚀</a>' +
+      btn("pausarRotinas", d.rotina.pausado ? "Retomar Rotinas ▶️" : "Pausar Rotinas ⏸️") + '<a class="btn" href="#config">Voltar às Configs 🔙</a></div>' + blocoMsg() + "</div>";
+    return t;
+  }
+  ACT.pausarRotinas = function () {
+    var pausar = !ler().rotina.pausado;
+    Painel.confirmar(pausar ? "⚠️ Tem certeza de que deseja PAUSAR as mensagens de rotina deste módulo?" :
+      "⚠️ Tem certeza de que deseja RETOMAR as mensagens de rotina?\n\nO sistema avaliará o histórico de hoje e distribuirá de forma inteligente apenas as mensagens que ainda estão faltando para o dia, garantindo uma postagem orgânica sem sobreposições.",
+      function () {
+        alt(function (d) { d.rotina.pausado = pausar; });
+        dizer(pausar ? "⏸️ Rotinas Principais PAUSADAS." : "▶️ Rotinas Principais ATIVAS.\nA grade de hoje só é recalculada no servidor.", true);
+        render();
+      });
+  };
+  function vRotinaEditar() {
+    voltar("#config-rotina", "🔙 Voltar ao Menu Rotinas");
+    var d = ler(), t = '<div class="card"><p class="bot" style="margin-top:0">✏️ <b>Editar Rotinas (Canal Principal)</b>\nSelecione qual rotina deseja configurar:</p><div class="menu-grid">';
+    EDITAR_ROTINA.forEach(function (e) { t += btn("editarRotina", e[0], null, "", e[1]); });
+    t += '<a class="btn full" href="#config-rotina">🔙 Voltar ao Menu Rotinas</a></div></div>';
+    if (CFG && CFG.tipo === "rotina") {
+      var k = CFG.chave, c = d.rotina[k], fixo = (k === "bom_dia" || k === "boa_noite"), rot = CFG.rot;
+      t += '<div class="card sub" id="cfg-box"><p class="bot" style="margin-top:0">' + (fixo ?
+        "Vamos configurar a janela de sorteio para <b>" + esc(rot) + "</b>.\nAtenção: A quantidade de envios para esta rotina é fixada em 1x ao dia.\n\nEnvie os dados no seguinte formato: <code>HoraInicio-HoraFim</code>\n\nExemplo atualizado com a sua configuração:\n<code>" + c.inicio + "-" + c.fim + "</code>" :
+        "Vamos configurar a janela de sorteio e a quantidade de envios para <b>" + esc(rot) + "</b>.\n\nEnvie os dados no seguinte formato: <code>HoraInicio-HoraFim, Quantidade</code>\n\nExemplo atualizado com a sua configuração:\n<code>" + c.inicio + "-" + c.fim + ", " + c.frequencia + "</code>") +
+        '</p><form data-form="salvarRotina" novalidate>' + campo("in-rot", "Janela" + (fixo ? "" : " e quantidade"), '<input type="text" id="in-rot" autocomplete="off" placeholder="' + (fixo ? "6-9" : "10-20, 3") + '">') +
+        '<div class="actions"><button type="submit" class="primary">Salvar</button>' + btn("cfgCancelar", "Cancelar ❌") + '</div></form><p class="err" role="alert" id="cfg-err"></p></div>';
+    }
+    return t + blocoMsg();
+  }
+  ACT.editarRotina = function (b) {
+    var k = b.dataset.arg;
+    CFG = { tipo: "rotina", chave: k, rot: b.textContent }; MSG = null; render();
+    var i = $("in-rot"); if (i) i.focus();
+  };
+  ACT.cfgCancelar = function () { CFG = null; dizer("Ação cancelada.", true); render(); };
+  function cfgErro(t) { var e = $("cfg-err"); if (e) e.textContent = t; }
+  FORM.salvarRotina = function () {
+    var k = CFG.chave, fixo = (k === "bom_dia" || k === "boa_noite"), t = $("in-rot").value.trim(), ini, fim, freq, m;
+    if (fixo) {
+      m = /^(\d{1,2})-(\d{1,2})$/.exec(t);
+      if (!m) { cfgErro("Formato inválido! Use o formato exato como no exemplo: 6-9"); return; }
+      ini = +m[1]; fim = +m[2]; freq = 1;
+    } else {
+      m = /^(\d{1,2})-(\d{1,2}),\s*(\d+)$/.exec(t);
+      if (!m) { cfgErro("Formato inválido! Use o formato exato como no exemplo: 10-20, 3"); return; }
+      ini = +m[1]; fim = +m[2]; freq = +m[3];
+    }
+    if (ini >= fim || ini < 0 || fim > 23 || freq < 1) {
+      cfgErro("Valores inválidos! A hora de início deve ser menor que a do fim (entre 0 e 23) e a quantidade mínima é 1."); return;
+    }
+    alt(function (d) { d.rotina[k] = { inicio: ini, fim: fim, frequencia: freq }; });
+    CFG = null;
+    dizer("✅ Configuração salva! Os novos horários de hoje só serão sorteados e agendados no servidor.", true);
+    render();
+  };
+  function vDisparos() {
+    voltar("#config-rotina", "🔙 Voltar ao Menu Rotinas");
+    var t = '<div class="card"><p class="bot" style="margin-top:0">🚀 <b>Disparos Manuais (Canal Principal)</b>\nSelecione qual mensagem de rotina deseja forçar o envio agora:</p><div class="menu-grid">';
+    [["Disparar Bom Dia ☀️", "bom_dia"], ["Disparar Incentivo 🔥", "incentivo"], ["Disparar Convite do Grupo 🔗", "link_grupo"], ["Disparar Convite Viral 🚀", "promo_viral"],
+      ["Disparar Promo Público 🗣️", "promo_publico"], ["Disparar Achadinhos 🛍️", "promo_achadinhos"], ["Disparar Boa Noite 🌙", "boa_noite"]].forEach(function (e) {
+      t += btn("disparar", e[0], null, "", e[1]);
+    });
+    return t + '<a class="btn" href="#config-rotina">🔙 Voltar ao Menu Rotinas</a></div>' + blocoMsg() + "</div>";
+  }
+  ACT.disparar = function (b) {
+    var k = b.dataset.arg, rot = b.textContent, d = ler();
+    MSG = null;
+    if (d.rotina.pausado) { dizer("⚠️ Ação Bloqueada: As rotinas do Canal Principal estão PAUSADAS."); render(); return; }
+    if (k === "bom_dia" && d.sim.bomDia) { dizer("⚠️ Bloqueio Anti-Acidente: O 'Bom Dia' de hoje já foi enviado. Ação cancelada."); render(); return; }
+    if (k === "boa_noite" && d.sim.boaNoite) { dizer("⚠️ Bloqueio Anti-Acidente: O 'Boa Noite' de hoje já foi enviado. Ação cancelada."); render(); return; }
+    if (k !== "bom_dia" && k !== "boa_noite" && (!d.sim.bomDia || d.sim.boaNoite)) {
+      dizer("⚠️ Ação Bloqueada: Dispare esta mensagem apenas durante o expediente."); render(); return;
+    }
+    render(); Painel.soServidor(rot);
+  };
+
+  /* ---------- SPAM em Grupos 📢 ---------- */
+  function normalizarAlvo(entrada) {
+    var s = String(entrada).trim(), base = s, topico = null, m;
+    if (!s) return null;
+    if (s.indexOf("t.me/c/") >= 0) {
+      var p = s.split("t.me/c/")[1].split("/"); base = "-100" + p[0]; if (p.length > 1 && /^\d+$/.test(p[1])) topico = p[1];
+    } else if (s.indexOf("t.me/") >= 0) {
+      var q = s.split("t.me/")[1].split("/"); base = "@" + q[0]; if (q.length > 1 && /^\d+$/.test(q[1])) topico = q[1];
+    } else if (s.indexOf("web.telegram.org") >= 0 && s.indexOf("#") >= 0) {
+      var w = s.split("#")[1].split("/")[0];
+      if (w.indexOf("_") >= 0) { var pw = w.split("_"); base = pw[0]; if (/^\d+$/.test(pw[1])) topico = pw[1]; } else base = w;
+    } else if (s.indexOf("_") >= 0 && s.indexOf("http") < 0) {
+      m = /^(-?\d+)_(\d+)$/.exec(s); if (m) { base = m[1]; topico = m[2]; }
+    } else if (s.indexOf(":") >= 0 && s.indexOf("http") < 0) {
+      var c = s.split(":"); base = c[0]; if (c.length > 1 && /^\d+$/.test(c[1])) topico = c[1];
+    } else if (s.indexOf("/") >= 0 && s.indexOf("http") < 0) {
+      var b2 = s.split("/"); base = b2[0]; if (b2.length > 1 && /^\d+$/.test(b2[1])) topico = b2[1];
+    }
+    base = base.trim();
+    if (!(/^-?\d+$/.test(base) || /^@[A-Za-z][A-Za-z0-9_]{3,}$/.test(base))) return null;
+    return base + (topico ? ":" + topico : "");
+  }
+  function vSpam() {
+    voltar("#config", "🔙 Voltar às Configs");
+    var d = ler(), sp = d.spam;
+    var t = '<div class="card"><p style="margin-top:0"><b>📊 Status da Divulgação</b> [' + (sp.pausado ? "⏸️ Pausado" : "▶️ Rodando") + "]</p>" +
+      '<p class="bot"><b>🌍 Padrão Global:</b>\nFrequência: ' + sp.frequencia + " msgs/hora\nRepetições no Texto: " + sp.repeticoes + "x\nRéplicas por Disparo: " + sp.replicas + "x</p><p><b>🎯 Alvos Ativos:</b></p>";
+    if (sp.alvos.length) {
+      t += '<ul class="lista-num">';
+      sp.alvos.forEach(function (a, i) {
+        var c = sp.config_alvos[a] || null, hasC = c && Object.keys(c).length;
+        c = c || {};
+        t += "<li>" + (i + 1) + ". " + esc(a) + (hasC ? " (Personalizado)" : "") + '<br><span class="muted">└ Freq: ' + (c.frequencia != null ? c.frequencia : sp.frequencia) +
+          "/h | Rep: " + (c.repeticoes != null ? c.repeticoes : sp.repeticoes) + "x | Rép: " + (c.replicas != null ? c.replicas : sp.replicas) + "x</span></li>";
+      });
+      t += "</ul>";
+    } else t += '<p class="vazio">Nenhum alvo cadastrado no momento.</p>';
+    t += '<div class="menu-grid sub">' + btn("spamAdd", "Adicionar Alvo ➕") + btn("spamDel", "Excluir Alvo 🗑️") + btn("spamEdit", "Editar Configurações ⚙️") + btn("spamForcar", "Forçar Disparo Agora 🚀") +
+      btn("spamPausa", sp.pausado ? "Retomar SPAM ▶️" : "Pausar SPAM ⏸️") + '<a class="btn" href="#config">Voltar às Configs 🔙</a></div>' + blocoMsg() + "</div>";
+    if (CFG && CFG.tipo === "spam") t += '<div class="card sub" id="cfg-box">' + vSpamFluxo(d) + "</div>";
+    return t;
+  }
+  function vSpamFluxo(d) {
+    var f = CFG, sp = d.spam, cancel = btn("cfgCancelar", "Cancelar ❌"), err = '<p class="err" role="alert" id="cfg-err"></p>', h;
+    if (f.passo === "add") {
+      return '<p class="bot" style="margin-top:0">Envie os links ou IDs dos grupos separados por vírgula.\nExemplo: <code>https://t.me/grupo1, -1009999999</code></p><form data-form="spamAdd" novalidate>' +
+        campo("in-alvos", "Links ou IDs dos grupos", '<textarea id="in-alvos" placeholder="https://t.me/..., -100123..."></textarea>') +
+        '<p class="hint">A confirmação no Telegram (virar o ID real do chat) só acontece no servidor. Aqui o formato é conferido.</p>' +
+        '<div class="actions"><button type="submit" class="primary">Adicionar</button>' + cancel + "</div></form>" + err;
+    }
+    if (f.passo === "del") {
+      h = '<p class="bot" style="margin-top:0">Qual alvo deseja excluir? Digite o <b>NÚMERO</b> correspondente da lista abaixo:</p><ul class="lista-num">' +
+        sp.alvos.map(function (a, i) { return "<li>" + (i + 1) + ". " + esc(a) + "</li>"; }).join("") + "</ul>";
+      return h + '<form data-form="spamDel" novalidate>' + campo("in-n", "Número do alvo", '<input type="text" id="in-n" inputmode="numeric" autocomplete="off">') +
+        '<div class="actions"><button type="submit" class="primary">Excluir</button>' + cancel + "</div></form>" + err;
+    }
+    if (f.passo === "tipo") {
+      return '<p class="bot" style="margin-top:0">Deseja editar o Padrão Global ou configurar um Alvo Específico?</p><div class="actions">' +
+        btn("spamTipo", "Global 🌍", null, "", "global") + btn("spamTipo", "Por Alvo 🎯", null, "", "alvo") + btn("cfgCancelar", "Cancelar ❌", null, "full") + "</div>" + err;
+    }
+    if (f.passo === "escolherAlvo") {
+      return '<p class="bot" style="margin-top:0">Qual alvo deseja personalizar? Digite o <b>NÚMERO</b> correspondente da lista abaixo:</p><ul class="lista-num">' +
+        sp.alvos.map(function (a, i) { return "<li>" + (i + 1) + ". " + esc(a) + "</li>"; }).join("") + "</ul>" +
+        '<form data-form="spamEscolher" novalidate>' + campo("in-n", "Número do alvo", '<input type="text" id="in-n" inputmode="numeric" autocomplete="off">') +
+        '<div class="actions"><button type="submit" class="primary">Continuar</button>' + cancel + "</div></form>" + err;
+    }
+    if (f.passo === "valores") {
+      var c = f.global ? {} : (sp.config_alvos[f.alvo] || {}),
+        fr = c.frequencia != null ? c.frequencia : sp.frequencia, rp = c.repeticoes != null ? c.repeticoes : sp.repeticoes, rl = c.replicas != null ? c.replicas : sp.replicas;
+      return '<p class="bot" style="margin-top:0">' + (f.global ? "🌍 <b>Edição do Padrão Global</b>" : "🎯 <b>Edição do Alvo:</b> " + esc(f.alvo)) +
+        "\n\nEnvie os três valores juntos separados por vírgula nesta exata ordem:\n\n<b>1️⃣ Frequência:</b> Disparos por hora efetuados pelo bot.\n<b>2️⃣ Repetições:</b> Blocos de texto contidos na mensagem longa.\n<b>3️⃣ Réplicas:</b> Mensagens disparadas seguidas na mesma rajada.\n\n<i>Exemplo com a sua configuração atual:</i>\n<code>" +
+        fr + ", " + rp + ", " + rl + "</code></p><form data-form=\"spamValores\" novalidate>" +
+        campo("in-v", "Frequência, Repetições, Réplicas", '<input type="text" id="in-v" autocomplete="off" placeholder="3, 6, 5">') +
+        '<div class="actions"><button type="submit" class="primary">Salvar</button>' + cancel + "</div></form>" + err;
+    }
+    return "";
+  }
+  ACT.spamAdd = function () { CFG = { tipo: "spam", passo: "add" }; MSG = null; render(); };
+  ACT.spamDel = function () {
+    MSG = null;
+    if (!ler().spam.alvos.length) { CFG = null; dizer("Não há alvos cadastrados para excluir."); render(); return; }
+    CFG = { tipo: "spam", passo: "del" }; render();
+  };
+  ACT.spamEdit = function () { CFG = { tipo: "spam", passo: "tipo" }; MSG = null; render(); };
+  ACT.spamTipo = function (b) {
+    var d = ler();
+    if (b.dataset.arg === "global") { CFG = { tipo: "spam", passo: "valores", global: true }; render(); return; }
+    if (!d.spam.alvos.length) { CFG = null; dizer("Não há alvos para editar. Adicione um primeiro."); render(); return; }
+    CFG = { tipo: "spam", passo: "escolherAlvo" }; render();
+  };
+  ACT.spamForcar = function () {
+    MSG = null;
+    if (ler().spam.pausado) { dizer("⚠️ Ação Bloqueada: O SPAM Principal está PAUSADO. Retome-o antes de tentar disparos manuais."); render(); return; }
+    render(); Painel.soServidor("Forçar Disparo Agora 🚀");
+  };
+  ACT.spamPausa = function () {
+    var pausar = !ler().spam.pausado;
+    Painel.confirmar("⚠️ Tem certeza de que deseja " + (pausar ? "PAUSAR" : "RETOMAR") + " o SPAM em Grupos?", function () {
+      alt(function (d) { d.spam.pausado = pausar; });
+      dizer(pausar ? "⏸️ SPAM em Grupos PAUSADO.\nO Userbot não enviará mais convites." : "▶️ SPAM em Grupos ATIVO.\nO Userbot voltará a operar normalmente.", true);
+      CFG = null; render();
+    });
+  };
+  FORM.spamAdd = function () {
+    var entradas = $("in-alvos").value.split(",").map(function (x) { return x.trim(); }).filter(Boolean);
+    if (!entradas.length) { cfgErro("Nenhum alvo detectado. Tente novamente:"); return; }
+    var novos = [], recusados = [];
+    entradas.forEach(function (e) { var n = normalizarAlvo(e); if (n) novos.push(n); else recusados.push(e); });
+    var msg = "";
+    if (recusados.length) {
+      msg = "⚠️ Não consegui validar:\n" + recusados.map(function (r) { return "• " + r; }).join("\n") +
+        "\n\nUse o ID numérico, o link t.me ou a URL do Telegram Web. Para grupos privados, a conta do userbot precisa estar dentro.";
+    }
+    if (!novos.length) { cfgErro(msg + "\n\nNenhum alvo válido. Tente novamente:"); return; }
+    alt(function (d) {
+      var todos = d.spam.alvos.concat(novos), vistos = {};
+      d.spam.alvos = todos.filter(function (a) { if (vistos[a]) return false; vistos[a] = 1; return true; });
+    });
+    CFG = null; dizer((msg ? msg + "\n\n" : "") + "Alvos adicionados com sucesso!", !msg); render();
+  };
+  FORM.spamDel = function () {
+    var t = $("in-n").value.trim();
+    if (!/^\d+$/.test(t)) { cfgErro("Por favor, digite apenas o NÚMERO do alvo."); return; }
+    var i = parseInt(t, 10) - 1, d = ler();
+    if (!(i >= 0 && i < d.spam.alvos.length)) { cfgErro("Número inválido. Tente novamente:"); return; }
+    var rem = d.spam.alvos[i];
+    alt(function (x) { x.spam.alvos.splice(i, 1); delete x.spam.config_alvos[rem]; });
+    CFG = null; dizer("Alvo '" + rem + "' excluído com sucesso!", true); render();
+  };
+  FORM.spamEscolher = function () {
+    var t = $("in-n").value.trim();
+    if (!/^\d+$/.test(t)) { cfgErro("Por favor, digite apenas o NÚMERO."); return; }
+    var i = parseInt(t, 10) - 1, d = ler();
+    if (!(i >= 0 && i < d.spam.alvos.length)) { cfgErro("Número inválido. Tente novamente:"); return; }
+    CFG = { tipo: "spam", passo: "valores", global: false, alvo: d.spam.alvos[i] }; render();
+  };
+  FORM.spamValores = function () {
+    var m = /^(\d+)\s*,\s*(\d+)\s*,\s*(\d+)$/.exec($("in-v").value.trim());
+    if (!m) { cfgErro("Formato inválido. Envie os três números isolados por vírgula (Exemplo: 3, 6, 5)."); return; }
+    var fr = +m[1], rp = +m[2], rl = +m[3], f = CFG;
+    alt(function (d) {
+      if (f.global) { d.spam.frequencia = fr; d.spam.repeticoes = rp; d.spam.replicas = rl; }
+      else d.spam.config_alvos[f.alvo] = { frequencia: fr, repeticoes: rp, replicas: rl };
+    });
+    dizer(f.global ? "✅ Padrão Global atualizado!\nFrequência: " + fr + "x/h | Repetições: " + rp + "x | Réplicas: " + rl + "x" :
+      "✅ Alvo personalizado atualizado!\nAlvo: " + f.alvo + "\nFrequência: " + fr + "x/h | Repetições: " + rp + "x | Réplicas: " + rl + "x", true);
+    CFG = null; render();
+  };
+
+  /* ---------- Editar Número da Postagem 🔢 ---------- */
+  function vNumero() {
+    voltar("#config", "🔙 Voltar às Configs");
+    var d = ler();
+    var t = '<div class="card"><p class="bot" style="margin-top:0">O próximo vídeo será o <b>' + d.contador + "</b>.\nEscolha uma ação abaixo:</p>" +
+      '<div class="menu-grid">' + btn("numEditar", "Editar Número ✏️") + btn("numZerar", "Zerar Contador 🔄") + '<a class="btn full" href="#config">Voltar 🔙</a></div>' + blocoMsg() + "</div>";
+    if (CFG && CFG.tipo === "numero") {
+      t += '<div class="card sub" id="cfg-box"><p class="bot" style="margin-top:0">O próximo vídeo será o ' + d.contador + ".\n\nDigite o novo número que deseja usar (apenas números):</p>" +
+        '<form data-form="numSalvar" novalidate>' + campo("in-num", "Novo número", '<input type="text" id="in-num" inputmode="numeric" autocomplete="off">') +
+        '<div class="actions"><button type="submit" class="primary">Salvar</button>' + btn("cfgCancelar", "Cancelar ❌") + '</div></form><p class="err" role="alert" id="cfg-err"></p></div>';
+    }
+    return t;
+  }
+  ACT.numEditar = function () { CFG = { tipo: "numero" }; MSG = null; render(); var i = $("in-num"); if (i) i.focus(); };
+  ACT.numZerar = function () {
+    var n = ler().contador;
+    Painel.confirmar("⚠️ Atenção!\n\nO vídeo atual está no número " + n + " e iremos zerar para o vídeo número 1.\nVocê aprova essa ação?", function () {
+      alt(function (d) { d.contador = 1; });
+      CFG = null; dizer("Contador zerado com sucesso! O próximo post será o 'Vídeo 1'.", true); render();
+    });
+  };
+  FORM.numSalvar = function () {
+    var t = $("in-num").value.trim();
+    if (!/^\d+$/.test(t)) { cfgErro("Por favor, digite apenas números. Exemplo: 50"); return; }
+    var n = parseInt(t, 10);
+    alt(function (d) { d.contador = n; });
+    CFG = null; dizer("Sucesso! O próximo post será o 'Vídeo " + n + "'.", true); render();
+  };
+
+  /* ---------- Pausar / Retomar Postagens (pausa programada) ---------- */
+  function vPausa() {
+    voltar("#config", "🔙 Voltar às Configs");
+    var d = ler(), t;
+    if (d.pausa.ativa && !(PZ && PZ.passo === "confirmarFim")) {
+      t = '<div class="card"><p class="bot" style="margin-top:0">⚠️ <b>Pausa Programada Ativa!</b>\nO robô está em modo de descanso até <b>' + esc(d.pausa.data_retorno) + "</b>.\n\nDeseja cancelar esta pausa e retomar os serviços agora?</p>" +
+        '<div class="actions">' + btn("pzFim", "Encerrar Pausa Agora ▶️", null, "primary") + '<a class="btn" href="#config">Voltar 🔙</a></div>' + blocoMsg() + "</div>";
+      return t;
+    }
+    if (!PZ) PZ = { passo: "data" };
+    var cancel = btn("pzCancelar", "Cancelar ❌"), err = '<p class="err" role="alert" id="pz-err">' + (MSG && !MSG.ok ? esc(MSG.t) : "") + "</p>";
+    if (PZ.passo === "data") {
+      t = '<div class="card"><p class="bot" style="margin-top:0">📅 <b>Configurar Pausa Programada</b>\n\nDigite a data e a hora exatas do seu <b>retorno</b> no formato DD/MM HH:MM (Exemplo: 29/05 15:00).\nO robô voltará a funcionar automaticamente neste momento exato.</p>' +
+        '<form data-form="pzData" novalidate>' + campo("in-ret", "Data e hora do retorno", '<input type="text" id="in-ret" autocomplete="off" placeholder="29/05 15:00">') +
+        '<div class="actions"><button type="submit" class="primary">Continuar</button>' + cancel + "</div></form>" + err + "</div>";
+    } else if (PZ.passo === "servicos") {
+      var opts = PZ.opcoes;
+      if (!opts) {
+        t = '<div class="card"><p class="bot" style="margin-top:0">Ambos os serviços já estão pausados manualmente.\nApenas a rotina diária de avisos será agendada até ' + esc(PZ.retorno) + ".\nConfirma o agendamento desta pausa?</p>" +
+          '<div class="actions">' + btn("pzConfirmar", "Confirmar Pausa ✅", null, "primary") + cancel + "</div></div>";
+      } else {
+        t = '<div class="card"><p class="bot" style="margin-top:0">Data e hora de retorno: <b>' + esc(PZ.retorno) + "</b>.\nQuais serviços você deseja pausar automaticamente agora?</p><div class=\"actions\">" +
+          opts.map(function (o) { return btn("pzServico", o, null, "full", o); }).join("") + cancel + "</div></div>";
+      }
+    } else if (PZ.passo === "confirmar") {
+      t = '<div class="card"><p class="bot" style="margin-top:0">Você escolheu: <b>' + esc(PZ.selecao) + "</b>\nO robô ficará pausado até <b>" + esc(PZ.retorno) + "</b>.\n\nConfirma o agendamento desta pausa?</p>" +
+        '<div class="actions">' + btn("pzConfirmar", "Confirmar Pausa ✅", null, "primary") + cancel + "</div></div>";
+    } else t = "";
+    return t;
+  }
+  ACT.pzCancelar = function () { PZ = null; dizer("Ação cancelada. Retornando ao menu de configurações...", true); ir("#config"); };
+  FORM.pzData = function () {
+    var m = /^(\d{1,2})\/(\d{1,2})\s+(\d{1,2}):(\d{1,2})$/.exec($("in-ret").value.trim());
+    function erro(t) { MSG = { t: t, ok: false }; $("pz-err").textContent = t; }
+    if (!m) { erro("Formato inválido. Use DD/MM HH:MM, como por exemplo: 29/05 15:00."); return; }
+    var dia = +m[1], mes = +m[2], hora = +m[3], min = +m[4], n = agoraBR(), ano = n.y;
+    function valido(a) {
+      if (mes < 1 || mes > 12 || hora > 23 || min > 59 || dia < 1) return false;
+      var dt = new Date(Date.UTC(a, mes - 1, dia)); return dt.getUTCMonth() === mes - 1 && dt.getUTCDate() === dia;
+    }
+    function chave(a) { return ((a * 100 + mes) * 100 + dia) * 10000 + hora * 100 + min; }
+    var agoraK = ((n.y * 100 + n.m) * 100 + n.d) * 10000 + n.h * 100 + n.mi;
+    if (!valido(ano)) { erro("Data ou hora inexistente. Tente novamente:"); return; }
+    if (chave(ano) <= agoraK) {
+      if (mes < n.m) { ano = ano + 1; if (!valido(ano)) { erro("Data ou hora inexistente. Tente novamente:"); return; } }
+      else { erro("A data e hora de retorno devem estar no futuro. Tente novamente:"); return; }
+    }
+    MSG = null;
+    var retorno = z(dia) + "/" + z(mes) + "/" + ano + " " + z(hora) + ":" + z(min), d = ler();
+    var spamAtivo = !d.spam.pausado, rotAtiva = !d.rotina.pausado;
+    PZ = { passo: "servicos", retorno: retorno };
+    if (!spamAtivo && !rotAtiva) PZ.selecao = "Nenhum (Apenas Avisos)";
+    else if (spamAtivo && rotAtiva) PZ.opcoes = ["Pausar Ambos", "Apenas SPAM", "Apenas Rotina"];
+    else if (spamAtivo) PZ.opcoes = ["Pausar SPAM"];
+    else PZ.opcoes = ["Pausar Rotina"];
+    render();
+  };
+  ACT.pzServico = function (b) { PZ.selecao = b.dataset.arg; PZ.passo = "confirmar"; render(); };
+  ACT.pzConfirmar = function () {
+    var sel = PZ.selecao || "", ret = PZ.retorno, serv = [];
+    alt(function (d) {
+      if (["Pausar Ambos", "Apenas SPAM", "Pausar SPAM"].indexOf(sel) >= 0) { d.spam.pausado = true; serv.push("spam"); }
+      if (["Pausar Ambos", "Apenas Rotina", "Pausar Rotina"].indexOf(sel) >= 0) { d.rotina.pausado = true; serv.push("rotina"); }
+      d.pausa = { ativa: true, data_retorno: ret, servicos_pausados: serv };
+    });
+    PZ = null;
+    dizer("🛑 Pausa Configurada com Sucesso!\nA pausa ficou registrada aqui. O aviso gerado pela IA no grupo, a parada dos vídeos de hoje e o despertar automático na data marcada só acontecem no servidor.", true);
+    render();
+  };
+  ACT.pzFim = function () {
+    Painel.confirmar("⚠️ Tem certeza de que deseja encerrar a pausa agora, recalcular a fila e acordar o robô imediatamente?", function () {
+      alt(function (d) {
+        var s = d.pausa.servicos_pausados || [];
+        if (s.indexOf("spam") >= 0) d.spam.pausado = false;
+        if (s.indexOf("rotina") >= 0) d.rotina.pausado = false;
+        d.pausa.ativa = false; d.pausa.servicos_pausados = [];
+      });
+      dizer("▶️ Pausa programada encerrada! Serviços reativados aqui. A mensagem de retorno da IA no grupo, a troca do aviso antigo e o recálculo da fila só acontecem no servidor.", true);
+      render();
+    });
+  };
+
+  /* ---------- Zerar Filas e Tarefas 🧹 ---------- */
+  function vZerar() {
+    voltar("#config", "🔙 Voltar às Configs");
+    var t = '<div class="card"><p class="bot" style="margin-top:0">🧹 <b>CENTRAL DE LIMPEZA DO SERVIDOR</b>\n\nEscolha qual módulo você deseja esvaziar. As suas configurações do robô (textos, horários, alvos) <b>nunca</b> são apagadas.\n\n🛡️ <i>Nota: A Fila Principal (SQLite) está protegida e nunca será apagada por este menu.</i>\n\n' +
+      "👉 <b>Fila Espião:</b> Apaga clones retidos no radar e exclui os arquivos de vídeo do servidor.\n👉 <b>Fila Espelhador:</b> Apaga a repassagem de vídeos pendentes e seus respectivos arquivos.\n👉 <b>Fila Autorais:</b> Apaga os vídeos de retorno pendentes no banco de dados e arquivos físicos.\n👉 <b>Geral:</b> Esvazia o Espião, Espelhador, Autorais, apaga o lixo temporário, exclui backups e limpa logs do Ubuntu.</p>" +
+      '<div class="menu-grid">' + btn("limpar", "Limpar Tudo (Geral) 💥", null, "full", "Limpar Tudo (Geral) 💥") + btn("limpar", "Limpar Fila do Espião 🕵️", null, "", "Limpar Fila do Espião 🕵️") +
+      btn("limpar", "Limpar Fila Espelhador 🔄", null, "", "Limpar Fila Espelhador 🔄") + btn("limpar", "Limpar Fila Autorais 🎥", null, "", "Limpar Fila Autorais 🎥") +
+      '<a class="btn" href="#config">Voltar ao Menu Anterior 🔙</a></div></div>';
+    return t;
+  }
+  ACT.limpar = function (b) {
+    var r = b.dataset.arg;
+    Painel.confirmar("⚠️ Atenção: Você está prestes a executar a operação: " + r + ".\n\nEsta ação apagará arquivos físicos e limpará a fila selecionada. Deseja continuar? (Aprovar Exclusão ✅)",
+      function () { Painel.soServidor(r); });
+  };
+
+  /* ================================================================
+     Roteamento
+     ================================================================ */
+  var VISTAS = {
+    "": vMenu, criar: vCriar, fila: vFila, config: vConfig, "config-rotina": vRotina, "config-rotina-editar": vRotinaEditar,
+    "config-rotina-disparos": vDisparos, "config-spam": vSpam, "config-numero": vNumero, "config-pausa": vPausa, "config-zerar": vZerar
+  };
+  var vistaAtual = null;
+  function render() {
+    var h = (location.hash || "").replace(/^#/, "");
+    if (!VISTAS[h]) h = "";
+    if (vistaAtual !== null && vistaAtual !== h) {
+      // Como os botões do bot: sair de uma tela cancela o fluxo dela.
+      var msgKeep = MSG;
+      resetarFluxos();
+      if (vistaAtual === "criar") alt(function (d) { d.fluxo = null; });
+      MSG = msgKeep && msgKeep.keep ? msgKeep : null;
+    }
+    if (h !== "criar") RECIBO = null;
+    vistaAtual = h;
+    $("tela").innerHTML = VISTAS[h]();
+    if (h === "criar" && RECIBO == null) { /* nada */ }
+  }
+  window.addEventListener("hashchange", function () { render(); window.scrollTo(0, 0); });
+
+  $("tela").addEventListener("click", function (e) {
+    var b = e.target.closest("[data-act]");
+    if (b && ACT[b.dataset.act]) ACT[b.dataset.act](b, e);
+  });
+  $("tela").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var f = e.target.closest("form[data-form]");
+    if (f && FORM[f.dataset.form]) FORM[f.dataset.form](f);
+  });
+  $("tela").addEventListener("change", function (e) {
+    var c = e.target.closest("[data-sim]");
+    if (c) alt(function (d) { d.sim[c.dataset.sim] = c.checked; });
+  });
+
+  Painel.topo("canal-afiliados");
+  // Criar Postagem em andamento só continua se a tela ainda for a dela.
+  if ((location.hash || "") !== "#criar") alt(function (d) { d.fluxo = null; });
+  render();
+})();
+</script>
+</body>
+</html>

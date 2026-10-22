@@ -1,0 +1,808 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Grupo Público - Painel</title>
+<meta name="description" content="Painel web do Grupo Público: Robô Moderador, Robô Repostador, rotinas, SPAM, submissão e buscador, como no painel do Telegram.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23ee4d2d'/%3E%3Cpath d='M26 20l20 12-20 12z' fill='%23fff'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="/assets/painel.css">
+<style>
+  [hidden] { display: none !important; }
+  #dlg-texto, .pre { white-space: pre-line; }
+  .bloco { background: var(--card-2); border: 1px solid var(--line); border-radius: 12px; padding: 12px; margin-top: 10px; overflow-wrap: anywhere; }
+  .bloco b.t { display: block; margin-bottom: 4px; }
+  .sub-actions { display: grid; gap: 10px; grid-template-columns: 1fr 1fr; margin-top: 12px; }
+  @media (max-width: 420px) { .sub-actions { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div id="topo"></div>
+
+  <h1>📬 Grupo Público</h1>
+  <p class="lead">Os três robôs que atuam no seu Supergrupo: moderador (escuta e publica), repostador e rotinas. Mesmas opções do painel do Telegram.</p>
+
+  <!-- ===== Painel principal ===== -->
+  <section aria-labelledby="t-painel">
+    <h2 id="t-painel">Painel do Grupo Público</h2>
+    <div class="card" id="painel-status"></div>
+    <p class="hint">Nomes dos tópicos e dos canais (✅) vêm do Telegram; aqui aparece ⏳ e o código, que é o que você digitou.</p>
+    <div class="menu-grid" style="margin-top:12px">
+      <a class="btn" href="#moderador">Configurações do Robô Moderador ⚙️</a>
+      <a class="btn" href="#repostador">Configurações do Robô Repostador ♻️</a>
+      <a class="btn" href="#automacoes">⚙️ Automações do Grupo Público</a>
+      <a class="btn" href="/parceiros">Parceiros Afiliados 👥</a>
+      <a class="btn" href="#submissao">Submissão pública 🎬</a>
+      <a class="btn" href="#buscador">Buscador de produtos 🔎</a>
+    </div>
+  </section>
+
+  <!-- ===== Robô Moderador ===== -->
+  <section aria-labelledby="t-mod" id="moderador">
+    <h2 id="t-mod">⚙️ Configurações do Robô Moderador</h2>
+    <div class="card">
+      <dl class="status">
+        <div><dt>📊 Status Atual</dt><dd id="mod-status"></dd></div>
+      </dl>
+      <p class="hint">Aqui você liga ou desliga a moderação automática de vídeos e define os Tópicos que o robô deve escutar e usar para publicar.</p>
+      <div class="actions">
+        <button type="button" id="b-tops">Definir Tópicos de Moderação 💬</button>
+        <button type="button" id="b-mod-toggle"></button>
+      </div>
+      <p class="err" id="e-mod" role="alert"></p>
+    </div>
+
+    <div class="card fluxo" id="c-tops" hidden>
+      <h3>💬 Tópicos de Moderação</h3>
+      <p class="pre">Defina os dois tópicos do Grupo Público em que o Robô Moderador atua:
+
+📥 Tópico de Escuta: o tópico que o robô fica vigiando. É onde os membros enviam os vídeos para serem analisados pela IA.
+
+📤 Tópico de Postagem: o tópico onde o robô publica automaticamente os vídeos que foram aprovados na análise.</p>
+      <p class="hint">Os alvos das mensagens automáticas de divulgação ficam em ⚙️ Automações do Grupo Público › Rotinas do Público ⏰.</p>
+      <p class="pre" style="margin-bottom:0">Selecione qual tópico deseja alterar:</p>
+      <div class="sub-actions">
+        <button type="button" data-top="escuta">Editar Tópico de Escuta 💬</button>
+        <button type="button" data-top="vitrine">Editar Tópico de Postagem 📤</button>
+        <button type="button" class="full" data-cancela>Voltar às Configurações 🔙</button>
+      </div>
+    </div>
+
+    <form class="card fluxo" id="f-top" hidden novalidate>
+      <h3 id="f-top-titulo"></h3>
+      <label for="i-top" id="l-top"></label>
+      <input type="text" id="i-top" autocomplete="off" placeholder="-100123..._5 ou https://t.me/c/123.../5" aria-describedby="e-top">
+      <p class="hint pre" id="ex-top"></p>
+      <p class="err" id="e-top" role="alert"></p>
+      <div class="actions">
+        <button type="submit" class="primary">Enviar</button>
+        <button type="button" data-cancela>Cancelar ❌</button>
+      </div>
+    </form>
+  </section>
+
+  <!-- ===== Robô Repostador ===== -->
+  <section aria-labelledby="t-rep" id="repostador">
+    <h2 id="t-rep">♻️ Configurações do Robô Repostador</h2>
+    <div class="card">
+      <dl class="status">
+        <div><dt>📊 Status Atual</dt><dd id="rep-status"></dd></div>
+        <div><dt>⏳ Oculto por</dt><dd id="rep-dias"></dd></div>
+        <div><dt>📦 Cota Diária</dt><dd id="rep-cota"></dd></div>
+        <div><dt>🕒 Janela de postagem</dt><dd>das 10h às 20h <span class="hint">(padrão do código)</span></dd></div>
+      </dl>
+      <p class="hint">Aqui você define de onde os vídeos são puxados, para onde vão, as regras de tempo e o cota diária — além de pausar ou retomar o robô.</p>
+      <p class="hint">Janela: o painel do bot só mostra (nos relatórios) a janela <code>repost_inicio</code>/<code>repost_fim</code>, padrão 10h–20h; não há botão para editá-la no menu do Repostador. A confirmar com o Rafael se deve ter.</p>
+      <div class="actions">
+        <button type="button" data-abre="f-rorigem">Editar Escutando (Público) 📥</button>
+        <button type="button" data-abre="f-rdestino">Editar Postando (Público) 📤</button>
+        <button type="button" data-abre="f-rdias">Editar Dias (Público) ⏳</button>
+        <button type="button" data-abre="f-rlimite">Editar Limite (Público) 📦</button>
+        <button type="button" class="full" id="b-rep-toggle"></button>
+      </div>
+    </div>
+
+    <form class="card fluxo" id="f-rorigem" hidden novalidate>
+      <label for="i-rorigem">Envie o <b>ID Numérico, @username ou Link do Telegram Web</b> do canal de ORIGEM de onde o robô vai puxar os vídeos para postar no Grupo Público:</label>
+      <input type="text" id="i-rorigem" autocomplete="off" placeholder="-100123... ou @canal" aria-describedby="e-rorigem">
+      <p class="hint">(Se você não definir, ele continuará pegando do destino dos Vídeos Autorais)</p>
+      <p class="err" id="e-rorigem" role="alert"></p>
+      <div class="actions"><button type="submit" class="primary">Enviar</button><button type="button" data-cancela>Cancelar ❌</button></div>
+    </form>
+
+    <form class="card fluxo" id="f-rdestino" hidden novalidate>
+      <label for="i-rdestino">Envie o <b>ID Numérico, @username ou Link do Telegram Web</b> do canal/tópico de DESTINO para onde o robô vai enviar as repostagens:</label>
+      <input type="text" id="i-rdestino" autocomplete="off" placeholder="-100123...:5 ou @canal" aria-describedby="e-rdestino">
+      <p class="hint">(Se você não definir, ele continuará postando no Tópico de Postagem por padrão)</p>
+      <p class="err" id="e-rdestino" role="alert"></p>
+      <div class="actions"><button type="submit" class="primary">Enviar</button><button type="button" data-cancela>Cancelar ❌</button></div>
+    </form>
+
+    <form class="card fluxo" id="f-rdias" hidden novalidate>
+      <label for="i-rdias">Por quantos <b>dias</b> o vídeo deve ficar arquivado antes de ir para o Grupo Público? (Ex: 15)</label>
+      <input type="text" id="i-rdias" inputmode="numeric" autocomplete="off" placeholder="15" aria-describedby="e-rdias">
+      <p class="err" id="e-rdias" role="alert"></p>
+      <div class="actions"><button type="submit" class="primary">Enviar</button><button type="button" data-cancela>Cancelar ❌</button></div>
+    </form>
+
+    <form class="card fluxo" id="f-rlimite" hidden novalidate>
+      <label for="i-rlimite">Quantos vídeos por dia no Grupo Público?</label>
+      <p class="pre hint" style="margin-top:0">• Faixa: 4-8 — cada dia sorteia um número entre 4 e 8 (média 6)
+• Fixo: 6 — sempre 6 por dia
+
+A faixa existe para a quantidade não ser sempre igual, que é o que denuncia robô.</p>
+      <input type="text" id="i-rlimite" inputmode="text" autocomplete="off" placeholder="4-8 ou 6" aria-describedby="e-rlimite">
+      <p class="err" id="e-rlimite" role="alert"></p>
+      <div class="actions"><button type="submit" class="primary">Enviar</button><button type="button" data-cancela>Cancelar ❌</button></div>
+    </form>
+  </section>
+
+  <!-- ===== Central de Automações ===== -->
+  <section aria-labelledby="t-aut" id="automacoes">
+    <h2 id="t-aut">⚙️ Central de Automações do Grupo Público</h2>
+    <div class="card">
+      <p style="margin-top:0"><b>📊 Status Atual das Automações:</b></p>
+      <dl class="status">
+        <div><dt>📢 SPAM do Público</dt><dd id="aut-spam"></dd></div>
+        <div><dt>⏰ Rotinas do Público</dt><dd id="aut-rot"></dd></div>
+      </dl>
+      <p class="hint">SPAM divulga o grupo em OUTROS grupos. Rotinas postam DENTRO do grupo.</p>
+      <div class="actions">
+        <a class="btn" href="#rotinas">Rotinas do Público ⏰</a>
+        <a class="btn" href="#spam">SPAM do Público 📢</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== Rotinas do Público ===== -->
+  <section aria-labelledby="t-rot" id="rotinas">
+    <h2 id="t-rot">⏰ Rotinas do Grupo Público</h2>
+    <div class="card">
+      <p style="margin-top:0"><b>📢 Alvos das Rotinas:</b></p>
+      <div id="rot-alvos"></div>
+      <p class="hint">Use o botão "Gerenciar Alvos de Postagem 🎯" para ativar ou desativar estes locais.</p>
+      <div id="rot-lista"></div>
+      <p class="pre" style="margin-bottom:0">Status: <span id="rot-status"></span></p>
+      <div class="actions">
+        <button type="button" data-abre="c-editar">Editar Rotinas ✏️</button>
+        <button type="button" data-abre="c-disparos">Disparos Manuais 🚀</button>
+        <button type="button" class="full" data-abre="f-alvos">Gerenciar Alvos de Postagem 🎯</button>
+        <button type="button" class="full" id="b-rot-toggle"></button>
+      </div>
+      <p class="err" id="e-rot" role="alert"></p>
+    </div>
+
+    <div class="card fluxo" id="c-editar" hidden>
+      <h3>✏️ Editar Rotinas (Grupo Público)</h3>
+      <p class="pre">Selecione qual rotina deseja configurar:</p>
+      <div class="sub-actions" id="botoes-editar"></div>
+      <form id="f-rot" hidden novalidate style="margin-top:12px">
+        <label for="i-rot" id="l-rot" class="pre"></label>
+        <input type="text" id="i-rot" autocomplete="off" placeholder="10-20, 3" aria-describedby="e-rotf">
+        <p class="err" id="e-rotf" role="alert"></p>
+        <div class="actions"><button type="submit" class="primary">Enviar</button><button type="button" id="b-rot-cancela">Cancelar ❌</button></div>
+      </form>
+      <div class="sub-actions"><button type="button" class="full" data-cancela>🔙 Voltar ao Menu Rotinas</button></div>
+    </div>
+
+    <div class="card fluxo" id="c-disparos" hidden>
+      <h3>🚀 Disparos Manuais (Grupo Público)</h3>
+      <p class="pre">Selecione qual mensagem deseja forçar o envio agora:</p>
+      <div class="sub-actions" id="botoes-disparo"></div>
+      <div class="sub-actions"><button type="button" class="full" data-cancela>🔙 Voltar ao Menu Rotinas</button></div>
+    </div>
+
+    <form class="card fluxo" id="f-alvos" hidden novalidate>
+      <h3>🎯 Gerenciar Alvos de Postagem</h3>
+      <p>Aqui você define <b>em quais tópicos do Grupo Público</b> as mensagens automáticas de divulgação serão publicadas (Convite ao Grupo, Promo Canal Principal e Promo Canal Viral).</p>
+      <p><b>📢 Ativos hoje:</b></p>
+      <div id="alvos-atual"></div>
+      <label for="i-alvos" style="margin-top:12px">Envie a <b>nova lista</b> de alvos (ela substitui a atual). Abra o tópico no Telegram, toque no nome dele e escolha <b>Copiar Link</b>.</label>
+      <p class="pre hint" style="margin-top:0">• Um alvo: https://t.me/c/1234567890/6
+• Vários alvos — separe por vírgula: https://t.me/c/1234567890/6, https://t.me/c/1234567890/1
+
+Link de mensagem dentro do tópico também serve: o bot descarta o número da mensagem sozinho.
+
+Para desativar todos e publicar somente no Chat Geral, digite 0.</p>
+      <input type="text" id="i-alvos" autocomplete="off" placeholder="https://t.me/c/.../6, 0" aria-describedby="e-alvos">
+      <p class="err" id="e-alvos" role="alert"></p>
+      <div class="actions"><button type="submit" class="primary">Enviar</button><button type="button" data-cancela>❌ Cancelar e Voltar às Rotinas</button></div>
+    </form>
+  </section>
+
+  <!-- ===== SPAM do Público ===== -->
+  <section aria-labelledby="t-spam" id="spam">
+    <h2 id="t-spam">📢 SPAM · Grupo Público</h2>
+    <div class="card">
+      <p style="margin-top:0">Status: <span id="spam-status"></span></p>
+      <p class="hint">🔗 Divulga: o link do Grupo Público (fixo no servidor, não aparece aqui).</p>
+      <div class="bloco" id="spam-global"></div>
+      <p style="margin-bottom:6px"><b>🎯 Alvos Ativos:</b></p>
+      <ul class="list" id="spam-alvos"></ul>
+      <div class="actions">
+        <button type="button" data-abre="f-spamadd">Adicionar Alvo SPAM ➕</button>
+        <button type="button" data-abre="c-spamedit">Editar Configs SPAM ⚙️</button>
+        <button type="button" id="b-spam-forcar">Forçar Disparo SPAM 🚀</button>
+        <button type="button" id="b-spam-toggle"></button>
+      </div>
+      <p class="err" id="e-spam" role="alert"></p>
+    </div>
+
+    <form class="card fluxo" id="f-spamadd" hidden novalidate>
+      <label for="i-spamadd">Envie os links ou IDs dos grupos separados por vírgula.</label>
+      <p class="hint pre" style="margin-top:0">Exemplo: https://t.me/grupo1, -1009999999</p>
+      <input type="text" id="i-spamadd" autocomplete="off" placeholder="https://t.me/grupo1, -100999..." aria-describedby="e-spamadd">
+      <p class="err pre" id="e-spamadd" role="alert"></p>
+      <div class="actions"><button type="submit" class="primary">Enviar</button><button type="button" data-cancela>Cancelar ❌</button></div>
+    </form>
+
+    <div class="card fluxo" id="c-spamedit" hidden>
+      <p style="margin-top:0">Deseja editar o Padrão Global ou configurar um Alvo Específico?</p>
+      <div class="sub-actions">
+        <button type="button" id="b-spam-global">Global 🌍</button>
+        <button type="button" id="b-spam-alvo">Por Alvo 🎯</button>
+        <button type="button" class="full" data-cancela>Cancelar ❌</button>
+      </div>
+      <p class="err" id="e-spamedit" role="alert"></p>
+    </div>
+
+    <form class="card fluxo" id="f-spamvals" hidden novalidate>
+      <div id="spam-sel-box" hidden class="field">
+        <label for="s-spam-alvo">Qual alvo deseja configurar?</label>
+        <select id="s-spam-alvo"></select>
+      </div>
+      <label for="i-spamvals" id="l-spamvals" class="pre"></label>
+      <input type="text" id="i-spamvals" autocomplete="off" placeholder="1, 1, 1" aria-describedby="e-spamvals">
+      <p class="err" id="e-spamvals" role="alert"></p>
+      <div class="actions"><button type="submit" class="primary">Enviar</button><button type="button" data-cancela>Cancelar ❌</button></div>
+    </form>
+  </section>
+
+  <!-- ===== Submissão pública ===== -->
+  <section aria-labelledby="t-sub" id="submissao">
+    <h2 id="t-sub">🎬 Submissão pública</h2>
+    <div class="card">
+      <p style="margin-top:0">É o que os membros veem no tópico de escuta. O painel fica sempre como a última mensagem do tópico, fixado e sem notificar.</p>
+      <div class="bloco pre"><b class="t">👋 Divulgue a sua oferta aqui!</b>Toque no botão abaixo e um painel só seu vai abrir. É só mandar:
+
+🎥 O vídeo do produto
+🔶 O seu link da Shopee
+⬛ O seu link do TikTok
+
+Os dois links são bem-vindos, mas basta um deles para publicar.
+
+Pode enviar na ordem que quiser — o painel marca sozinho o que já chegou.
+
+💡 Deixe o link já copiado antes de começar: você tem 3 minutos a cada envio.
+✅ As ofertas aprovadas pela nossa IA vão para o mural com os seus créditos!
+
+[ 🎬 Iniciar Postagem de Oferta ]</div>
+      <div class="actions">
+        <button type="button" id="b-recriar-painel">Recriar painel fixo (/botao_ofertas)</button>
+        <button type="button" id="b-repost-autoral">Disparar Repost Autoral ♻️</button>
+      </div>
+      <p class="hint">"Disparar Repost Autoral ♻️" não tem botão no bot: só roda digitando o texto exato. Posta um vídeo autoral ainda não enviado ao Público. O painel fixo é renovado a cada 24 h, porque o Telegram só deixa o bot apagar mensagem com menos de 48 h.</p>
+    </div>
+
+    <div class="card">
+      <h3 style="margin-top:0">Simulador do painel do membro</h3>
+      <p class="hint" style="margin-top:0">Testa as regras do painel (nada é enviado). Obrigatório: o vídeo + pelo menos um dos dois links.</p>
+      <div class="field">
+        <label for="s-mb">Tamanho do vídeo em MB (vazio = ainda sem vídeo)</label>
+        <input type="number" id="s-mb" min="0" step="0.1" inputmode="decimal" placeholder="12">
+      </div>
+      <div class="field">
+        <label for="s-shopee">Link da Shopee</label>
+        <input type="text" id="s-shopee" autocomplete="off" placeholder="https://s.shopee.com.br/AbCdEf123">
+      </div>
+      <div class="field">
+        <label for="s-tiktok">Link do TikTok</label>
+        <input type="text" id="s-tiktok" autocomplete="off" placeholder="https://vm.tiktok.com/AbCdEf/">
+      </div>
+      <div class="bloco pre" id="sim-painel" aria-live="polite"></div>
+      <div class="actions"><button type="button" class="primary" id="b-sim-concluir" hidden>Concluir Oferta ✅</button><button type="button" id="b-sim-cancelar">Cancelar ❌</button></div>
+    </div>
+
+    <details class="card">
+      <summary>Regras e prazos da submissão</summary>
+      <ul>
+        <li>Cada passo tem <b>3 minutos</b> (a contagem reinicia a cada envio). Sem vídeo e link ao acabar, a submissão é cancelada: "⌛ Tempo esgotado".</li>
+        <li>Com vídeo e ao menos um link, o painel dá <b>1 minuto extra</b> ("Publicar agora 🚀" ou "Cancelar ❌"); em silêncio, publica sozinho.</li>
+        <li>Vídeo de mais de <b>20 MB</b> é recusado na hora (limite de download do bot); o painel continua aberto.</li>
+        <li>Um painel por membro: tocar de novo troca o painel aberto por um novo. Só o dono mexe no próprio painel.</li>
+        <li>A IA avalia o vídeo inteiro: aprovado vira post no tópico de postagem; rejeitado mostra o motivo (nudez, violência, memes, dancinhas, vídeo pessoal ou só texto).</li>
+        <li>Legenda: "👤 Vídeo enviado por", nome do produto, "🔶 SHOPEE 🔶" e "⬛ TIKTOK ⬛" com o link, e as hashtags de categoria.</li>
+      </ul>
+      <p class="hint">Ações de moderação (IA, publicar no mural, apagar painéis) só acontecem no servidor.</p>
+    </details>
+  </section>
+
+  <!-- ===== Buscador de produtos ===== -->
+  <section aria-labelledby="t-busca" id="buscador">
+    <h2 id="t-busca">🔎 Buscador de produtos</h2>
+    <div class="card">
+      <p style="margin-top:0">O membro escreve o que procura no tópico do buscador e recebe <b>três opções</b> da Shopee com link de afiliado.</p>
+      <div class="bloco pre"><b class="t">🔎 Escreva aqui o que você procura</b>Mande o nome do produto neste tópico e eu vasculho a Shopee para você.
+
+Quanto mais específico, melhor
+• fone bluetooth → genérico demais
+• fone bluetooth com cancelamento de ruido → bem melhor
+
+Você recebe três opções
+💰 Mais barato — para gastar pouco
+⭐ Melhor avaliado — para não errar
+🔥 Maior desconto — a pechincha da busca
+
+Mostro preço, nota, quantidade vendida e a faixa de preço das opções que separei. Quando o produto tem variação, aparece a faixa (ex: R$ 18,98 a R$ 23,98) — assim você não se surpreende ao abrir o link.
+
+Limite: 10 buscas por dia, por pessoa. Zera à meia-noite.
+
+Busco no catálogo da Shopee. Não é comparação com outras lojas — é a melhor seleção dentro do que a Shopee tem para o seu termo.</div>
+      <div class="actions"><button type="button" class="full" id="b-painelbusca">Publicar painel do buscador (/painelbusca)</button></div>
+      <p class="hint">O painel é recriado no fim do tópico e fixado; o anterior é apagado. Ele também desce sozinho depois de 5 minutos de silêncio.</p>
+    </div>
+    <div class="card">
+      <h3 style="margin-top:0">Regras fixas do buscador (no código)</h3>
+      <dl class="status">
+        <div><dt>Limite por membro</dt><dd>10 buscas/dia (o admin não conta)</dd></div>
+        <div><dt>Mínimo de caracteres</dt><dd>3</dd></div>
+        <div><dt>Resultados pedidos à API</dt><dd>30, ordem de relevância</dd></div>
+        <div><dt>Janela de relevância</dt><dd>25 primeiros</dd></div>
+        <div><dt>Nota mínima</dt><dd>4,0 (nota 0 passa)</dd></div>
+        <div><dt>Vendas mínimas</dt><dd>20</dd></div>
+        <div><dt>Falha sem resultado</dt><dd>some em 3 min</dd></div>
+      </dl>
+      <p class="hint">Estes valores são constantes do código, sem botão no painel do bot. Resposta sem resultado: "😕 Não achei nada confiável para ...".</p>
+    </div>
+  </section>
+
+  <!-- ===== Repetidos ===== -->
+  <section aria-labelledby="t-rpt" id="repetidos">
+    <h2 id="t-rpt">♻️ Vídeos repetidos no Público</h2>
+    <div class="card">
+      <p style="margin-top:0">Regra do robô (sem botões): cada vídeo dos Autorais vai ao Grupo Público <b>uma vez só</b>.</p>
+      <ul>
+        <li>O vídeo é reconhecido pelo arquivo do Telegram (o mesmo quando é encaminhado) e pelo SHA-256 do arquivo baixado (o mesmo quando é enviado igual de novo).</li>
+        <li>Se a origem postar o mesmo vídeo outra vez, ele não volta, nem pelo sorteio nem pelo Disparar Repost Autoral ♻️.</li>
+        <li>O mesmo produto com <b>outro vídeo</b> pode ir: é conteúdo novo.</li>
+        <li>Quando a origem para de mandar vídeos novos, as postagens param (não reciclam os antigos).</li>
+        <li>Na dúvida (erro ao consultar o banco), o vídeo fica de fora em vez de arriscar repetir.</li>
+      </ul>
+    </div>
+  </section>
+</div>
+
+<script src="/assets/painel.js"></script>
+<script>
+(function () {
+  "use strict";
+  var P = Painel, $ = P.$, esc = P.esc;
+
+  var PADRAO = {
+    moderador_ativo: false, grupo_id: "", topico_envio: "", topico_destino: "",
+    repost_origem: "", repost_destino: "", repost_dias: 15, repost_min: 6, repost_max: 6, repost_pausado: false,
+    topicos_rotina: [],
+    rotinas: {
+      link_grupo_publico: { inicio: 9, fim: 21, frequencia: 2 },
+      promo_principal_publico: { inicio: 10, fim: 20, frequencia: 1 },
+      promo_viral_publico: { inicio: 10, fim: 20, frequencia: 1 },
+      promo_achadinhos_publico: { inicio: 10, fim: 20, frequencia: 1 }
+    },
+    pausado_publico: false,
+    spam: { alvos: [], freq: 1, rep: 1, repl: 1, pausado: true, config_alvos: {} }
+  };
+  var E = P.estado("publico", PADRAO);
+  function C() { return E.ler(); }
+  function mudar(fn) { E.alterar(fn); desenhar(); }
+
+  var ROTINAS = [
+    { k: "link_grupo_publico", nome: "Convite (Próprio Grupo) 🔗", edit: "Editar Convite (Próprio) 🔗", disp: "Disparar Convite (Próprio) 🔗", desc: "convite para o próprio Grupo Público" },
+    { k: "promo_principal_publico", nome: "Promo Canal Principal 🌟", edit: "Editar Promo Principal 🌟", disp: "Disparar Promo Principal 🌟", desc: "divulgação do Canal Principal" },
+    { k: "promo_viral_publico", nome: "Promo Canal Viral 💥", edit: "Editar Promo Viral 💥", disp: "Disparar Promo Viral 💥", desc: "divulgação do Canal Viral" },
+    { k: "promo_achadinhos_publico", nome: "Promo Central de Achadinhos 🏪", edit: "Editar Achadinhos 🏪", disp: "Disparar Achadinhos 🏪", desc: "divulgação da Central de Achadinhos" }
+  ];
+
+  // ---------- utilidades ----------
+  // Mesmo rótulo de cota do bot (rotulo_cota).
+  function rotuloCota(p, t) { return t > p ? p + " a " + t + "/dia · média " + Math.round((p + t) / 2) : p + "/dia (fixo)"; }
+  // interpretar_faixa_cota: "6" ou "4-8", sem teto de dias (só 3 dígitos).
+  function faixaCota(txt) {
+    var m = /^(\d{1,3})(?:\s*-\s*(\d{1,3}))?$/.exec((txt || "").trim());
+    if (!m) return null;
+    var p = parseInt(m[1], 10), t = m[2] ? parseInt(m[2], 10) : p;
+    if (p < 1 || t < p) return null;
+    return [p, t];
+  }
+  // Lê ID, @, link t.me ou Telegram Web como o validar_e_formatar_alvo, mas sem consultar o Telegram.
+  function lerAlvo(txt) {
+    var e = (txt || "").trim(), base = e, top = null, m;
+    if (!e) return null;
+    if (/t\.me\/c\//i.test(e)) {
+      m = /t\.me\/c\/(\d+)(?:\/(\d+))?/i.exec(e); if (!m) return null;
+      base = "-100" + m[1]; top = m[2] || null;
+    } else if (/t\.me\//i.test(e)) {
+      m = /t\.me\/([A-Za-z0-9_+]+)(?:\/(\d+))?/i.exec(e); if (!m) return null;
+      base = "@" + m[1]; top = m[2] || null;
+    } else if (/web\.telegram\.org/i.test(e) && e.indexOf("#") > -1) {
+      var parte = e.split("#")[1].split("/")[0];
+      if (parte.indexOf("_") > -1) { var s = parte.split("_"); base = s[0]; top = /^\d+$/.test(s[1]) ? s[1] : null; } else base = parte;
+    } else if (e.indexOf("_") > -1 && !/http/.test(e)) {
+      var i = e.lastIndexOf("_"), a = e.slice(0, i).trim(), b = e.slice(i + 1).trim();
+      if (/^\d+$/.test(b) && /^-?\d+$/.test(a)) { base = a; top = b; }
+    } else if (e.indexOf(":") > -1 && !/http/.test(e)) {
+      var q = e.split(":"); base = q[0]; top = /^\d+$/.test(q[1] || "") ? q[1] : null;
+    } else if (e.indexOf("/") > -1 && !/http/.test(e)) {
+      var r = e.split("/"); base = r[0]; top = /^\d+$/.test(r[1] || "") ? r[1] : null;
+    }
+    if (!(/^-?\d+$/.test(base) || /^@[A-Za-z0-9_+]{4,}$/.test(base))) return null;
+    return { base: base, top: top, id: top ? base + ":" + top : base };
+  }
+  // extrair_id_topico do bot: devolve [topico, erro].
+  function extrairTopico(entrada, grupo) {
+    var b = (entrada || "").trim(), m;
+    if (!b) return [null, null];
+    if (/t\.me\//i.test(b)) {
+      m = /t\.me\/c\/(\d+)\/(\d+)(?:\/(\d+))?/i.exec(b);
+      if (m) {
+        var esperado = String(grupo || "").trim().replace(/^-/, "");
+        if (esperado.indexOf("100") === 0) esperado = esperado.slice(3);
+        if (esperado && /^\d+$/.test(esperado) && m[1] !== esperado) return [null, b + " é de outro grupo (id " + m[1] + ")"];
+        return [m[2], null];
+      }
+      m = /t\.me\/([A-Za-z0-9_]+)\/(\d+)(?:\/(\d+))?/i.exec(b);
+      if (m && m[1].toLowerCase() !== "c") return [m[2], null];
+      return [null, "não achei o número do tópico em " + b];
+    }
+    if (b.indexOf("_") > -1) { var c = b.split("_").pop(); return /^\d+$/.test(c) ? [c, null] : [null, b + " não terminou em número"]; }
+    if (b.indexOf(":") > -1) { var d = b.split(":").pop(); return /^\d+$/.test(d) ? [d, null] : [null, b + " não terminou em número"]; }
+    if (/^\d+$/.test(b)) return [b, null];
+    return [null, b + " não é um link nem um número"];
+  }
+  function alvoRotulo(v) { return v ? "<code>" + esc(String(v).replace(":", "_")) + "</code>" : "<i>não definido (usando o padrão)</i>"; }
+  function defin(x) { return x !== "" && x !== null && x !== undefined && x !== 0 && x !== "0"; }
+
+  // ---------- fluxos: um aberto por vez, como o estado do bot ----------
+  function fechar() { P.$$(".fluxo").forEach(function (f) { f.hidden = true; }); var sub = $("f-rot"); if (sub) sub.hidden = true; }
+  function abrir(id) {
+    fechar();
+    var f = $(id); if (!f) return;
+    f.hidden = false;
+    var campo = f.querySelector("input[type=text],select");
+    if (campo && !campo.closest("[hidden]")) { try { campo.focus({ preventScroll: true }); } catch (e) {} }
+    try { f.scrollIntoView({ block: "nearest", behavior: "smooth" }); } catch (e) {}
+  }
+  function cancelar() { fechar(); P.$$(".err").forEach(function (e) { e.textContent = ""; }); P.aviso("Operação cancelada."); }
+  document.addEventListener("click", function (ev) {
+    var b = ev.target.closest ? ev.target.closest("button") : null;
+    if (!b) return;
+    if (b.hasAttribute("data-cancela")) { cancelar(); return; }
+    if (b.dataset.abre) {
+      P.$$(".err").forEach(function (e) { e.textContent = ""; });
+      var f = $(b.dataset.abre); if (f && f.querySelector("input[type=text]")) f.querySelector("input[type=text]").value = "";
+      abrir(b.dataset.abre);
+    }
+  });
+  function erro(id, texto) { $(id).textContent = texto; }
+  function ok(id) { $(id).textContent = ""; }
+
+  // ---------- painel principal ----------
+  function desenhar() {
+    var c = C();
+    var esc_ = defin(c.topico_envio) ? "⏳ Tópico de Escuta (<code>" + esc(c.grupo_id + "_" + c.topico_envio) + "</code>)" : "❌ <i>Não definido</i>";
+    var vit = defin(c.topico_destino) ? "⏳ Tópico de Postagem (<code>" + esc(c.grupo_id + "_" + c.topico_destino) + "</code>)" : "❌ <i>Não definido</i>";
+    var ro = c.repost_origem ? "⏳ <code>" + esc(String(c.repost_origem).replace(":", "_")) + "</code>" : "⏳ destino dos Vídeos Autorais <i>[Padrão]</i>";
+    var rd = c.repost_destino ? "⏳ <code>" + esc(String(c.repost_destino).replace(":", "_")) + "</code>" : vit + " <i>[Padrão]</i>";
+    var rotAlvos = c.topicos_rotina.length
+      ? c.topicos_rotina.map(function (t) { return "<div>⏳ Tópico " + esc(t) + " (<code>" + esc(c.grupo_id + "_" + t) + "</code>)</div>"; }).join("")
+      : "<div>✅ <i>Chat Geral (Padrão)</i></div>";
+    var modTxt = c.moderador_ativo ? "🟢 ATIVADO" : "🔴 DESATIVADO";
+    var repTxt = c.repost_pausado ? "🔴 PAUSADO" : "🟢 ATIVADO";
+    $("painel-status").innerHTML =
+      '<p style="margin-top:0"><b>📬 PAINEL DO GRUPO PÚBLICO</b><br><span class="muted">Os três robôs que atuam no seu Supergrupo.</span></p>' +
+      '<div class="bloco"><b class="t">⚙️ ROBÔ MODERADOR · ' + modTxt + '</b>📥 <b>Escuta</b><br>' + esc_ + '<br>📤 <b>Publica</b><br>' + vit + '</div>' +
+      '<div class="bloco"><b class="t">♻️ ROBÔ REPOSTADOR · ' + repTxt + '</b>📥 <b>Escuta</b><br>' + ro + '<br>📤 <b>Publica</b><br>' + rd +
+        '<br>⏳ Oculto por <b>' + c.repost_dias + ' dias</b> · 📦 <b>' + rotuloCota(c.repost_min, c.repost_max) + ' vídeos/dia</b></div>' +
+      '<div class="bloco"><b class="t">⏰ ROTINAS DO GRUPO · ' + (c.pausado_publico ? "🔴 PAUSADAS" : "🟢 ATIVAS") + '</b>📢 <b>Publicando nos alvos</b>' + rotAlvos + '</div>' +
+      '<p style="margin-bottom:0">Escolha a ação desejada:</p>';
+
+    // Moderador
+    $("mod-status").innerHTML = c.moderador_ativo ? '<span class="pill ativo">🟢 ATIVADO</span>' : '<span class="pill pausado">🔴 PAUSADO</span>';
+    $("b-mod-toggle").textContent = c.moderador_ativo ? "Pausar Robô Moderador ⏸️" : "Retomar Robô Moderador ▶️";
+    // Repostador
+    $("rep-status").innerHTML = c.repost_pausado ? '<span class="pill pausado">🔴 PAUSADO</span>' : '<span class="pill ativo">🟢 ATIVADO</span>';
+    $("rep-dias").textContent = c.repost_dias + " dias";
+    $("rep-cota").textContent = rotuloCota(c.repost_min, c.repost_max);
+    $("b-rep-toggle").textContent = c.repost_pausado ? "Retomar Repostagem ▶️" : "Pausar Repostagem ⏸️";
+    // Automações
+    $("aut-spam").textContent = c.spam.pausado ? "🔴 PAUSADO" : "🟢 ATIVO";
+    $("aut-rot").textContent = c.pausado_publico ? "🔴 PAUSADAS" : "🟢 ATIVAS";
+    // Rotinas
+    $("rot-alvos").innerHTML = rotAlvos;
+    $("rot-lista").innerHTML = ROTINAS.map(function (r) {
+      var x = c.rotinas[r.k] || PADRAO.rotinas[r.k];
+      return '<div class="bloco"><b class="t">🔹 ' + esc(r.nome) + '</b>Janela: ' + x.inicio + 'h às ' + x.fim + 'h | ' + x.frequencia + 'x/dia</div>';
+    }).join("");
+    $("rot-status").textContent = c.pausado_publico ? "🔴 PAUSADAS" : "🟢 ATIVAS";
+    $("b-rot-toggle").textContent = c.pausado_publico ? "Retomar Rotinas ▶️" : "Pausar Rotinas ⏸️";
+    $("alvos-atual").innerHTML = rotAlvos;
+    // SPAM
+    var s = c.spam, vol = s.repl * s.rep;
+    $("spam-status").textContent = s.pausado ? "⏸️ Pausado" : "▶️ Rodando";
+    $("spam-global").innerHTML = '<b class="t">🌍 Padrão Global:</b>Frequência: ' + s.freq + 'x/hora<br>Repetições no Texto: ' + s.rep + 'x<br>Réplicas por Disparo: ' + s.repl + 'x<br>📊 <b>Volume:</b> ' + vol + ' anúncio(s) por disparo · ' + (vol * s.freq) + '/hora por grupo';
+    var ul = $("spam-alvos");
+    if (!s.alvos.length) { ul.innerHTML = '<li class="vazio">Nenhum alvo cadastrado no momento.</li>'; }
+    else {
+      ul.innerHTML = s.alvos.map(function (a, i) {
+        var cf = s.config_alvos[a] || {}, pers = Object.keys(cf).length > 0;
+        var f = cf.frequencia != null ? cf.frequencia : s.freq, ri = cf.repeticoes != null ? cf.repeticoes : s.rep, rm = cf.replicas != null ? cf.replicas : s.repl;
+        return '<li class="item"><div class="info"><b>' + (i + 1) + '. ' + esc(a) + (pers ? " (Personalizado)" : "") + '</b><span>└ Freq: ' + f + '/h | Rep: ' + ri + 'x | Rép: ' + rm + 'x</span></div>' +
+          '<div class="acoes"><button type="button" data-excluir="' + i + '" aria-label="Excluir 🗑️ alvo ' + esc(a) + '">Excluir 🗑️</button></div></li>';
+      }).join("");
+    }
+    $("b-spam-toggle").textContent = s.pausado ? "Retomar Divulgação ▶️" : "Pausar Divulgação ⏸️";
+  }
+
+  // ---------- Moderador ----------
+  $("b-tops").addEventListener("click", function () { abrir("c-tops"); });
+  var campoTop = null;
+  P.$$("[data-top]").forEach(function (b) {
+    b.addEventListener("click", function () {
+      campoTop = b.dataset.top;
+      var c = C(), grupo = String(c.grupo_id || "");
+      var atual = campoTop === "escuta" ? c.topico_envio : c.topico_destino;
+      var ex = grupo && defin(atual) ? grupo + "_" + atual : "-1001234567890_5\n(exemplo genérico: o grupo ainda não foi definido)";
+      $("f-top-titulo").textContent = campoTop === "escuta" ? "📥 Tópico de Escuta" : "📤 Tópico de Postagem";
+      $("l-top").textContent = campoTop === "escuta"
+        ? "Envie o Link ou o ID numérico do tópico onde os membros enviam os vídeos."
+        : "Envie o Link ou o ID numérico do tópico onde o robô irá publicar automaticamente os vídeos aprovados.";
+      $("ex-top").textContent = "Exemplo atualizado com a sua configuração:\n" + ex;
+      abrir("f-top"); $("i-top").value = ""; ok("e-top");
+    });
+  });
+  $("f-top").addEventListener("submit", function (ev) {
+    ev.preventDefault();
+    var a = lerAlvo($("i-top").value);
+    if (!a) { erro("e-top", "Não reconheci esse ID ou link. Envie o link do tópico (t.me/c/.../5) ou o ID numérico (-100..._5)."); return; }
+    ok("e-top");
+    var grupo = a.base, top = a.top || "0", campo = campoTop;
+    P.confirmar("✅ Canal/Tópico lido: " + grupo + " (ID do tópico: " + top + ")\n(Protótipo: o formato foi conferido; a consulta ao Telegram só ocorre com o servidor ligado.)\n\nDeseja confirmar e salvar esta alteração?", function () {
+      mudar(function (c) {
+        c.grupo_id = grupo;
+        if (campo === "escuta") c.topico_envio = parseInt(top, 10); else c.topico_destino = parseInt(top, 10);
+      });
+      fechar(); P.aviso("✅ Configuração atualizada com sucesso!");
+    });
+  });
+  $("b-mod-toggle").addEventListener("click", function () {
+    var c = C();
+    if (!c.grupo_id) { erro("e-mod", "⚠️ Você precisa configurar o Grupo e os Tópicos primeiro."); return; }
+    ok("e-mod");
+    var pausar = c.moderador_ativo;
+    P.confirmar("⚠️ Tem certeza de que deseja " + (pausar ? "PAUSAR" : "RETOMAR") + " a moderação automática de vídeos neste grupo?\n\n(Quando em execução, a IA analisa e aprova automaticamente os vídeos enviados pelos membros no tópico de escuta)", function () {
+      mudar(function (x) { x.moderador_ativo = !pausar; });
+      P.aviso((pausar ? "⏸️ O Robô Moderador foi PAUSADO com sucesso." : "▶️ O Robô Moderador foi RETOMADO com sucesso."));
+    });
+  });
+
+  // ---------- Repostador ----------
+  function fluxoDestino(formId, inputId, errId, chave, rotulo) {
+    $(formId).addEventListener("submit", function (ev) {
+      ev.preventDefault();
+      var a = lerAlvo($(inputId).value);
+      if (!a) { erro(errId, "Não reconheci esse valor. Envie o ID numérico, o @username ou o link do Telegram."); return; }
+      ok(errId);
+      var atual = C()[chave] || "";
+      if (String(atual) === a.id) {
+        fechar(); P.aviso("ℹ️ " + rotulo + " já estava definido com esse valor. Nada foi alterado."); return;
+      }
+      P.confirmar("⚠️ Confirmar alteração do " + rotulo + "?\n\n📍 Antes: " + (atual ? String(atual).replace(":", "_") : "não definido (usando o padrão)") +
+        "\n📍 Depois: " + a.id.replace(":", "_") + "\n\nIsto muda para onde o conteúdo é enviado. Confirme para aplicar.\n(Protótipo: o canal não é consultado no Telegram.)", function () {
+        mudar(function (c) { c[chave] = a.id; });
+        fechar(); P.aviso("✅ " + rotulo + " atualizado com sucesso!");
+      });
+    });
+  }
+  fluxoDestino("f-rorigem", "i-rorigem", "e-rorigem", "repost_origem", "Origem do Repost");
+  fluxoDestino("f-rdestino", "i-rdestino", "e-rdestino", "repost_destino", "Destino do Repost");
+
+  $("f-rdias").addEventListener("submit", function (ev) {
+    ev.preventDefault();
+    var v = $("i-rdias").value.trim();
+    if (!/^\d+$/.test(v)) { erro("e-rdias", "⚠️ Envie apenas números inteiros."); return; }
+    ok("e-rdias");
+    var n = parseInt(v, 10);
+    P.confirmar("Tem certeza que deseja configurar o atraso para " + n + " dias?", function () {
+      mudar(function (c) { c.repost_dias = n; });
+      fechar(); P.aviso("✅ Tempo de Atraso Atualizado! Os vídeos irão para o Grupo Público após " + n + " dias da captura original.");
+    });
+  });
+  $("f-rlimite").addEventListener("submit", function (ev) {
+    ev.preventDefault();
+    var f = faixaCota($("i-rlimite").value);
+    if (!f) { erro("e-rlimite", "⚠️ Envie um número (6) ou uma faixa (4-8)."); return; }
+    ok("e-rlimite");
+    P.confirmar("Tem certeza que deseja definir a cota diária para " + rotuloCota(f[0], f[1]) + "?", function () {
+      mudar(function (c) { c.repost_min = f[0]; c.repost_max = f[1]; });
+      fechar(); P.aviso("✅ Cota Diária Atualizada! O robô enviará " + rotuloCota(f[0], f[1]) + " ao Grupo Público.");
+    });
+  });
+  $("b-rep-toggle").addEventListener("click", function () {
+    var pausar = !C().repost_pausado;
+    P.confirmar("⚠️ Tem certeza de que deseja " + (pausar ? "PAUSAR" : "RETOMAR") + " a repostagem automática para o Grupo Público?", function () {
+      mudar(function (c) { c.repost_pausado = pausar; });
+      P.aviso("✅ A repostagem automática para o Público foi " + (pausar ? "PAUSADA 🔴." : "RETOMADA 🟢."));
+    });
+  });
+
+  // ---------- Rotinas ----------
+  var rotAtual = null;
+  $("botoes-editar").innerHTML = ROTINAS.map(function (r) { return '<button type="button" data-edit="' + r.k + '">' + esc(r.edit) + '</button>'; }).join("");
+  $("botoes-disparo").innerHTML = ROTINAS.map(function (r) { return '<button type="button" data-disp="' + r.k + '">' + esc(r.disp) + '</button>'; }).join("");
+  $("botoes-editar").addEventListener("click", function (ev) {
+    var b = ev.target.closest("button[data-edit]"); if (!b) return;
+    rotAtual = ROTINAS.filter(function (r) { return r.k === b.dataset.edit; })[0];
+    var x = C().rotinas[rotAtual.k] || PADRAO.rotinas[rotAtual.k];
+    $("l-rot").textContent = "Vamos configurar a janela de sorteio e a quantidade de envios para " + rotAtual.edit + ".\n\nEnvie os dados no seguinte formato: HoraInicio-HoraFim, Quantidade\n\nExemplo atualizado com a sua configuração:\n" + x.inicio + "-" + x.fim + ", " + x.frequencia;
+    $("i-rot").value = ""; ok("e-rotf"); $("f-rot").hidden = false; $("i-rot").focus();
+  });
+  $("b-rot-cancela").addEventListener("click", function () { $("f-rot").hidden = true; ok("e-rotf"); P.aviso("Operação cancelada."); });
+  $("f-rot").addEventListener("submit", function (ev) {
+    ev.preventDefault();
+    var m = /^(\d{1,2})-(\d{1,2}),\s*(\d+)$/.exec($("i-rot").value.trim());
+    if (!m) { erro("e-rotf", "Formato inválido! Use o formato exato como no exemplo: 10-20, 3"); return; }
+    var i = parseInt(m[1], 10), f = parseInt(m[2], 10), q = parseInt(m[3], 10);
+    if (i >= f || i < 0 || f > 23 || q < 1) { erro("e-rotf", "Valores inválidos! A hora de início deve ser menor que a do fim (entre 0 e 23) e a quantidade mínima é 1."); return; }
+    ok("e-rotf");
+    var k = rotAtual.k;
+    mudar(function (c) { c.rotinas[k] = { inicio: i, fim: f, frequencia: q }; });
+    $("f-rot").hidden = true;
+    P.aviso("✅ Configuração salva! (Neste protótipo o sorteio dos horários de hoje não é refeito: quem faz isso é o servidor.)");
+  });
+  $("botoes-disparo").addEventListener("click", function (ev) {
+    var b = ev.target.closest("button[data-disp]"); if (!b) return;
+    var r = ROTINAS.filter(function (x) { return x.k === b.dataset.disp; })[0];
+    if (C().pausado_publico) { erro("e-rot", "⚠️ Ação Bloqueada: As rotinas do Grupo Público estão PAUSADAS."); fechar(); return; }
+    ok("e-rot");
+    P.confirmar("⚠️ Tem certeza de que deseja DISPARAR AGORA a rotina " + r.nome + "?\n\n(A mensagem de " + r.desc + " será gerada pela IA e enviada imediatamente aos tópicos configurados do Grupo Público)", function () {
+      P.soServidor(r.disp);
+    });
+  });
+  $("f-alvos").addEventListener("submit", function (ev) {
+    ev.preventDefault();
+    var txt = $("i-alvos").value.trim(), grupo = String(C().grupo_id || ""), finais = [];
+    if (txt !== "0") {
+      var problemas = [];
+      txt.split(",").forEach(function (en) {
+        var r = extrairTopico(en, grupo);
+        if (r[1]) problemas.push(r[1]);
+        else if (r[0] && r[0] !== "0" && finais.indexOf(r[0]) < 0) finais.push(r[0]);
+      });
+      if (problemas.length) { erro("e-alvos", "⚠️ Não consegui ler alguns alvos: " + problemas.join("; ") + ". Corrija e envie a lista de novo, ou use o botão de cancelar."); return; }
+      if (!finais.length) { erro("e-alvos", "⚠️ Não identifiquei nenhum tópico válido. Cole o link do tópico (toque no nome do tópico → Copiar Link), separando por vírgula se forem vários, ou envie 0 para publicar somente no Chat Geral."); return; }
+    }
+    ok("e-alvos");
+    P.confirmar("🎯 As rotinas do Grupo Público passarão a ser publicadas em: " + (finais.length ? finais.join(", ") : "Chat Geral (Padrão)") +
+      "\n\n(Os nomes reais dos tópicos serão sincronizados em background pelo Userbot)\n\nDeseja confirmar esta alteração?", function () {
+      mudar(function (c) { c.topicos_rotina = finais; });
+      fechar(); P.aviso("✅ Alvos de postagem atualizados com sucesso!");
+    });
+  });
+  $("b-rot-toggle").addEventListener("click", function () {
+    var pausar = !C().pausado_publico;
+    P.confirmar(pausar
+      ? "⚠️ Tem certeza de que deseja PAUSAR as mensagens de rotina deste módulo?"
+      : "⚠️ Tem certeza de que deseja RETOMAR as mensagens de rotina?\n\n🧠 O sistema avaliará o histórico de hoje e distribuirá de forma inteligente apenas as mensagens que ainda estão faltando para o dia, garantindo uma postagem orgânica sem sobreposições.", function () {
+      mudar(function (c) { c.pausado_publico = pausar; });
+      P.aviso(pausar ? "⏸️ Rotinas do Público PAUSADAS." : "▶️ Rotinas do Público ATIVAS. (A grade do dia é recalculada pelo servidor.)");
+    });
+  });
+
+  // ---------- SPAM ----------
+  $("f-spamadd").addEventListener("submit", function (ev) {
+    ev.preventDefault();
+    var entradas = $("i-spamadd").value.split(",").map(function (x) { return x.trim(); }).filter(Boolean);
+    if (!entradas.length) { erro("e-spamadd", "Nenhum alvo detectado. Tente novamente:"); return; }
+    var novos = [], recusados = [];
+    entradas.forEach(function (en) { var a = lerAlvo(en); if (a) novos.push(a.id); else recusados.push(en); });
+    var msg = recusados.length ? "⚠️ Não consegui validar:\n" + recusados.map(function (r) { return "• " + r; }).join("\n") + "\n\nUse o ID numérico, o link t.me ou a URL do Telegram Web. Para grupos privados, a conta do userbot precisa estar dentro." : "";
+    if (!novos.length) { erro("e-spamadd", (msg ? msg + "\n\n" : "") + "Nenhum alvo válido. Tente novamente:"); return; }
+    mudar(function (c) { c.spam.alvos = c.spam.alvos.concat(novos).filter(function (v, i, a) { return a.indexOf(v) === i; }); });
+    if (msg) { erro("e-spamadd", msg); $("i-spamadd").value = ""; } else fechar();
+    P.aviso("Alvos adicionados com sucesso! (Protótipo: só o formato foi conferido.)");
+  });
+  $("spam-alvos").addEventListener("click", function (ev) {
+    var b = ev.target.closest("button[data-excluir]"); if (!b) return;
+    var idx = parseInt(b.dataset.excluir, 10), nome;
+    mudar(function (c) { nome = c.spam.alvos.splice(idx, 1)[0]; delete c.spam.config_alvos[nome]; });
+    P.aviso("Alvo '" + nome + "' excluído com sucesso!");
+  });
+  var spamGlobal = true;
+  $("b-spam-global").addEventListener("click", function () {
+    spamGlobal = true; $("spam-sel-box").hidden = true;
+    $("l-spamvals").textContent = "Envie os três números separados por vírgula:\nFrequência/hora, Repetições no texto, Réplicas por disparo\n\nExemplo: 1, 1, 1 — um anúncio por hora em cada grupo.";
+    abrir("f-spamvals"); $("i-spamvals").value = ""; ok("e-spamvals");
+  });
+  $("b-spam-alvo").addEventListener("click", function () {
+    var alvos = C().spam.alvos;
+    if (!alvos.length) { erro("e-spamedit", "Não há alvos cadastrados ainda."); return; }
+    ok("e-spamedit"); spamGlobal = false;
+    $("s-spam-alvo").innerHTML = alvos.map(function (a, i) { return '<option value="' + i + '">' + (i + 1) + ". " + esc(a) + "</option>"; }).join("");
+    $("spam-sel-box").hidden = false;
+    $("l-spamvals").textContent = "Envie os três números separados por vírgula:\nFrequência/hora, Repetições no texto, Réplicas por disparo";
+    abrir("f-spamvals"); $("i-spamvals").value = ""; ok("e-spamvals");
+  });
+  $("f-spamvals").addEventListener("submit", function (ev) {
+    ev.preventDefault();
+    var m = /^(\d+)\s*,\s*(\d+)\s*,\s*(\d+)$/.exec($("i-spamvals").value.trim());
+    if (!m) { erro("e-spamvals", "Formato inválido. Envie os três números isolados por vírgula (Exemplo: 1, 1, 1)."); return; }
+    ok("e-spamvals");
+    var f = +m[1], r = +m[2], p = +m[3], texto, alvo = null;
+    if (spamGlobal) {
+      mudar(function (c) { c.spam.freq = f; c.spam.rep = r; c.spam.repl = p; });
+      texto = "✅ Padrão Global (Grupo Público) atualizado! Frequência: " + f + "x/h | Repetições: " + r + "x | Réplicas: " + p + "x";
+    } else {
+      alvo = C().spam.alvos[parseInt($("s-spam-alvo").value, 10)];
+      mudar(function (c) { c.spam.config_alvos[alvo] = { frequencia: f, repeticoes: r, replicas: p }; });
+      texto = "✅ Alvo personalizado (Grupo Público) atualizado! Alvo: " + alvo + " | Frequência: " + f + "x/h | Repetições: " + r + "x | Réplicas: " + p + "x";
+    }
+    var vol = p * r;
+    if (vol > 6) texto += " ⚠️ Atenção: isso são " + vol + " anúncios por disparo (" + (vol * f) + "/hora por grupo). Volume alto é o gatilho clássico de PeerFloodError na sessão do userbot.";
+    fechar(); P.aviso(texto);
+  });
+  $("b-spam-toggle").addEventListener("click", function () {
+    var pausar = !C().spam.pausado;
+    mudar(function (c) { c.spam.pausado = pausar; });
+    P.aviso("✅ Divulgação " + (pausar ? "PAUSADA." : "RETOMADA."));
+  });
+  $("b-spam-forcar").addEventListener("click", function () {
+    var s = C().spam;
+    if (s.pausado) { erro("e-spam", "⚠️ Ação Bloqueada: esta divulgação está PAUSADA. Retome-a antes de disparos manuais."); return; }
+    if (!s.alvos.length) { erro("e-spam", "⚠️ Nenhum alvo cadastrado. Adicione ao menos um grupo antes."); return; }
+    ok("e-spam"); P.soServidor("Forçar Disparo SPAM 🚀");
+  });
+
+  // ---------- Submissão e buscador ----------
+  $("b-recriar-painel").addEventListener("click", function () {
+    P.confirmar("Recriar o painel fixo de submissão no fim do tópico de escuta? O anterior é apagado e o novo é fixado.", function () { P.soServidor("Recriar painel fixo (/botao_ofertas)"); });
+  });
+  $("b-repost-autoral").addEventListener("click", function () {
+    var c = C();
+    if (!c.moderador_ativo || !(c.repost_destino || c.grupo_id)) {
+      P.aviso("⚠️ Ação Bloqueada: O Painel do Grupo Público está desativado ou não possui um destino configurado."); return;
+    }
+    P.confirmar("Postar agora um vídeo autoral recente que ainda não foi ao Grupo Público?", function () { P.soServidor("Disparar Repost Autoral ♻️"); });
+  });
+  $("b-painelbusca").addEventListener("click", function () {
+    P.confirmar("Publicar (ou recriar no fim do tópico) o painel fixo do buscador?", function () { P.soServidor("Publicar painel do buscador (/painelbusca)"); });
+  });
+
+  // Simulador do painel do membro (montar_texto_painel). Os padrões de link são os do bot.
+  var RE_SHOPEE = /(?:https?:\/\/)?(?:s\.shopee\.com\.br|shope\.ee|br\.shp\.ee|shp\.ee|shopee\.com\.br)\/[^\s<]+/i;
+  var RE_TIKTOK = /(?:https?:\/\/)?(?:www\.)?(?:vm\.tiktok\.com|vt\.tiktok\.com|tiktok\.com)\/[^\s]+/i;
+  function simular() {
+    var mbTxt = $("s-mb").value.trim(), mb = mbTxt === "" ? null : parseFloat(mbTxt);
+    var sh = $("s-shopee").value.trim(), tk = $("s-tiktok").value.trim();
+    var temVideo = mb !== null && !isNaN(mb) && mb <= 20, grande = mb !== null && !isNaN(mb) && mb > 20;
+    var temSh = RE_SHOPEE.test(sh), temTk = RE_TIKTOK.test(tk);
+    var pronto = temVideo && (temSh || temTk), t = "📋 Painel de Submissão de Oferta\n\n";
+    t += pronto ? "🎉 Você já pode concluir a sua postagem!\n\n" : "Complete os requisitos abaixo:\n\n";
+    t += (temVideo ? "✅" : "🎬") + " Vídeo do produto\n" + (temSh ? "✅" : "🔶") + " Link da Shopee\n" + (temTk ? "✅" : "⬛") + " Link do TikTok\n\n";
+    if (!pronto) t += "Obrigatório: o vídeo + pelo menos um dos dois links.\n\n";
+    if (grande) t += "⚠️ este vídeo tem " + mb.toFixed(1) + " MB e o robô só consegue analisar até 20 MB. Mande uma versão mais leve (corte alguns segundos ou reduza a qualidade). O painel continua aberto de onde parou.\n\n";
+    if ((sh && !temSh) || (tk && !temTk)) t += "⚠️ não reconheci o envio. Mande um vídeo ou cole um link completo da Shopee ou do TikTok. Exemplo: https://s.shopee.com.br/AbCdEf123\n\n";
+    t += "Mande o vídeo e os links aqui no chat, na ordem que preferir. O painel se atualiza sozinho.\n⏱️ Tempo restante para envio: 03:00";
+    $("sim-painel").textContent = t;
+    $("b-sim-concluir").hidden = !pronto;
+  }
+  ["s-mb", "s-shopee", "s-tiktok"].forEach(function (id) { $(id).addEventListener("input", simular); });
+  $("b-sim-cancelar").addEventListener("click", function () { ["s-mb", "s-shopee", "s-tiktok"].forEach(function (id) { $(id).value = ""; }); simular(); P.aviso("❌ Envio de oferta cancelado."); });
+  $("b-sim-concluir").addEventListener("click", function () { P.soServidor("Concluir Oferta ✅ (avaliação da IA e publicação)"); });
+
+  P.topo("publico");
+  desenhar();
+  simular();
+})();
+</script>
+</body>
+</html>

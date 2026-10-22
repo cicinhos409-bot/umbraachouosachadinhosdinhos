@@ -1,0 +1,480 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Achadinhos - Painel</title>
+<meta name="description" content="Painel web do Gerador de Achadinhos: as mesmas configurações do painel do Telegram.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23ee4d2d'/%3E%3Cpath d='M26 20l20 12-20 12z' fill='%23fff'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="/assets/painel.css">
+<style>
+  .nicho { background: var(--card-2); border: 1px solid var(--line); border-radius: 12px; padding: 12px; margin-top: 10px; overflow-wrap: anywhere; }
+  .nicho b { display: block; }
+  .nicho span { display: block; color: var(--muted); font-size: 14px; }
+  .resposta { white-space: pre-line; border-left: 3px solid var(--accent); padding: 4px 0 4px 12px; margin: 12px 0 0; }
+  .fluxo { margin-top: 12px; border-color: var(--accent); }
+  .fluxo .pedido { white-space: pre-line; margin: 0 0 12px; overflow-wrap: anywhere; }
+  .fluxo .antes { white-space: pre-line; overflow-wrap: anywhere; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div id="topo"></div>
+
+  <h1>🛍️ Gerador de Achadinhos</h1>
+  <p class="lead">O robô garimpa ofertas na API da Shopee e publica a foto com a legenda no tópico de cada nicho.</p>
+
+  <section aria-labelledby="t-status">
+    <h2 id="t-status">🛍️ Painel do Gerador de Achadinhos</h2>
+    <div class="card" id="status" aria-live="polite"></div>
+  </section>
+
+  <section aria-labelledby="t-menu">
+    <h2 id="t-menu">Menu</h2>
+    <div class="menu-grid">
+      <button type="button" id="m-add">Adicionar Nicho ➕</button>
+      <button type="button" id="m-rem">Remover Nicho 🗑️</button>
+      <button type="button" id="m-edit">Editar Nicho ✏️</button>
+      <button type="button" id="m-forcar">Forçar Garimpo 🚀</button>
+      <button type="button" id="m-janela">Janela de Horário ⏰</button>
+      <button type="button" id="m-ciclo">Nichos por Ciclo 🔄</button>
+    </div>
+    <div class="card fluxo" id="fluxo" hidden></div>
+    <p class="resposta" id="resposta" role="status" hidden></p>
+  </section>
+
+  <section aria-labelledby="t-spam">
+    <h2 id="t-spam">📢 SPAM do Achadinhos</h2>
+    <div class="card" id="spam-status" aria-live="polite"></div>
+    <div class="menu-grid" style="margin-top:12px">
+      <button type="button" id="s-add">Adicionar Alvo SPAM ➕</button>
+      <button type="button" id="s-rem">Excluir Alvo SPAM 🗑️</button>
+      <button type="button" id="s-edit">Editar Configs SPAM ⚙️</button>
+      <button type="button" id="s-forcar">Forçar Disparo SPAM 🚀</button>
+      <button type="button" id="s-pausa" class="full" style="grid-column:1/-1"></button>
+    </div>
+    <div class="card fluxo" id="fluxo-spam" hidden></div>
+    <p class="resposta" id="resposta-spam" role="status" hidden></p>
+  </section>
+
+  <section aria-labelledby="t-como">
+    <h2 id="t-como">Como o garimpo funciona</h2>
+    <details class="card">
+      <summary>Regras do ciclo e do garimpo (como no robô)</summary>
+      <ul>
+        <li><b>Quando roda:</b> o próximo garimpo é sorteado a cada ciclo, sem hora fixa: rajada (30%, de 12 a 40 min), normal (45%, de 55 a 160 min) e sumiço (25%, de 190 a 420 min). A média fica perto de 2 h. Fora da janela de horário, o ciclo é adiado para a abertura da janela. Depois de reiniciar, o robô espera de 3 a 25 min (ou retoma o horário já sorteado).</li>
+        <li><b>Quais nichos:</b> por sorteio com peso, sem rodízio fixo. Quem publicou há pouco pesa menos, mas pode repetir. O número de Nichos por Ciclo é a média: cada rodada sorteia um a menos, o valor ou um a mais (30% / 50% / 20%).</li>
+        <li><b>Qual produto:</b> sorteia uma palavra-chave do nicho, busca 40 produtos na Shopee (mais vendidos), ordena do maior para o menor desconto e pega o primeiro ainda inédito com pelo menos 15% de desconto. Sem produto assim, o nicho é pulado.</li>
+        <li><b>Memória:</b> produto publicado não volta; o robô guarda por 5 anos.</li>
+        <li><b>Legenda:</b> uma linha de chamada da IA (até 60 caracteres, sem preço); sem IA, uma abertura pronta. O bloco de preço (de/por, desconto, nota da loja) é montado por código. O link sai com a marcação de afiliado.</li>
+        <li><b>Entrega:</b> a foto vai ao tópico do nicho e também ao feed central. Desconto de 60% ou mais ainda é republicado no tópico de achados do dia.</li>
+        <li><b>Entre nichos do mesmo ciclo:</b> 45% das vezes emenda (25 a 90 s); nas outras, uma pausa de 150 a 600 s.</li>
+      </ul>
+      <p class="hint">Forçar Garimpo roda um ciclo agora, ignorando a janela de horário.</p>
+    </details>
+  </section>
+</div>
+
+<script src="/assets/painel.js"></script>
+<script>
+(function () {
+  "use strict";
+  Painel.topo("achadinhos");
+  var $ = Painel.$, esc = Painel.esc;
+
+  // Padrões do bot (bot_mestre.py): janela 8-22, 2 nichos por ciclo; SPAM nasce pausado, 1/1/1.
+  var estado = Painel.estado("achadinhos", {
+    nichos: [], inicio: 8, fim: 22, nichos_por_ciclo: 2,
+    spam: { alvos: [], frequencia_por_hora: 1, repeticoes_internas: 1, replicas_mensagem: 1, pausado: true, config_alvos: {} }
+  });
+  function ler() { var c = estado.ler(); c.spam = Object.assign({ alvos: [], frequencia_por_hora: 1, repeticoes_internas: 1, replicas_mensagem: 1, pausado: true, config_alvos: {} }, c.spam || {}); return c; }
+  function mudar(fn) { estado.alterar(function (c) { c.spam = Object.assign({ alvos: [], frequencia_por_hora: 1, repeticoes_internas: 1, replicas_mensagem: 1, pausado: true, config_alvos: {} }, c.spam || {}); fn(c); }); }
+
+  // ---------- Painel de status (texto de painel_achadinhos) ----------
+  function desenharStatus() {
+    var c = ler(), n = c.nichos, h = "";
+    h += "<p style='margin-top:0'>O motor autônomo está configurado para inspecionar <b>" + n.length + " nicho(s) de mercado</b> em ciclo.</p>";
+    if (!n.length) {
+      h += "<p class='vazio'><i>Nenhum nicho configurado. Clique em 'Adicionar Nicho ➕' para começar.</i></p>";
+    } else {
+      n.forEach(function (x, i) {
+        var th = String(x.thread_id == null || x.thread_id === "" ? "0" : x.thread_id);
+        var alvo = th !== "0" ? x.destino + ":" + th : String(x.destino);
+        h += "<div class='nicho'><b>🎯 " + (i + 1) + ". " + esc(x.nome) + "</b>" +
+          "<span>└ Publica em: " + esc(x.destino) + "</span>" +
+          (th !== "0" ? "<span>└ Tópico: " + esc(th) + "</span>" : "") +
+          "<span>└ ID: <code>" + esc(alvo) + "</code></span>" +
+          "<span>└ Termos Rastreados: " + esc((x.keywords || []).join(", ")) + "</span></div>";
+      });
+    }
+    var j = (c.inicio === 0 && c.fim === 24) ? "24h" : c.inicio + "h às " + c.fim + "h";
+    h += "<dl class='status' style='margin-top:16px'><div><dt>⏰ Janela de postagem</dt><dd>" + j + "</dd></div>" +
+         "<div><dt>🔄 Nichos por ciclo</dt><dd>" + c.nichos_por_ciclo + "</dd></div></dl>";
+    h += "<p class='hint'>No Telegram, o nome do grupo e do tópico vêm do cache do robô e aparecem como atalho clicável; aqui aparece o ID.</p>";
+    $("status").innerHTML = h;
+  }
+
+  function desenharSpam() {
+    var c = ler(), s = c.spam, h = "";
+    var vol = s.replicas_mensagem * s.repeticoes_internas;
+    h += "<p style='margin-top:0'><b>SPAM · Central de Achadinhos</b> <span class='pill " + (s.pausado ? "pausado'>⏸️ Pausado" : "ativo'>▶️ Rodando") + "</span></p>";
+    h += "<p>🔗 Divulga: o link do canal Central de Achadinhos (definido no robô)</p>";
+    h += "<p><b>🌍 Padrão Global:</b><br>Frequência: " + s.frequencia_por_hora + "x/hora<br>Repetições no Texto: " + s.repeticoes_internas + "x<br>Réplicas por Disparo: " + s.replicas_mensagem + "x<br>" +
+         "📊 <b>Volume:</b> " + vol + " anúncio(s) por disparo · " + (vol * s.frequencia_por_hora) + "/hora por grupo</p>";
+    h += "<p style='margin-bottom:0'><b>🎯 Alvos Ativos:</b></p>";
+    if (!s.alvos.length) h += "<p class='vazio'>Nenhum alvo cadastrado no momento.</p>";
+    else s.alvos.forEach(function (a, i) {
+      var cf = s.config_alvos[a] || {}, pers = Object.keys(cf).length ? " (Personalizado)" : "";
+      h += "<div class='nicho'><b>" + (i + 1) + ". " + esc(a) + pers + "</b><span>└ Freq: " +
+        (cf.frequencia != null ? cf.frequencia : s.frequencia_por_hora) + "/h | Rep: " +
+        (cf.repeticoes != null ? cf.repeticoes : s.repeticoes_internas) + "x | Rép: " +
+        (cf.replicas != null ? cf.replicas : s.replicas_mensagem) + "x</span></div>";
+    });
+    $("spam-status").innerHTML = h;
+    $("s-pausa").textContent = s.pausado ? "Retomar Divulgação ▶️" : "Pausar Divulgação ⏸️";
+  }
+  function desenhar() { desenharStatus(); desenharSpam(); }
+
+  // ---------- Caixa de fluxo (cada passo do FSM do bot) ----------
+  // passo({ pedido, campo:{label,ph,inputmode,valor}, botoes:[{r,cls,fn}], aoEnviar(valor) })
+  function Caixa(idCaixa, idResposta, aoCancelar) {
+    var box = $(idCaixa), resp = $(idResposta), contador = 0;
+    function responder(texto) { resp.textContent = texto; resp.hidden = !texto; }
+    function fechar() { box.hidden = true; box.innerHTML = ""; }
+    function passo(p) {
+      var id = idCaixa + "-c" + (++contador);
+      var h = "<form novalidate><p class='pedido'>" + (p.pedidoHtml != null ? p.pedidoHtml : esc(p.pedido)) + "</p>";
+      if (p.campo) {
+        h += "<div class='field'><label for='" + id + "'>" + esc(p.campo.label) + "</label>" +
+          "<input type='text' id='" + id + "' autocomplete='off' inputmode='" + (p.campo.inputmode || "text") + "' placeholder='" + esc(p.campo.ph || "") + "' value='" + esc(p.campo.valor || "") + "' aria-describedby='" + id + "-e'>" +
+          "<p class='err' id='" + id + "-e' role='alert'></p></div>";
+      }
+      h += "<div class='actions'>";
+      if (p.campo) h += "<button type='submit' class='primary'>Enviar</button>";
+      (p.botoes || []).forEach(function (b, i) { h += "<button type='button' data-b='" + i + "' class='" + (b.cls || "") + "'>" + esc(b.r) + "</button>"; });
+      h += "<button type='button' data-cancelar='1'>Cancelar ❌</button></div></form>";
+      box.innerHTML = h; box.hidden = false;
+      var inp = $(id), er = $(id + "-e");
+      function erro(t) { if (er) er.textContent = t; if (inp) inp.focus(); }
+      box.querySelector("form").addEventListener("submit", function (e) {
+        e.preventDefault();
+        if (p.aoEnviar) p.aoEnviar(inp ? inp.value : "", erro);
+      });
+      Painel.$$("button[data-b]", box).forEach(function (bt) {
+        bt.addEventListener("click", function () { p.botoes[+bt.dataset.b].fn(erro); });
+      });
+      box.querySelector("[data-cancelar]").addEventListener("click", function () {
+        fechar(); responder("Ação cancelada."); if (aoCancelar) aoCancelar();
+      });
+      if (inp) inp.focus(); else box.querySelector("button").focus();
+      box.scrollIntoView && box.scrollIntoView({ block: "nearest" });
+    }
+    return { passo: passo, fechar: fechar, responder: responder };
+  }
+  var N = Caixa("fluxo", "resposta"), S = Caixa("fluxo-spam", "resposta-spam");
+  // Abrir um fluxo fecha o outro e apaga a última resposta, como trocar de tela no bot.
+  function abrirN() { S.fechar(); S.responder(""); N.responder(""); }
+  function abrirS() { N.fechar(); N.responder(""); S.responder(""); }
+
+  // Mesmo extrair_destino_e_topico do bot.
+  function destinoETopico(texto) {
+    texto = (texto || "").trim();
+    var m = /#(-100\d+)(?:_(\d+))?/.exec(texto);
+    if (m) return [m[1], m[2] || "0"];
+    m = /t\.me\/c\/(\d+)(?:\/(\d+))?/.exec(texto);
+    if (m) return ["-100" + m[1], m[2] || "0"];
+    m = /^(-?\d{6,})(?:[_:](\d+))?$/.exec(texto);
+    if (m) { var d = m[1]; if (d[0] !== "-") d = "-100" + d; return [d, m[2] || "0"]; }
+    return [null, null];
+  }
+  function lista(arr, linhaFn) { return arr.map(function (x, i) { return linhaFn(x, i + 1); }).join("\n"); }
+  function palavras(t) { return t.split(",").map(function (k) { return k.trim(); }).filter(Boolean); }
+  function mostrar(v) {
+    if (Array.isArray(v)) return v.length ? v.join(", ") : "(vazio)";
+    return (v == null || v === "") ? "(vazio)" : String(v);
+  }
+
+  // ---------- Adicionar Nicho ----------
+  $("m-add").addEventListener("click", function () {
+    abrirN();
+    N.passo({
+      pedidoHtml: "Vamos configurar um novo robô de garimpo!\n\nQual será o <b>Nome deste nicho</b>? (Ex: Achadinhos Tech, Moda Feminina)",
+      campo: { label: "Nome do nicho", ph: "Achadinhos Tech" },
+      aoEnviar: function (nome, erro) {
+        nome = nome.trim();
+        if (!nome) { erro("Digite o nome do nicho."); return; }
+        pedirDestino(nome);
+      }
+    });
+  });
+  function pedirDestino(nome) {
+    N.passo({
+      pedidoHtml: "Nome salvo: <b>" + esc(nome) + "</b>\n\nAgora cole o <b>link do tópico</b> onde as ofertas serão postadas.\n\n<i>Abra o tópico no Telegram Web e copie a URL da barra de endereço. Também aceito o link t.me/c/... ou o ID cru.</i>\n\n<code>https://web.telegram.org/a/#-100123...._195</code> (formato)",
+      campo: { label: "Link do tópico ou ID", ph: "https://web.telegram.org/a/#-100123..._195" },
+      aoEnviar: function (v, erro) {
+        var r = destinoETopico(v);
+        if (!r[0]) { erro("❌ Não consegui achar o ID nesse link. O link público (t.me/nomedogrupo) não serve — ele não tem o número. Abra o tópico no Telegram Web e copie a URL, ou mande o ID direto."); return; }
+        pedirKeywords(nome, r[0], r[1]);
+      }
+    });
+  }
+  function pedirKeywords(nome, destino, th) {
+    var onde = th !== "0" ? "tópico " + th : "chat principal";
+    N.passo({
+      pedidoHtml: "✅ Grupo: <code>" + esc(destino) + "</code> · " + esc(onde) + "\n\nPor fim, digite as <b>Palavras-chave</b> que o motor usará para rastrear produtos na Shopee. Separe-as por vírgula.\nExemplo: <code>smartwatch, fone bluetooth, gamer</code>",
+      campo: { label: "Palavras-chave (separadas por vírgula)", ph: "smartwatch, fone bluetooth, gamer" },
+      aoEnviar: function (v, erro) {
+        var k = palavras(v);
+        if (!k.length) { erro("Nenhuma palavra-chave detectada. Tente novamente separando por vírgulas:"); return; }
+        mudar(function (c) { c.nichos.push({ nome: nome, destino: destino, thread_id: th, keywords: k }); });
+        N.fechar(); N.responder("✅ Nicho " + nome + " criado e ativado com sucesso!"); desenhar();
+      }
+    });
+  }
+
+  // ---------- Remover Nicho ----------
+  $("m-rem").addEventListener("click", function () {
+    abrirN();
+    var n = ler().nichos;
+    if (!n.length) { N.responder("Não há nichos configurados para remover."); return; }
+    N.passo({
+      pedidoHtml: "Qual nicho deseja excluir? Digite o <b>NÚMERO</b> correspondente:\n\n" + lista(n, function (x, i) { return "<b>" + i + ".</b> " + esc(x.nome) + " (Canal: " + esc(x.destino) + ")"; }),
+      campo: { label: "Número do nicho", ph: "1", inputmode: "numeric" },
+      aoEnviar: function (v, erro) {
+        v = v.trim();
+        if (!/^\d+$/.test(v)) { erro("Por favor, digite apenas o número do nicho."); return; }
+        var i = parseInt(v, 10) - 1, atual = ler().nichos;
+        if (!(i >= 0 && i < atual.length)) { erro("Número inválido. Tente novamente:"); return; }
+        N.passo({
+          pedidoHtml: "Tem certeza que deseja apagar permanentemente o nicho <b>" + esc(atual[i].nome) + "</b> do motor?",
+          botoes: [{ r: "Confirmar Exclusão ✅", cls: "danger", fn: function () {
+            var rem = null;
+            mudar(function (c) { if (i < c.nichos.length) rem = c.nichos.splice(i, 1)[0]; });
+            N.fechar(); if (rem) N.responder("✅ Nicho '" + rem.nome + "' removido com sucesso!"); desenhar();
+          } }]
+        });
+      }
+    });
+  });
+
+  // ---------- Editar Nicho ----------
+  var CAMPOS = {
+    "Editar Nome 📝": ["nome", "Digite o novo <b>Nome</b> para este nicho:", "Novo nome"],
+    "Editar Destino 🎯": ["destino", "Digite o novo <b>ID do Canal/Grupo</b> de destino:", "Novo ID do canal/grupo"],
+    "Editar Tópico 💬": ["thread_id", "Digite o novo <b>ID do Tópico (Thread)</b> (ou 0 para geral):", "ID do tópico (ou 0)"],
+    "Editar Palavras-chave 🔑": ["keywords", "Digite a nova lista de <b>Palavras-chave</b> separadas por vírgula.\n\n<i>⚠️ A lista atual será substituída por inteiro, não somada. Você verá o antes e o depois antes de confirmar.</i>", "Palavras-chave (separadas por vírgula)"]
+  };
+  $("m-edit").addEventListener("click", function () {
+    abrirN();
+    var n = ler().nichos;
+    if (!n.length) { N.responder("Não há nichos configurados para editar."); return; }
+    N.passo({
+      pedidoHtml: "Qual nicho deseja editar? Digite o <b>NÚMERO</b> correspondente:\n\n" + lista(n, function (x, i) { return "<b>" + i + ".</b> " + esc(x.nome); }),
+      campo: { label: "Número do nicho", ph: "1", inputmode: "numeric" },
+      aoEnviar: function (v, erro) {
+        v = v.trim();
+        if (!/^\d+$/.test(v)) { erro("Por favor, digite apenas o número."); return; }
+        var i = parseInt(v, 10) - 1, atual = ler().nichos;
+        if (!(i >= 0 && i < atual.length)) { erro("Número inválido. Tente novamente:"); return; }
+        escolherCampo(i, atual[i].nome);
+      }
+    });
+  });
+  function escolherCampo(i, nome) {
+    N.passo({
+      pedidoHtml: "🎯 Editando: <b>" + esc(nome) + "</b>\nO que você deseja alterar?",
+      botoes: Object.keys(CAMPOS).map(function (rot) { return { r: rot, fn: function () { novoValor(i, rot); } }; })
+    });
+  }
+  function novoValor(i, rot) {
+    var campo = CAMPOS[rot][0];
+    N.passo({
+      pedidoHtml: CAMPOS[rot][1],
+      campo: { label: CAMPOS[rot][2] },
+      aoEnviar: function (v, erro) {
+        v = v.trim();
+        var nichos = ler().nichos;
+        if (!(i >= 0 && i < nichos.length)) { N.fechar(); N.responder("❌ Nicho não encontrado. A lista pode ter mudado."); desenhar(); return; }
+        var novo = v;
+        if (campo === "keywords") {
+          novo = palavras(v);
+          if (!novo.length) { erro("Nenhuma palavra-chave detectada. Separe por vírgulas e tente de novo:"); return; }
+        } else if (!v) { erro("Digite um valor."); return; }
+        var antigo = nichos[i][campo];
+        var qt = campo === "keywords" ? " (" + novo.length + " palavras)" : "";
+        N.passo({
+          pedidoHtml: "📋 <b>Confira antes de salvar</b>\nNicho: <b>" + esc(nichos[i].nome) + "</b> · Campo: <code>" + campo + "</code>\n\n<b>Como está:</b>\n<i class='antes'>" + esc(mostrar(antigo)) + "</i>\n\n<b>Como vai ficar" + qt + ":</b>\n" + esc(mostrar(novo)) + "\n\nConfirma a troca?",
+          botoes: [{ r: "Confirmar ✅", cls: "primary", fn: function () {
+            var ok = false;
+            mudar(function (c) { if (i < c.nichos.length) { c.nichos[i][campo] = novo; ok = true; } });
+            N.fechar(); if (ok) N.responder("✅ Nicho atualizado com sucesso!"); desenhar();
+          } }]
+        });
+      }
+    });
+  }
+
+  // ---------- Forçar Garimpo (servidor) ----------
+  $("m-forcar").addEventListener("click", function () {
+    abrirN();
+    Painel.soServidor("Forçar Garimpo 🚀");
+  });
+
+  // ---------- Janela de Horário ----------
+  $("m-janela").addEventListener("click", function () {
+    abrirN();
+    var c = ler();
+    N.passo({
+      pedidoHtml: "Defina a <b>Janela de Horário</b> em que o garimpo pode publicar ofertas.\n\nEnvie no formato <code>Inicio-Fim</code> (Exemplo: <code>8-22</code>) ou clique no botão para rodar 24h.\n<i>Janela atual: " + c.inicio + "h às " + c.fim + "h</i>",
+      campo: { label: "Início-fim (de 0 a 24)", ph: "8-22" },
+      botoes: [{ r: "Dia Todo (24h) 🕛", fn: function () { confirmarJanela(0, 24); } }],
+      aoEnviar: function (v, erro) {
+        v = v.trim();
+        if (v.toLowerCase() === "dia todo") { confirmarJanela(0, 24); return; }
+        var m = /^(\d{1,2})\s*-\s*(\d{1,2})$/.exec(v);
+        if (!m) { erro("⚠️ Formato inválido! Use exatamente como no exemplo: 8-22."); return; }
+        var ini = +m[1], fim = +m[2];
+        if (ini >= fim || ini < 0 || fim > 24) { erro("⚠️ Valores inválidos! A hora de início precisa ser menor que a do fim (0 a 24)."); return; }
+        confirmarJanela(ini, fim);
+      }
+    });
+  });
+  function confirmarJanela(ini, fim) {
+    var ciclos = Math.max(1, Math.floor((fim - ini) / 2)), q = ler().nichos.length;
+    var t = (ini === 0 && fim === 24) ? "24 horas por dia" : "entre " + ini + "h e " + fim + "h";
+    N.passo({
+      pedidoHtml: "Confirmar a janela de garimpo <b>" + t + "</b>?\n\n<i>Dará algo entre " + Math.max(1, ciclos - 2) + " e " + (ciclos + 2) + " ciclo(s) por dia — o intervalo é sorteado, não é fixo. Com " + q + " nicho(s) cadastrado(s), fica em torno de " + (ciclos * q) + " publicações diárias no grupo.</i>",
+      botoes: [{ r: "Aprovar ✅", cls: "primary", fn: function () {
+        mudar(function (c) { c.inicio = ini; c.fim = fim; });
+        N.fechar(); N.responder("✅ Janela salva: " + ini + "h às " + fim + "h."); desenhar();
+      } }]
+    });
+  }
+
+  // ---------- Nichos por Ciclo ----------
+  $("m-ciclo").addEventListener("click", function () {
+    abrirN();
+    var c = ler(), total = c.nichos.length, max = Math.max(1, total);
+    N.passo({
+      pedidoHtml: "Quantos nichos o garimpo atende <b>por ciclo</b>?\n\n<i>Este valor é a MÉDIA: cada rodada sorteia um pouco mais ou um pouco menos, e o nicho é escolhido por sorteio (pode repetir). Quanto menor o número, menos posts por vez no grupo.</i>\n\nDigite um número de <b>1</b> a <b>" + max + "</b>.\n<i>Atualmente: " + c.nichos_por_ciclo + " de " + total + " nicho(s) por ciclo.</i>",
+      campo: { label: "Nichos por ciclo (1 a " + max + ")", ph: "2", inputmode: "numeric" },
+      aoEnviar: function (v, erro) {
+        v = v.trim();
+        if (!/^[+-]?\d+$/.test(v)) { erro("⚠️ Digite apenas um número de 1 a " + max + "."); return; }
+        var n = parseInt(v, 10);
+        if (!(n >= 1 && n <= max)) { erro("⚠️ O número precisa ficar entre 1 e " + max + "."); return; }
+        var cc = ler(), ciclos = Math.max(1, Math.floor((cc.fim - cc.inicio) / 2));
+        mudar(function (x) { x.nichos_por_ciclo = n; });
+        N.fechar();
+        N.responder("✅ Salvo: " + n + " nicho(s) por ciclo.\n\nCom " + ciclos + " ciclo(s) por dia, dará cerca de " + (ciclos * n) + " publicações diárias no grupo, e cada nicho será atendido a cada " + Math.max(1, Math.floor(max / n)) + " ciclo(s).");
+        desenhar();
+      }
+    });
+  });
+
+  // ---------- SPAM do Achadinhos ----------
+  $("s-add").addEventListener("click", function () {
+    abrirS();
+    S.passo({
+      pedidoHtml: "Envie os links ou IDs dos grupos separados por vírgula.\nExemplo: <code>https://t.me/grupo1, -1009999999</code>",
+      campo: { label: "Links ou IDs dos grupos", ph: "https://t.me/grupo1, -100123..." },
+      aoEnviar: function (v, erro) {
+        var ent = v.split(",").map(function (a) { return a.trim(); }).filter(Boolean);
+        if (!ent.length) { erro("Nenhum alvo detectado. Tente novamente:"); return; }
+        // O bot confere cada alvo no Telegram; aqui só o formato (a conferência real exige o servidor).
+        var ok = [], ruim = [];
+        ent.forEach(function (e) {
+          var valido = destinoETopico(e)[0] || /^@[A-Za-z0-9_]{4,}$/.test(e) || /^(https?:\/\/)?t\.me\/[A-Za-z0-9_+]{4,}\/?$/.test(e);
+          (valido ? ok : ruim).push(e);
+        });
+        var aviso = ruim.length ? "⚠️ Não consegui validar:\n" + ruim.map(function (r) { return "• " + r; }).join("\n") + "\n\nUse o ID numérico, o link t.me ou a URL do Telegram Web. Para grupos privados, a conta do userbot precisa estar dentro." : "";
+        if (!ok.length) { erro("Nenhum alvo válido. Tente novamente:"); S.responder(aviso); return; }
+        mudar(function (c) { c.spam.alvos = c.spam.alvos.concat(ok).filter(function (a, i, arr) { return arr.indexOf(a) === i; }); });
+        S.fechar(); S.responder((aviso ? aviso + "\n\n" : "") + "Alvos adicionados com sucesso!"); desenhar();
+      }
+    });
+  });
+
+  $("s-rem").addEventListener("click", function () {
+    abrirS();
+    var alvos = ler().spam.alvos;
+    if (!alvos.length) { S.responder("Não há alvos cadastrados para excluir."); return; }
+    S.passo({
+      pedidoHtml: "Qual alvo deseja excluir? Digite o <b>NÚMERO</b> correspondente:\n\n" + lista(alvos, function (a, i) { return i + ". " + esc(a); }),
+      campo: { label: "Número do alvo", ph: "1", inputmode: "numeric" },
+      aoEnviar: function (v, erro) {
+        v = v.trim();
+        if (!/^\d+$/.test(v)) { erro("Por favor, digite apenas o NÚMERO do alvo."); return; }
+        var i = parseInt(v, 10) - 1, rem = null;
+        if (!(i >= 0 && i < alvos.length)) { erro("Número inválido. Tente novamente:"); return; }
+        mudar(function (c) { rem = c.spam.alvos.splice(i, 1)[0]; delete c.spam.config_alvos[rem]; });
+        S.fechar(); S.responder("Alvo '" + rem + "' excluído com sucesso!"); desenhar();
+      }
+    });
+  });
+
+  $("s-edit").addEventListener("click", function () {
+    abrirS();
+    S.passo({
+      pedido: "Deseja editar o Padrão Global ou configurar um Alvo Específico?",
+      botoes: [
+        { r: "Global 🌍", fn: function () { pedirTres(null); } },
+        { r: "Por Alvo 🎯", fn: function () {
+          var alvos = ler().spam.alvos;
+          if (!alvos.length) { S.fechar(); S.responder("Não há alvos cadastrados ainda."); return; }
+          S.passo({
+            pedidoHtml: "Qual alvo deseja configurar? Digite o <b>NÚMERO</b>:\n\n" + lista(alvos, function (a, i) { return i + ". " + esc(a); }),
+            campo: { label: "Número do alvo", ph: "1", inputmode: "numeric" },
+            aoEnviar: function (v, erro) {
+              v = v.trim();
+              if (!/^\d+$/.test(v)) { erro("Digite apenas o NÚMERO do alvo."); return; }
+              var i = parseInt(v, 10) - 1;
+              if (!(i >= 0 && i < alvos.length)) { erro("Número inválido. Tente novamente:"); return; }
+              pedirTres(alvos[i]);
+            }
+          });
+        } }
+      ]
+    });
+  });
+  function pedirTres(alvo) {
+    S.passo({
+      pedidoHtml: (alvo ? "Configurando <code>" + esc(alvo) + "</code>.\n\n" : "") + "Envie os três números separados por vírgula:\n<b>Frequência/hora, Repetições no texto, Réplicas por disparo</b>" + (alvo ? "" : "\n\n<i>Exemplo: 1, 1, 1 — um anúncio por hora em cada grupo.</i>"),
+      campo: { label: "Frequência/hora, Repetições, Réplicas", ph: "1, 1, 1" },
+      aoEnviar: function (v, erro) {
+        var m = /^(\d+)\s*,\s*(\d+)\s*,\s*(\d+)$/.exec(v.trim());
+        if (!m) { erro("Formato inválido. Envie os três números isolados por vírgula (Exemplo: 1, 1, 1)."); return; }
+        var f = +m[1], r = +m[2], p = +m[3], msg;
+        mudar(function (c) {
+          if (!alvo) { c.spam.frequencia_por_hora = f; c.spam.repeticoes_internas = r; c.spam.replicas_mensagem = p; }
+          else { c.spam.config_alvos[alvo] = Object.assign(c.spam.config_alvos[alvo] || {}, { frequencia: f, repeticoes: r, replicas: p }); }
+        });
+        msg = alvo ? "✅ Alvo personalizado (Central de Achadinhos) atualizado!\nAlvo: " + alvo + "\nFrequência: " + f + "x/h | Repetições: " + r + "x | Réplicas: " + p + "x"
+                   : "✅ Padrão Global (Central de Achadinhos) atualizado!\nFrequência: " + f + "x/h | Repetições: " + r + "x | Réplicas: " + p + "x";
+        var vol = p * r;
+        if (vol > 6) msg += "\n\n⚠️ Atenção: isso são " + vol + " anúncios por disparo (" + (vol * f) + "/hora por grupo). Volume alto é o gatilho clássico de PeerFloodError na sessão do userbot.";
+        S.fechar(); S.responder(msg); desenhar();
+      }
+    });
+  }
+
+  $("s-pausa").addEventListener("click", function () {
+    abrirS();
+    var pausou = false;
+    mudar(function (c) { c.spam.pausado = !c.spam.pausado; pausou = c.spam.pausado; });
+    S.responder("✅ Divulgação " + (pausou ? "PAUSADA" : "RETOMADA") + "."); desenhar();
+  });
+
+  $("s-forcar").addEventListener("click", function () {
+    abrirS();
+    var s = ler().spam;
+    if (s.pausado) { S.responder("⚠️ Ação Bloqueada: esta divulgação está PAUSADA. Retome-a antes de disparos manuais."); return; }
+    if (!s.alvos.length) { S.responder("⚠️ Nenhum alvo cadastrado. Adicione ao menos um grupo antes."); return; }
+    Painel.soServidor("Forçar Disparo SPAM 🚀");
+  });
+
+  desenhar();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,330 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Servidor - Painel</title>
+<meta name="description" content="Painel web das Opções do Servidor: as mesmas ferramentas do painel do Telegram.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23ee4d2d'/%3E%3Cpath d='M26 20l20 12-20 12z' fill='%23fff'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="/assets/painel.css">
+<style>
+  .wrap { overflow-wrap: anywhere; }
+  .sub { margin: 0 0 12px; }
+  .lista-simples { margin: 8px 0 0; padding-left: 20px; }
+  .lista-simples li { margin-bottom: 6px; }
+  .table-box table { min-width: 0; }
+  .seguro { border-color: var(--warn); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div id="topo"></div>
+
+  <h1>⚙️ Opções do Servidor</h1>
+  <p class="lead">Escolha uma ferramenta de manutenção global.</p>
+
+  <section aria-labelledby="t-menu">
+    <h2 id="t-menu">Menu</h2>
+    <div class="card">
+      <div class="menu-grid">
+        <a class="btn" href="#s-monitor">Monitorar Servidor 🖥️</a>
+        <a class="btn" href="#s-zerar">Zerar Filas e Tarefas 🧹</a>
+        <a class="btn" href="#s-reiniciar">Reiniciar Robôs 🔄</a>
+        <a class="btn" href="#s-acessos">Acessos do Servidor 🔐</a>
+        <a class="btn" href="#s-admins" style="grid-column:1 / -1">Administradores 🛡️</a>
+        <a class="btn" href="/painel" style="grid-column:1 / -1">Voltar ao Início 🔙</a>
+      </div>
+      <p class="hint">Os botões são os mesmos do teclado do bot. Tudo o que depende do servidor (ler sensores, apagar filas, reiniciar) só funciona quando o painel for ligado a ele.</p>
+    </div>
+  </section>
+
+  <!-- Monitorar Servidor -->
+  <section id="s-monitor" aria-labelledby="t-monitor">
+    <h2 id="t-monitor">🖥️ Monitorar Servidor</h2>
+    <div class="card">
+      <p class="sub">Uso de disco e RAM do servidor, lidos na hora, com um diagnóstico em texto e uma tabela-resumo.</p>
+      <div class="table-box"><table>
+        <caption class="hint" style="text-align:left;padding:8px 14px">Resumo do Status (sem leitura neste protótipo)</caption>
+        <thead><tr><th>Recurso</th><th>Total</th><th>Uso</th><th>Livre</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr><td>Disco (/)</td><td>—</td><td>—</td><td>—</td><td>—</td></tr>
+          <tr><td>RAM</td><td>—</td><td>—</td><td>—</td><td>—</td></tr>
+        </tbody>
+      </table></div>
+      <h3>Como o robô classifica</h3>
+      <dl class="status">
+        <div><dt>🟢 Excelente</dt><dd>abaixo de 75% de uso</dd></div>
+        <div><dt>🟡 Atenção</dt><dd>de 75% a 89%</dd></div>
+        <div><dt>🔴 Crítico</dt><dd>90% ou mais</dd></div>
+      </dl>
+      <p class="hint">A frase geral do diagnóstico segue o pior dos dois: "excelente saúde" (disco e RAM abaixo de 75%), "estado de atenção" (os dois abaixo de 90%) ou "risco crítico". A RAM usa a coluna "available" do <code>free -m</code>.</p>
+      <div class="actions"><button type="button" class="primary full" id="b-monitor">Monitorar Servidor 🖥️</button></div>
+    </div>
+  </section>
+
+  <!-- /status e Monitor de saúde -->
+  <section id="s-saude" aria-labelledby="t-saude">
+    <h2 id="t-saude">🩺 /status e Monitor de saúde</h2>
+    <div class="card">
+      <h3 style="margin-top:0">/status (só o admin, sob demanda)</h3>
+      <p class="sub">Responde "Status do sistema" com:</p>
+      <ul class="lista-simples">
+        <li>📦 Versão no ar (commit do deploy).</li>
+        <li>Os 5 serviços (Bot Mestre, Divulgação, Motor Userbot, Autorais, Baixador), cada um com ✅ active, ❌ outro estado ou ❔ se não der para ler; mostra "desde" quando entrou no ar e os reinícios automáticos, se houver.</li>
+        <li>💾 Disco: % usado e GB livres.</li>
+        <li>🗄️ Último backup: idade em horas e tamanho (⚠️ se passar de 30 h ou se não houver nenhum).</li>
+        <li>👥 Contas dos Autorais: quantas estão ok (só aparece se houver contas).</li>
+        <li>A linha de situação da faxina do Acervo Viral.</li>
+        <li>🔗 Links sem a marcação de afiliado nas últimas 24 h (✅ se zero, ⚠️ se houver).</li>
+        <li>🐛 Erros na última hora e os 5 últimos erros (data, origem e começo da mensagem).</li>
+      </ul>
+      <div class="actions"><button type="button" class="full" id="b-status">/status 🩺</button></div>
+    </div>
+
+    <div class="card">
+      <h3 style="margin-top:0">Monitor de saúde (automático)</h3>
+      <p class="sub">Roda de hora em hora e só fala no seu privado quando há problema ("ALERTA DE SAÚDE DO SISTEMA"). Cada tipo de alerta repete no máximo a cada 6 horas.</p>
+      <div class="table-box"><table>
+        <thead><tr><th>Alerta</th><th>Quando dispara</th></tr></thead>
+        <tbody>
+          <tr><td>💾 Disco</td><td>uso a partir de 80%</td></tr>
+          <tr><td>🗂️ Pasta temp/</td><td>a partir de 3 GB (roda a faxina antes de avisar)</td></tr>
+          <tr><td>⏸️ Fila do Espião travada</td><td>vídeo vencido há 4 h ou mais sem publicar</td></tr>
+          <tr><td>🐛 Erros</td><td>10 ou mais na última hora</td></tr>
+          <tr><td>🔇 Nenhuma publicação hoje</td><td>depois das 12h, nada publicado e mais de 5 vídeos na fila de hoje</td></tr>
+          <tr><td>👥 Parceiro sem captura</td><td>parceiro ativo cuja origem a conta da captura não acessa</td></tr>
+          <tr><td>💾 Backup atrasado</td><td>último backup com mais de 30 h (ou nenhum)</td></tr>
+          <tr><td>🔗 Link sem marcação</td><td>algum link sem a marcação de afiliado na última hora</td></tr>
+          <tr><td>Faxina do Acervo Viral</td><td>a conta principal sem permissão para apagar (precisa ser admin do canal)</td></tr>
+        </tbody>
+      </table></div>
+      <p class="hint">Estes limites são fixos no código do robô, por isso aparecem só para consulta.</p>
+    </div>
+  </section>
+
+  <!-- Zerar Filas e Tarefas -->
+  <section id="s-zerar" aria-labelledby="t-zerar">
+    <h2 id="t-zerar">🧹 Zerar Filas e Tarefas</h2>
+    <div class="card">
+      <p class="sub"><b>CENTRAL DE LIMPEZA DO SERVIDOR</b></p>
+      <p class="sub">Escolha qual módulo você deseja esvaziar. As suas configurações do robô (textos, horários, alvos) <b>nunca</b> são apagadas.</p>
+      <p class="hint">🛡️ Nota: A Fila Principal (SQLite) está protegida e nunca será apagada por este menu.</p>
+      <ul class="lista-simples">
+        <li><b>Fila Espião:</b> apaga clones retidos no radar e exclui os arquivos de vídeo do servidor.</li>
+        <li><b>Fila Espelhador:</b> apaga a repassagem de vídeos pendentes e seus respectivos arquivos.</li>
+        <li><b>Fila Autorais:</b> apaga os vídeos de retorno pendentes no banco de dados e arquivos físicos.</li>
+        <li><b>Geral:</b> esvazia o Espião, Espelhador, Autorais, apaga o lixo temporário, exclui backups e limpa logs do Ubuntu.</li>
+      </ul>
+      <div class="actions">
+        <button type="button" class="b-limpar full" data-tipo="Limpar Tudo (Geral) 💥">Limpar Tudo (Geral) 💥</button>
+        <button type="button" class="b-limpar" data-tipo="Limpar Fila do Espião 🕵️">Limpar Fila do Espião 🕵️</button>
+        <button type="button" class="b-limpar" data-tipo="Limpar Fila Espelhador 🔄">Limpar Fila Espelhador 🔄</button>
+        <button type="button" class="b-limpar full" data-tipo="Limpar Fila Autorais 🎥">Limpar Fila Autorais 🎥</button>
+      </div>
+      <p class="hint">Depois de escolher, o bot pede a aprovação ("Aprovar Exclusão ✅" ou "Voltar ao Menu Anterior 🔙"). Ao terminar, mostra o relatório: clones do Espião, itens do Espelhador, vídeos de Autorais, arquivos temporários apagados e MB liberados; no "Limpar Tudo", também o resultado da limpeza dos logs do Ubuntu (mantém os últimos 2 dias). Arquivos que ainda estão em alguma fila pendente, ou mexidos nos últimos 10 minutos, não são tocados na faxina de temp/.</p>
+    </div>
+  </section>
+
+  <!-- Reiniciar Robôs -->
+  <section id="s-reiniciar" aria-labelledby="t-reiniciar">
+    <h2 id="t-reiniciar">🔄 Reiniciar Robôs</h2>
+    <div class="card">
+      <p class="sub">Reinicia <b>todos</b> os robôs ao mesmo tempo no servidor Linux. A lista vem dos serviços do projeto:</p>
+      <ul class="lista-simples" id="l-servicos"></ul>
+      <p class="hint">Os outros quatro reiniciam primeiro, em segundo plano; o Bot Mestre reinicia por último e o painel volta em uns 5 segundos.</p>
+      <div class="actions"><button type="button" class="danger full" id="b-reiniciar">Reiniciar Robôs 🔄</button></div>
+    </div>
+  </section>
+
+  <!-- Acessos do Servidor -->
+  <section id="s-acessos" aria-labelledby="t-acessos">
+    <h2 id="t-acessos">🔐 Acessos do Servidor (Privado)</h2>
+    <div class="card seguro">
+      <p class="sub"><b>Aviso:</b> este site e o repositório são públicos. Nesta página os campos abaixo ficam sempre vazios e <b>nada do que você digitar é guardado</b>, nem neste navegador. No bot, esses dados ficam no banco do servidor, nunca no código nem no log.</p>
+    </div>
+
+    <div class="card">
+      <h3 style="margin-top:0">🌐 Tailscale (rede privada do celular)</h3>
+      <dl class="status">
+        <div><dt>🔗 Link</dt><dd><a href="https://login.tailscale.com/" rel="noopener noreferrer" target="_blank">login.tailscale.com</a></dd></div>
+        <div><dt>🔓 Entrar</dt><dd>pelo Google (<i>Sign in with Google</i>)</dd></div>
+        <div><dt>👤 Conta Google</dt><dd><i>não cadastrado</i></dd></div>
+        <div><dt>🔑 Senha</dt><dd>a da sua conta Google</dd></div>
+      </dl>
+      <form id="f-tailscale" novalidate autocomplete="off" style="margin-top:16px">
+        <h3>Editar Tailscale ✏️</h3>
+        <label for="i-ts-email">🌐 Qual é a conta Google com que você entra no Tailscale? Envie o e-mail.</label>
+        <div class="row">
+          <input type="text" id="i-ts-email" inputmode="email" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="nome@gmail.com" aria-describedby="e-ts">
+          <button type="submit" class="primary">Salvar</button>
+        </div>
+        <p class="err" id="e-ts" role="alert"></p>
+        <p class="hint">A senha é a do Google e não fica guardada: quem visse o bot teria a sua conta Google inteira.</p>
+      </form>
+    </div>
+
+    <div class="card">
+      <h3 style="margin-top:0">☁️ Oracle Cloud (servidor dos robôs)</h3>
+      <dl class="status">
+        <div><dt>🔗 Link</dt><dd><a href="https://cloud.oracle.com/" rel="noopener noreferrer" target="_blank">cloud.oracle.com</a></dd></div>
+        <div><dt>🏢 Nome da conta na nuvem</dt><dd><i>não cadastrado</i></dd></div>
+        <div><dt>👤 Login</dt><dd><i>não cadastrado</i></dd></div>
+        <div><dt>🔑 Senha</dt><dd><i>não cadastrada</i></dd></div>
+      </dl>
+      <p class="hint">No bot, o login aparece para copiar e a senha fica escondida até você tocar nela.</p>
+      <form id="f-oracle" novalidate autocomplete="off" style="margin-top:16px">
+        <h3>Editar Oracle ✏️</h3>
+        <div class="field">
+          <label for="i-or-conta">☁️ Oracle (1 de 3): qual é o nome da conta na nuvem (Cloud Account Name)?</label>
+          <input type="text" id="i-or-conta" autocomplete="off" autocapitalize="off" spellcheck="false" aria-describedby="e-or-conta">
+          <p class="hint">É o primeiro campo da tela de entrada da Oracle e vem no e-mail de boas-vindas dela.</p>
+          <p class="err" id="e-or-conta" role="alert"></p>
+        </div>
+        <div class="field">
+          <label for="i-or-email">☁️ Oracle (2 de 3): qual é o e-mail (login) da conta?</label>
+          <input type="text" id="i-or-email" inputmode="email" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="nome@gmail.com" aria-describedby="e-or-email">
+          <p class="err" id="e-or-email" role="alert"></p>
+        </div>
+        <div class="field">
+          <label for="i-or-senha">☁️ Oracle (3 de 3): qual é a senha?</label>
+          <input type="password" id="i-or-senha" autocomplete="new-password" aria-describedby="e-or-senha">
+          <p class="hint">No bot, assim que a senha é guardada, a sua mensagem com ela é apagada da conversa. Ela aparece só no Acessos do Servidor 🔐, escondida.</p>
+          <p class="err" id="e-or-senha" role="alert"></p>
+        </div>
+        <div class="actions">
+          <button type="submit" class="primary full">Salvar</button>
+        </div>
+      </form>
+      <p class="hint">No bot, nada é gravado antes da última pergunta (Cancelar ❌ não muda nada) e, quando já há um valor guardado, o botão "Manter como Está ⏭️" pula a pergunta. Aqui não há valor guardado, então esse botão não aparece.</p>
+    </div>
+  </section>
+
+  <!-- Administradores -->
+  <section id="s-admins" aria-labelledby="t-admins">
+    <h2 id="t-admins">🛡️ Administradores</h2>
+    <div class="card">
+      <p class="sub">A conta principal confere todo dia, às 04:20 (e ao ligar o robô de divulgação, se a última conferência tem mais de 20 h), todos os grupos e canais em que você é dono ou admin. Grupo novo entra sozinho, sem cadastro. Aqui fica só a estrutura; nomes de pessoas e grupos aparecem apenas no bot, no seu privado.</p>
+      <p class="vazio" id="v-admins-vazio">🛡️ <b>Administradores</b><br>A primeira conferência ainda não rodou. Ela roda sozinha pouco depois de o robô de divulgação ligar e, depois, todo dia às 04:20.</p>
+    </div>
+
+    <div class="card">
+      <h3 style="margin-top:0">Cabeçalho (depois da primeira conferência)</h3>
+      <p class="sub">"Conferido em <i>dd/mm às hh:mm</i>: <i>N</i> grupo(s) e canal(is) em que você é dono ou admin, <i>N</i> administradores no total."</p>
+      <div class="table-box"><table>
+        <caption class="hint" style="text-align:left;padding:8px 14px">Um bloco por grupo (👥) ou canal (📢), em ordem alfabética; dentro dele, o dono primeiro, depois admins, e bots por último</caption>
+        <thead><tr><th>Grupo ou canal</th><th>Admin</th><th>Papel</th><th>Permissões</th></tr></thead>
+        <tbody><tr><td colspan="4" class="vazio">Nenhum grupo ou canal registrado ainda.</td></tr></tbody>
+      </table></div>
+      <p class="hint">Cada admin aparece como: ícone (👑 dono, 🤖 bot, 👤 admin), nome e @ se houver, ":" e o que pode ("dono, pode tudo", "nenhuma permissão" ou a lista), mais título e "promovido por", quando existirem.</p>
+    </div>
+
+    <div class="card">
+      <h3 style="margin-top:0">Permissões acompanhadas</h3>
+      <p class="sub">Na ordem e com os nomes da tela do Telegram:</p>
+      <ul class="lista-simples" id="l-perms"></ul>
+      <p class="hint">Em grupo básico não há permissões separadas: o admin conta com todas, exceto "anônimo".</p>
+    </div>
+
+    <div class="card">
+      <h3 style="margin-top:0">🕓 Últimas mudanças</h3>
+      <p class="vazio" id="v-mudancas">Nenhuma mudança registrada. A primeira conferência só guarda a foto, sem aviso.</p>
+      <p class="hint">Mostra as 10 mais recentes (data dd/mm, grupo, pessoa e o que mudou). Os tipos de mudança são:</p>
+      <ul class="lista-simples">
+        <li>virou dono ou admin;</li>
+        <li>passou de um papel a outro;</li>
+        <li>permissões mudaram (ganhou: ...; perdeu: ...);</li>
+        <li>deixou de ser admin;</li>
+        <li>grupo entrou no registro (com N admin(s));</li>
+        <li>grupo saiu do registro (a sua conta deixou de ser dona ou admin, ou saiu dele).</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h3 style="margin-top:0">Avisos no privado</h3>
+      <dl class="status">
+        <div><dt>🛡️ Mudanças de admin</dt><dd>conferência a cada 15 min; aviso "Administradores: o que mudou"</dd></div>
+        <div><dt>Limite do aviso</dt><dd>30 linhas, depois "…e mais N."</dd></div>
+        <div><dt>🔐 Chave da cópia cifrada</dt><dd>uma vez por chave, a cada 15 min se houver chave nova</dd></div>
+      </dl>
+      <p class="hint">O aviso termina com "O registro completo fica em Opções do Servidor ⚙️ → Administradores 🛡️". O painel mostra ainda a linha "🔐 Cópia cifrada no GitHub: última em dd/mm às hh:mm". Pelas decisões do Rafael, a cópia cifrada sai todo dia às 05:47; o horário exato exibido pelo bot <b>a confirmar</b>.</p>
+    </div>
+    <div class="actions"><button type="button" class="full" id="b-admins">Administradores 🛡️ (ler o registro)</button></div>
+  </section>
+
+  <p><a class="voltar" href="/painel">Voltar ao Início 🔙</a></p>
+</div>
+<script src="/assets/painel.js"></script>
+<script>
+(function () {
+  "use strict";
+  var $ = Painel.$;
+  Painel.topo("servidor");
+
+  // Serviços da pasta servicos_linux/, com os nomes amigáveis do bot.
+  var SERVICOS = [
+    "Bot Mestre (Painel Principal)",
+    "Divulgação de Canais (Spam)",
+    "Downloader (TikTok/Insta/Pinterest)",
+    "Espelhador (Vídeos Autorais)",
+    "Motor Espião (Userbot)"
+  ];
+  $("l-servicos").innerHTML = SERVICOS.map(function (s) { return "<li>🔹 " + Painel.esc(s) + "</li>"; }).join("");
+
+  var PERMISSOES = ["alterar dados", "postar mensagens", "editar mensagens de outros", "apagar mensagens de outros",
+    "banir usuários", "convidar via link", "fixar mensagens", "gerenciar tópicos", "transmissões ao vivo",
+    "postar stories", "editar stories de outros", "apagar stories de outros", "adicionar admins", "anônimo"];
+  $("l-perms").innerHTML = PERMISSOES.map(function (p) { return "<li>" + Painel.esc(p) + "</li>"; }).join("");
+
+  $("b-monitor").addEventListener("click", function () { Painel.soServidor("Monitorar Servidor 🖥️"); });
+  $("b-status").addEventListener("click", function () { Painel.soServidor("/status"); });
+  $("b-admins").addEventListener("click", function () { Painel.soServidor("Administradores 🛡️"); });
+
+  Painel.$$(".b-limpar").forEach(function (b) {
+    b.addEventListener("click", function () {
+      var tipo = b.dataset.tipo;
+      Painel.confirmar("⚠️ Atenção: Você está prestes a executar a operação: " + tipo +
+        ". Esta ação apagará arquivos físicos e limpará a fila selecionada. Deseja continuar?",
+        function () { Painel.soServidor(tipo); });
+    });
+  });
+
+  $("b-reiniciar").addEventListener("click", function () {
+    Painel.confirmar("⚠️ ATENÇÃO! Você está prestes a reiniciar TODOS os " + SERVICOS.length +
+      " robôs simultaneamente no servidor Linux: " + SERVICOS.join("; ") +
+      ". Isso causará uma breve interrupção. O painel ficará mudo por alguns segundos até que o sistema inteiro acorde e se reconecte ao Telegram. Confirma o reinício de todos os sistemas?",
+      function () { Painel.soServidor("Reiniciar Robôs 🔄"); });
+  });
+
+  // Mesma regra do parece_email do painel_acessos.py.
+  function parecEmail(t) {
+    t = (t || "").trim();
+    var i = t.indexOf("@");
+    if (i < 1) return false;
+    var dominio = t.slice(i + 1);
+    return dominio.indexOf(".") >= 0 && t.indexOf(" ") < 0;
+  }
+  function limpar(ids) { ids.forEach(function (id) { $(id).value = ""; }); }
+
+  $("f-tailscale").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var v = $("i-ts-email").value;
+    if (!parecEmail(v)) { $("e-ts").textContent = "⚠️ Envie o e-mail da conta Google (ex.: nome@gmail.com)."; return; }
+    $("e-ts").textContent = "";
+    limpar(["i-ts-email"]);
+    Painel.soServidor("Editar Tailscale ✏️");
+  });
+
+  $("f-oracle").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var conta = $("i-or-conta").value.trim(), email = $("i-or-email").value, senha = $("i-or-senha").value;
+    $("e-or-conta").textContent = conta ? "" : "⚠️ Envie o nome da conta na nuvem em texto.";
+    $("e-or-email").textContent = parecEmail(email) ? "" : "⚠️ Envie o e-mail de login da Oracle (ex.: nome@gmail.com).";
+    $("e-or-senha").textContent = senha.trim() ? "" : "⚠️ Envie a senha em texto.";
+    if (!conta || !parecEmail(email) || !senha.trim()) return;
+    limpar(["i-or-conta", "i-or-email", "i-or-senha"]);
+    Painel.soServidor("Editar Oracle ✏️");
+  });
+})();
+</script>
+</body>
+</html>

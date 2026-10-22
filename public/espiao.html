@@ -1,0 +1,924 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Espião - Painel</title>
+<meta name="description" content="Painel web do Espião Afiliados: as mesmas configurações do painel do Telegram.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23ee4d2d'/%3E%3Cpath d='M26 20l20 12-20 12z' fill='%23fff'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="/assets/painel.css">
+<style>
+  [hidden] { display: none !important; }
+  .res { background: var(--card-2); border: 1px solid var(--line); border-radius: 12px; padding: 12px; margin-top: 12px; overflow-wrap: anywhere; }
+  .res p { margin: 0 0 8px; }
+  .res ul { margin: 0 0 8px; padding-left: 0; list-style: none; }
+  .res .acoes-res { display: grid; gap: 10px; grid-template-columns: 1fr 1fr; margin-top: 8px; }
+  .linhas { margin: 8px 0 0; padding: 0; list-style: none; overflow-wrap: anywhere; }
+  .linhas li { padding: 2px 0; }
+  .flow { margin-top: 12px; }
+  .flow h3 { margin-top: 0; }
+  .flow .actions { margin-top: 8px; }
+  @media (max-width: 420px) { .res .acoes-res { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div id="topo"></div>
+
+  <h1>🕵️ Espião Afiliados</h1>
+  <p class="lead">Fila de clonagem, canais vigiados, destino, janela e atraso, mais as automações do Canal Viral (SPAM e rotinas).</p>
+
+  <!-- PAINEL PRINCIPAL -->
+  <section aria-labelledby="t-principal">
+    <h2 id="t-principal">🕵️ Painel Principal do Espião</h2>
+    <div class="card">
+      <dl class="status">
+        <div><dt>📦 Fila de clonagem</dt><dd id="p-fila"></dd></div>
+        <div><dt>📡 Radar operacional</dt><dd id="p-radar"></dd></div>
+        <div><dt>🎯 Canal de destino</dt><dd id="p-destino"></dd></div>
+        <div><dt>🕒 Janela de Postagem</dt><dd id="p-janela"></dd></div>
+        <div><dt>📅 Atraso (Defasagem)</dt><dd id="p-atraso"></dd></div>
+      </dl>
+      <p class="hint">Escolha uma opção para gerenciar:</p>
+      <div class="actions">
+        <button type="button" id="b-forcar" class="full">Forçar Postagens 🚀</button>
+      </div>
+      <p class="err" id="e-forcar" role="status"></p>
+    </div>
+  </section>
+
+  <!-- GRUPOS VIGIADOS -->
+  <section aria-labelledby="t-vigiados">
+    <h2 id="t-vigiados">Grupos Vigiados 📡</h2>
+    <div class="card">
+      <h3>📡 Gestão de Grupos Vigiados</h3>
+      <p style="margin:0 0 8px"><b>🎯 Canal de Destino:</b> <span id="g-destino"></span></p>
+      <p style="margin:0"><b>📥 Na Escuta:</b></p>
+      <ul class="linhas" id="g-lista"></ul>
+      <div class="actions" id="menu-opcoes">
+        <button type="button" class="full" data-abrir="f-destino">Definir Destino 🎯</button>
+        <button type="button" data-abrir="f-add">Adicionar Grupo ➕</button>
+        <button type="button" data-abrir="f-rem">Remover Grupo 🗑️</button>
+        <button type="button" data-abrir="f-janela">Editar Janela 🕒</button>
+        <button type="button" data-abrir="f-atraso">Editar Atraso ⏳</button>
+        <button type="button" class="full" data-abrir="f-analise">Analisar Canais Vigiados 🔎</button>
+      </div>
+    </div>
+
+    <!-- Definir Destino -->
+    <form class="card flow" id="f-destino" data-grupo="opcoes" hidden novalidate>
+      <h3>Definir Destino 🎯</h3>
+      <label for="i-destino">Envie o <b>ID Numérico, Link ou @username</b> do Canal de DESTINO (para onde o robô vai enviar os vídeos clonados). Exemplo: <code>-100123456789</code> ou <code>https://t.me/meucanal</code></label>
+      <input type="text" id="i-destino" autocomplete="off" placeholder="-100123... ou @canal">
+      <p class="err" id="e-destino" role="alert"></p>
+      <div class="actions"><button type="submit" class="primary">Validar destino</button><button type="button" data-fechar="f-destino">Cancelar ❌</button></div>
+      <div id="r-destino"></div>
+    </form>
+
+    <!-- Adicionar Grupo -->
+    <form class="card flow" id="f-add" data-grupo="opcoes" hidden novalidate>
+      <h3>Adicionar Grupo ➕</h3>
+      <label for="i-add">Envie os @usernames, links ou IDs dos grupos que deseja monitorar como ORIGEM. Você pode enviar vários separando por vírgula (ex.: <code>@grupo1, -100123, https://t.me/grupo2</code>).</label>
+      <textarea id="i-add" placeholder="@grupo1, -100123..., https://t.me/grupo2"></textarea>
+      <p class="hint">💡 Dica: você pode colar uma lista ou usar o botão <b>Importar Banco Global</b> (o robô ignora os grupos duplicados e os da Lista Negra automaticamente).</p>
+      <p class="err" id="e-add" role="alert"></p>
+      <div class="actions">
+        <button type="submit" class="primary full">Validar grupos</button>
+        <button type="button" id="b-global" class="full">Importar Banco Global 🌍</button>
+        <button type="button" id="b-lista-negra" class="full">Lista Negra (Blacklist) ⛔</button>
+        <button type="button" class="full" data-fechar="f-add">Cancelar ❌</button>
+      </div>
+      <div id="r-add"></div>
+    </form>
+
+    <!-- Lista Negra -->
+    <div class="card flow" id="f-bl" data-grupo="opcoes" hidden>
+      <h3>⛔ Lista Negra do Espião</h3>
+      <p class="hint" style="margin-top:0">Os canais abaixo <b>NUNCA</b> serão importados ou monitorados:</p>
+      <ul class="linhas" id="bl-lista"></ul>
+      <div class="actions">
+        <button type="button" id="b-bl-add">➕ Add à Blacklist</button>
+        <button type="button" id="b-bl-rem">🗑️ Remover da Blacklist</button>
+        <button type="button" class="full" data-fechar="f-bl">Cancelar ❌</button>
+      </div>
+      <form id="f-bl-add" hidden novalidate style="margin-top:12px">
+        <label for="i-bl-add">Envie os @usernames, links ou IDs dos canais que deseja <b>BLOQUEAR</b> no Espião. Você pode enviar vários separando por vírgula (ex.: <code>@grupo1, -100123, https://t.me/grupo2</code>). O robô ignora formatos inválidos e bloqueia os corretos.</label>
+        <textarea id="i-bl-add" placeholder="@grupo1, -100123..., https://t.me/grupo2"></textarea>
+        <p class="err" id="e-bl-add" role="alert"></p>
+        <button type="submit" class="primary">Bloquear</button>
+        <div id="r-bl-add"></div>
+      </form>
+      <form id="f-bl-rem" hidden novalidate style="margin-top:12px">
+        <label for="i-bl-rem">Envie os IDs que deseja liberar (separados por vírgula):</label>
+        <input type="text" id="i-bl-rem" autocomplete="off" placeholder="-100123..., @canal">
+        <p class="err" id="e-bl-rem" role="alert"></p>
+        <button type="submit" class="primary">Liberar</button>
+      </form>
+    </div>
+
+    <!-- Remover Grupo -->
+    <form class="card flow" id="f-rem" data-grupo="opcoes" hidden novalidate>
+      <h3>Remover Grupo 🗑️</h3>
+      <p style="margin-top:0">Qual alvo deseja excluir? Digite o <b>NÚMERO</b> correspondente. <span class="muted">(Para remover vários, separe por vírgula. Ex.: 1, 3, 4)</span></p>
+      <ul class="linhas" id="rem-lista"></ul>
+      <label for="i-rem" style="margin-top:12px">Número(s) do(s) alvo(s)</label>
+      <input type="text" id="i-rem" autocomplete="off" inputmode="numeric" placeholder="1, 3, 4">
+      <p class="err" id="e-rem" role="alert"></p>
+      <div class="actions"><button type="submit" class="primary">Remover</button><button type="button" data-fechar="f-rem">Cancelar ❌</button></div>
+      <div id="r-rem"></div>
+    </form>
+
+    <!-- Editar Janela -->
+    <form class="card flow" id="f-janela" data-grupo="opcoes" hidden novalidate>
+      <h3>Editar Janela 🕒</h3>
+      <label for="i-janela">Defina a <b>Janela de Horário</b> útil em que o Espião pode postar os vídeos. Envie no formato <code>Inicio-Fim</code> (Exemplo: <code>10-22</code>) ou use o botão para rodar 24h.</label>
+      <p class="hint" id="h-janela" style="margin:0 0 8px"></p>
+      <div class="row">
+        <input type="text" id="i-janela" autocomplete="off" placeholder="10-22" aria-describedby="e-janela">
+        <button type="submit" class="primary">Salvar</button>
+      </div>
+      <p class="err" id="e-janela" role="alert"></p>
+      <div class="actions"><button type="button" id="b-dia-todo">Dia Todo (24h) 🕛</button><button type="button" data-fechar="f-janela">Cancelar ❌</button></div>
+      <div id="r-janela"></div>
+    </form>
+
+    <!-- Editar Atraso -->
+    <form class="card flow" id="f-atraso" data-grupo="opcoes" hidden novalidate>
+      <h3>Editar Atraso ⏳</h3>
+      <fieldset>
+        <legend class="hint" style="margin-bottom:8px">Escolha a defasagem temporal (Atraso) das postagens extraídas do Espião:</legend>
+        <label class="opt"><input type="radio" name="atraso" value="0"><div><b>Mesmo Dia (D+0) 🟢</b></div></label>
+        <label class="opt"><input type="radio" name="atraso" value="1" checked><div><b>Dia Seguinte (D+1) 🟡</b></div></label>
+        <label class="opt"><input type="radio" name="atraso" value="2"><div><b>Dois Dias (D+2) 🔵</b></div></label>
+      </fieldset>
+      <fieldset id="fs-modo" style="margin-top:12px">
+        <legend class="hint" style="margin-bottom:8px">Como deseja distribuir os clones retidos dentro da janela estipulada?</legend>
+        <label class="opt"><input type="radio" name="modo" value="aleatorio" checked><div><b>Aleatório 🔀</b></div></label>
+        <label class="opt"><input type="radio" name="modo" value="ordem"><div><b>Ordem de Chegada ⬇️</b></div></label>
+      </fieldset>
+      <p class="hint" id="h-modo0" hidden>No Mesmo Dia (D+0) o modo é sempre Ordem de Chegada.</p>
+      <div class="actions"><button type="submit" class="primary">Salvar</button><button type="button" data-fechar="f-atraso">Cancelar ❌</button></div>
+      <div id="r-atraso"></div>
+    </form>
+
+    <!-- Analisar -->
+    <div class="card flow" id="f-analise" data-grupo="opcoes" hidden>
+      <h3>🔎 Análise de Canais Vigiados</h3>
+      <p class="hint" style="margin-top:0">Escolha a ferramenta que deseja utilizar:</p>
+      <div class="actions">
+        <button type="button" id="b-listar">Listar Todos 📜</button>
+        <button type="button" id="b-erros">❌ Erros</button>
+        <button type="button" id="b-dups" class="full">⚠️ Duplicados</button>
+        <button type="button" class="full" data-fechar="f-analise">Voltar às Opções 🔙</button>
+      </div>
+      <div id="r-analise"></div>
+    </div>
+  </section>
+
+  <!-- AUTOMAÇÕES -->
+  <section aria-labelledby="t-auto">
+    <h2 id="t-auto">⚙️ Automações (SPAM e Rotina)</h2>
+    <div class="card">
+      <h3>⚙️ Central de Automações do Espião</h3>
+      <p style="margin:0 0 8px"><b>📊 Status Atual das Automações:</b></p>
+      <dl class="status">
+        <div><dt>📢 SPAM do Viral</dt><dd id="a-spam"></dd></div>
+        <div><dt>⏰ Rotinas do Viral</dt><dd id="a-rotina"></dd></div>
+      </dl>
+      <p class="hint">Escolha o módulo que deseja configurar abaixo:</p>
+      <div class="actions">
+        <button type="button" data-abrir2="s-rotinas">Rotinas do Espião ⏰</button>
+        <button type="button" data-abrir2="s-spam">SPAM do Espião 📢</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ROTINAS -->
+  <section id="s-rotinas" data-grupo2="auto" hidden aria-labelledby="t-rotinas">
+    <h2 id="t-rotinas">⏰ Rotina do Espião (Canal Viral)</h2>
+    <div class="card">
+      <p class="hint" style="margin-top:0"><i>Todas as mensagens abaixo são publicadas NO Canal Viral. O que muda é o que cada uma divulga.</i></p>
+      <ul class="linhas" id="ro-lista"></ul>
+      <p class="hint">Selecione o que deseja editar abaixo:</p>
+      <div class="actions">
+        <button type="button" id="b-ro-edit">Editar Rotinas ✏️</button>
+        <button type="button" id="b-ro-disp">Disparos Manuais 🚀</button>
+        <button type="button" id="b-ro-pausa" class="full"></button>
+        <button type="button" data-fechar2="s-rotinas" class="full">Voltar às Automações 🔙</button>
+      </div>
+      <p class="err" id="e-ro" role="status"></p>
+    </div>
+
+    <div class="card flow" id="ro-editar" hidden>
+      <h3>✏️ Editar Rotinas (Canal Viral)</h3>
+      <p class="hint" style="margin-top:0">Selecione qual rotina deseja configurar:</p>
+      <div class="actions" id="ro-botoes">
+        <button type="button" data-rotina="link_grupo_viral">Editar Convite do Grupo 🔗</button>
+        <button type="button" data-rotina="divulgar_gem_viral">Editar Prompt GEM 🤖</button>
+        <button type="button" data-rotina="promo_principal">Editar Convite Afiliados 🚀</button>
+        <button type="button" data-rotina="promo_publico_viral">Editar Promo Público 👥</button>
+        <button type="button" data-rotina="promo_achadinhos_viral" class="full">Editar Achadinhos 🛒</button>
+      </div>
+      <form id="f-ro" hidden novalidate style="margin-top:12px">
+        <p id="ro-pedido" style="margin-top:0"></p>
+        <label for="i-ro">Janela e quantidade</label>
+        <input type="text" id="i-ro" autocomplete="off" placeholder="10-20, 3" aria-describedby="e-ro-f">
+        <p class="err" id="e-ro-f" role="alert"></p>
+        <div class="actions"><button type="submit" class="primary">Salvar</button><button type="button" id="b-ro-cancel">Cancelar ❌</button></div>
+      </form>
+    </div>
+
+    <div class="card flow" id="ro-disparos" hidden>
+      <h3>🚀 Disparos Manuais (Canal Viral)</h3>
+      <p class="hint" style="margin-top:0">Selecione qual mensagem deseja forçar o envio agora:</p>
+      <div class="actions">
+        <button type="button" data-disp="Disparar Convite Afiliados 🚀">Disparar Convite Afiliados 🚀</button>
+        <button type="button" data-disp="Disparar Convite do Grupo 🔗">Disparar Convite do Grupo 🔗</button>
+        <button type="button" data-disp="Disparar Prompt GEM 🤖">Disparar Prompt GEM 🤖</button>
+        <button type="button" data-disp="Disparar Promo Público 👥">Disparar Promo Público 👥</button>
+        <button type="button" data-disp="Disparar Achadinhos 🛒" class="full">Disparar Achadinhos 🛒</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- SPAM -->
+  <section id="s-spam" data-grupo2="auto" hidden aria-labelledby="t-spam">
+    <h2 id="t-spam">📢 SPAM do Espião</h2>
+    <div class="card">
+      <h3 id="sp-titulo">📊 Status da Divulgação do Viral</h3>
+      <p style="margin:0 0 4px"><b>🌍 Padrão Global:</b></p>
+      <p style="margin:0" id="sp-global"></p>
+      <p style="margin:12px 0 0"><b>🎯 Alvos Ativos:</b></p>
+      <ul class="linhas" id="sp-lista"></ul>
+      <div class="actions">
+        <button type="button" data-spam="sp-add">Adicionar Alvo Viral ➕</button>
+        <button type="button" data-spam="sp-del">Excluir Alvo Viral 🗑️</button>
+        <button type="button" data-spam="sp-edit">Editar Configs Viral ⚙️</button>
+        <button type="button" id="b-sp-forcar">Forçar Disparo Viral 🚀</button>
+        <button type="button" id="b-sp-pausa"></button>
+        <button type="button" data-fechar2="s-spam">Voltar às Automações 🔙</button>
+      </div>
+      <p class="err" id="e-sp" role="status"></p>
+    </div>
+
+    <form class="card flow" id="sp-add" data-g="sp" hidden novalidate>
+      <h3>Adicionar Alvo Viral ➕</h3>
+      <label for="i-sp-add">Envie os links ou IDs dos grupos separados por vírgula para o SPAM VIRAL. Exemplo: <code>https://t.me/grupo_viral, -1009999999</code></label>
+      <textarea id="i-sp-add" placeholder="https://t.me/grupo_viral, -100..."></textarea>
+      <p class="err" id="e-sp-add" role="alert"></p>
+      <div class="actions"><button type="submit" class="primary">Adicionar</button><button type="button" data-fechar="sp-add">Cancelar ❌</button></div>
+    </form>
+
+    <form class="card flow" id="sp-del" data-g="sp" hidden novalidate>
+      <h3>Excluir Alvo Viral 🗑️</h3>
+      <p style="margin-top:0">Qual alvo do Viral deseja excluir? Digite o <b>NÚMERO</b> correspondente da lista:</p>
+      <ul class="linhas" id="sp-del-lista"></ul>
+      <label for="i-sp-del" style="margin-top:12px">Número do alvo</label>
+      <input type="text" id="i-sp-del" autocomplete="off" inputmode="numeric" placeholder="1">
+      <p class="err" id="e-sp-del" role="alert"></p>
+      <div class="actions"><button type="submit" class="primary">Excluir</button><button type="button" data-fechar="sp-del">Cancelar ❌</button></div>
+    </form>
+
+    <div class="card flow" id="sp-edit" data-g="sp" hidden>
+      <h3>Editar Configs Viral ⚙️</h3>
+      <p class="hint" style="margin-top:0">Deseja editar o Padrão Global ou configurar um Alvo Específico para o Viral?</p>
+      <div class="actions">
+        <button type="button" id="b-sp-global">Global 🌍</button>
+        <button type="button" id="b-sp-alvo">Por Alvo 🎯</button>
+        <button type="button" class="full" data-fechar="sp-edit">Cancelar ❌</button>
+      </div>
+      <form id="f-sp-sel" hidden novalidate style="margin-top:12px">
+        <p style="margin-top:0">Qual alvo deseja personalizar? Digite o <b>NÚMERO</b> correspondente da lista:</p>
+        <ul class="linhas" id="sp-sel-lista"></ul>
+        <label for="i-sp-sel" style="margin-top:12px">Número do alvo</label>
+        <input type="text" id="i-sp-sel" autocomplete="off" inputmode="numeric" placeholder="1">
+        <p class="err" id="e-sp-sel" role="alert"></p>
+        <button type="submit" class="primary">Escolher</button>
+      </form>
+      <form id="f-sp-val" hidden novalidate style="margin-top:12px">
+        <p id="sp-val-txt" style="margin-top:0"></p>
+        <label for="i-sp-val">Frequência, repetições e réplicas</label>
+        <input type="text" id="i-sp-val" autocomplete="off" placeholder="3, 6, 5" aria-describedby="e-sp-val">
+        <p class="err" id="e-sp-val" role="alert"></p>
+        <button type="submit" class="primary">Salvar</button>
+      </form>
+    </div>
+  </section>
+
+  <!-- SIMULAÇÃO -->
+  <section aria-labelledby="t-sim">
+    <h2 id="t-sim">Simulação do servidor (só neste protótipo)</h2>
+    <details class="card">
+      <summary>Simular o que o servidor preenche</summary>
+      <p class="hint">No robô, a fila de clonagem e o status de acesso de cada canal vêm do userbot. Aqui você pode simular esses valores para testar as telas acima. Isso não existe no painel do Telegram.</p>
+      <label for="i-sim-fila">Vídeos aguardando na fila de clonagem (exemplo)</label>
+      <input type="number" id="i-sim-fila" min="0" step="1" value="0">
+      <h3>Status de acesso dos canais vigiados (exemplo)</h3>
+      <div id="sim-status"></div>
+    </details>
+  </section>
+</div>
+
+<script src="/assets/painel.js"></script>
+<script>
+(function () {
+  "use strict";
+  Painel.topo("espiao");
+  var $ = Painel.$, esc = Painel.esc;
+
+  var ROTINAS = [
+    { chave: "link_grupo_viral", nome: "Convite do Grupo 🔗", divulga: "o próprio Canal Viral", botao: "Editar Convite do Grupo 🔗" },
+    { chave: "divulgar_gem_viral", nome: "Prompt GEM 🤖", divulga: "o prompt do Gemini", botao: "Editar Prompt GEM 🤖" },
+    { chave: "promo_principal", nome: "Convite do Grupo Afiliados 🛍️", divulga: "o Canal Afiliados", botao: "Editar Convite Afiliados 🚀" },
+    { chave: "promo_publico_viral", nome: "Promoção do Grupo Público 👥", divulga: "o Grupo Público", botao: "Editar Promo Público 👥" },
+    { chave: "promo_achadinhos_viral", nome: "Achadinhos VIP 🛒", divulga: "a Central de Achadinhos", botao: "Editar Achadinhos 🛒" }
+  ];
+
+  var est = Painel.estado("espiao", {
+    alvos: [], canal_destino: null, blacklist: [], status_alvos: {},
+    inicio: 10, fim: 22, intervalo_dias: 1, modo: "aleatorio",
+    rotinas: {
+      link_grupo_viral: { inicio: 9, fim: 21, frequencia: 2 },
+      divulgar_gem_viral: { inicio: 8, fim: 22, frequencia: 1 },
+      promo_principal: { inicio: 10, fim: 20, frequencia: 1 },
+      promo_publico_viral: { inicio: 10, fim: 20, frequencia: 1 },
+      promo_achadinhos_viral: { inicio: 10, fim: 20, frequencia: 1 }
+    },
+    pausado_viral: false,
+    spam: { alvos: [], frequencia_por_hora: 0, repeticoes_internas: 6, replicas_mensagem: 5, pausado: false, config_alvos: {} },
+    sim_fila: 0
+  });
+
+  function pad2(n) { return (n < 10 ? "0" : "") + n; }
+  function isDig(s) { return /^\d+$/.test(s); }
+  function setTxt(id, t) { $(id).textContent = t; }
+  function limpar(id) { $(id).textContent = ""; }
+  function plural(h) { return h; }
+
+  // ---------- Leitura de alvos (mesmas regras do utils.validar_e_formatar_alvo, sem consultar o Telegram) ----------
+  // Devolve {ok, id, pendente}. pendente = @username/link t.me/nome: o bot só confirma pelo Telegram (a confirmar no servidor).
+  function lerAlvo(entrada) {
+    entrada = String(entrada || "").trim();
+    if (!entrada) return { ok: false };
+    var base = entrada, topico = null, partes;
+    if (entrada.indexOf("t.me/c/") >= 0) {
+      partes = entrada.split("t.me/c/")[1].split("/");
+      base = "-100" + partes[0];
+      if (partes.length > 1 && isDig(partes[1])) topico = partes[1];
+    } else if (entrada.indexOf("t.me/") >= 0) {
+      partes = entrada.split("t.me/")[1].split("/");
+      base = "@" + partes[0];
+      if (partes.length > 1 && isDig(partes[1])) topico = partes[1];
+    } else if (entrada.indexOf("web.telegram.org") >= 0 && entrada.indexOf("#") >= 0) {
+      var pw = entrada.split("#")[1].split("/")[0];
+      if (pw.indexOf("_") >= 0) { var pp = pw.split("_"); base = pp[0]; if (isDig(pp[1])) topico = pp[1]; }
+      else base = pw;
+    } else if (entrada.indexOf("_") >= 0 && entrada.indexOf("http") < 0) {
+      var i = entrada.lastIndexOf("_"), a = entrada.slice(0, i).trim(), b = entrada.slice(i + 1).trim();
+      if (isDig(b) && isDig(a.replace(/^-/, ""))) { base = a; topico = b; }
+    } else if (entrada.indexOf(":") >= 0 && entrada.indexOf("http") < 0) {
+      partes = entrada.split(":");
+      base = partes[0];
+      if (partes.length > 1 && isDig(partes[1])) topico = partes[1];
+    } else if (entrada.indexOf("/") >= 0 && entrada.indexOf("http") < 0) {
+      partes = entrada.split("/");
+      base = partes[0];
+      if (partes.length > 1 && isDig(partes[1])) topico = partes[1];
+    }
+    var num = isDig(base.replace(/^-+/, ""));
+    if (num) return { ok: true, id: topico ? base + ":" + topico : base };
+    if (base.charAt(0) === "@" && base.length > 1) return { ok: true, id: topico ? base + ":" + topico : base, pendente: true };
+    return { ok: false };
+  }
+
+  function semCem(s) { return String(s).split("-100").join(""); }
+
+  // ---------- Textos do painel ----------
+  function destinoTexto() { return est.ler().canal_destino ? est.ler().canal_destino : null; }
+
+  function pintarPrincipal() {
+    var d = est.ler();
+    var pend = d.sim_fila || 0;
+    setTxt("p-fila", pend + " vídeos aguardando");
+    setTxt("p-radar", d.alvos.length + " concorrentes vigiados");
+    $("p-destino").innerHTML = d.canal_destino ? "<code>" + esc(d.canal_destino) + "</code>" : "<i>Não definido</i>";
+    setTxt("p-janela", d.inicio + "h às " + d.fim + "h");
+    var modo = d.modo === "ordem" ? "Ordem" : "Aleatorio";
+    setTxt("p-atraso", "D+" + d.intervalo_dias + " (Modo: " + modo + ")");
+  }
+
+  function iconeStatus(d, alvo) {
+    var s = (d.status_alvos[alvo] || {}).status;
+    return s === "ok" ? "✅" : s === "erro" ? "❌" : "⏳";
+  }
+
+  function pintarVigiados() {
+    var d = est.ler();
+    $("g-destino").innerHTML = d.canal_destino ? "⏳ <code>" + esc(d.canal_destino) + "</code>" : "<i>Não definido</i>";
+    var ul = $("g-lista");
+    if (!d.alvos.length) { ul.innerHTML = '<li class="vazio">Nenhum grupo sendo monitorado no momento.</li>'; return; }
+    var linhas = d.alvos.map(function (a, i) {
+      var ic = iconeStatus(d, a), erro = ic === "❌";
+      var det = erro ? "<code>" + esc(a) + "</code> - <i>Acesso negado/Link inválido</i>" : "<code>" + esc(a) + "</code>";
+      return { html: "<code>" + pad2(i + 1) + ".</code> " + ic + " " + det, erro: erro };
+    });
+    var total = linhas.length, out = [];
+    if (total <= 15) { linhas.forEach(function (l) { out.push(l.html); }); }
+    else {
+      var i, ocultos = 0;
+      for (i = 0; i < 5; i++) out.push(linhas[i].html);
+      for (i = 5; i < total - 5; i++) {
+        if (linhas[i].erro) {
+          if (ocultos > 0) { out.push("<i>... e mais " + ocultos + " canais operando normalmente ...</i>"); ocultos = 0; }
+          out.push(linhas[i].html);
+        } else ocultos++;
+      }
+      if (ocultos > 0) out.push("<i>... e mais " + ocultos + " canais operando normalmente ...</i>");
+      for (i = total - 5; i < total; i++) out.push(linhas[i].html);
+    }
+    ul.innerHTML = out.map(function (h) { return "<li>" + h + "</li>"; }).join("");
+  }
+
+  function pintarAutomacoes() {
+    var d = est.ler();
+    $("a-spam").innerHTML = d.spam.pausado ? '<span class="pill erro">🔴 PAUSADO</span>' : '<span class="pill ok">🟢 ATIVO</span>';
+    $("a-rotina").innerHTML = d.pausado_viral ? '<span class="pill erro">🔴 PAUSADAS</span>' : '<span class="pill ok">🟢 ATIVAS</span>';
+  }
+
+  function pintarRotinas() {
+    var d = est.ler();
+    $("ro-lista").innerHTML = ROTINAS.map(function (r) {
+      var c = d.rotinas[r.chave];
+      return "<li><b>🔹 " + esc(r.nome) + "</b><br><span class='muted'>Divulga: " + esc(r.divulga) + "<br>Janela de Sorteio: " + c.inicio + "h às " + c.fim + "h<br>Disparos por Dia: " + c.frequencia + "x</span></li>";
+    }).join("");
+    $("b-ro-pausa").textContent = d.pausado_viral ? "Retomar Rotinas ▶️" : "Pausar Rotinas ⏸️";
+  }
+
+  function pintarSpam() {
+    var d = est.ler(), s = d.spam;
+    setTxt("sp-titulo", "📊 Status da Divulgação do Viral [" + (s.pausado ? "⏸️ Pausado" : "▶️ Rodando") + "]");
+    setTxt("sp-global", "Frequência: " + s.frequencia_por_hora + " msgs/hora · Repetições no Texto: " + s.repeticoes_internas + "x · Réplicas por Disparo: " + s.replicas_mensagem + "x");
+    var ul = $("sp-lista");
+    if (!s.alvos.length) ul.innerHTML = '<li class="vazio">Nenhum alvo cadastrado no momento.</li>';
+    else ul.innerHTML = s.alvos.map(function (a, i) {
+      var c = s.config_alvos[a] || {}, tem = Object.keys(c).length > 0;
+      var f = c.frequencia != null ? c.frequencia : s.frequencia_por_hora;
+      var ri = c.repeticoes != null ? c.repeticoes : s.repeticoes_internas;
+      var rm = c.replicas != null ? c.replicas : s.replicas_mensagem;
+      return "<li>" + (i + 1) + ". <code>" + esc(a) + "</code>" + (tem ? " (Personalizado)" : "") + "<br><span class='muted'>└ Freq: " + f + "/h | Rep: " + ri + "x | Rép: " + rm + "x</span></li>";
+    }).join("");
+    $("b-sp-pausa").textContent = s.pausado ? "Retomar SPAM ▶️" : "Pausar SPAM ⏸️";
+  }
+
+  function pintarSim() {
+    var d = est.ler();
+    $("i-sim-fila").value = d.sim_fila || 0;
+    var box = $("sim-status");
+    if (!d.alvos.length) { box.innerHTML = '<p class="vazio">Nenhum grupo sendo monitorado no momento.</p>'; return; }
+    box.innerHTML = d.alvos.map(function (a, i) {
+      var s = (d.status_alvos[a] || {}).status || "";
+      return '<div class="field"><label for="sim-' + i + '">' + (i + 1) + ". " + esc(a) + '</label><select id="sim-' + i + '" data-alvo="' + esc(a) + '">' +
+        '<option value=""' + (s === "" ? " selected" : "") + '>⏳ ainda não verificado</option>' +
+        '<option value="ok"' + (s === "ok" ? " selected" : "") + '>✅ acesso ok</option>' +
+        '<option value="erro"' + (s === "erro" ? " selected" : "") + '>❌ erro de acesso</option></select></div>';
+    }).join("");
+  }
+
+  function pintarTudo() {
+    pintarPrincipal(); pintarVigiados(); pintarAutomacoes(); pintarRotinas(); pintarSpam(); pintarSim();
+    $("h-janela").textContent = "Janela atual: " + est.ler().inicio + "h às " + est.ler().fim + "h";
+    var d = est.ler();
+    $("rem-lista").innerHTML = d.alvos.length ? d.alvos.map(function (a, i) { return "<li>" + (i + 1) + ". " + esc(a) + "</li>"; }).join("") : '<li class="vazio">Não há concorrentes para remover.</li>';
+    var bl = d.blacklist;
+    $("bl-lista").innerHTML = bl.length ? bl.map(function (b, i) { return "<li>" + (i + 1) + ". <code>" + esc(b) + "</code></li>"; }).join("") : '<li class="vazio">A lista negra está vazia.</li>';
+    var sa = d.spam.alvos;
+    var listaSp = sa.map(function (a, i) { return "<li>" + (i + 1) + ". " + esc(a) + "</li>"; }).join("");
+    $("sp-del-lista").innerHTML = sa.length ? listaSp : '<li class="vazio">Não há alvos cadastrados para excluir.</li>';
+    $("sp-sel-lista").innerHTML = sa.length ? listaSp : '<li class="vazio">Não há alvos para editar. Adicione um primeiro.</li>';
+  }
+
+  // ---------- Navegação entre fluxos ----------
+  function mostrar(id) {
+    var el = $(id); if (!el) return;
+    var g = el.getAttribute("data-grupo");
+    if (g) Painel.$$('[data-grupo="' + g + '"]').forEach(function (x) { x.hidden = x !== el; });
+    var g2 = el.getAttribute("data-g");
+    if (g2) Painel.$$('[data-g="' + g2 + '"]').forEach(function (x) { x.hidden = x !== el; });
+    el.hidden = false;
+    if (el.scrollIntoView) { try { el.scrollIntoView({ block: "nearest", behavior: "smooth" }); } catch (e) {} }
+  }
+  function fechar(id) { $(id).hidden = true; }
+  Painel.$$("[data-abrir]").forEach(function (b) { b.addEventListener("click", function () {
+    var id = b.getAttribute("data-abrir"); limparResultados(); pintarTudo(); mostrar(id);
+    var inp = $(id).querySelector("input[type=text],textarea"); if (inp && id !== "f-atraso") inp.focus({ preventScroll: true });
+  }); });
+  Painel.$$("[data-fechar]").forEach(function (b) { b.addEventListener("click", function () { fechar(b.getAttribute("data-fechar")); }); });
+  Painel.$$("[data-abrir2]").forEach(function (b) { b.addEventListener("click", function () {
+    var id = b.getAttribute("data-abrir2");
+    Painel.$$("[data-grupo2]").forEach(function (x) { x.hidden = x.id !== id; });
+    pintarTudo(); $(id).scrollIntoView({ block: "start", behavior: "smooth" });
+  }); });
+  Painel.$$("[data-fechar2]").forEach(function (b) { b.addEventListener("click", function () {
+    $(b.getAttribute("data-fechar2")).hidden = true; $("t-auto").scrollIntoView({ block: "start", behavior: "smooth" });
+  }); });
+  function limparResultados() {
+    ["r-destino", "r-add", "r-rem", "r-janela", "r-atraso", "r-analise", "r-bl-add"].forEach(function (i) { $(i).innerHTML = ""; });
+    ["e-destino", "e-add", "e-rem", "e-janela", "e-bl-add", "e-bl-rem", "e-forcar", "e-ro", "e-ro-f", "e-sp", "e-sp-add", "e-sp-del", "e-sp-sel", "e-sp-val"].forEach(limpar);
+  }
+
+  // Caixa de resultado com Aprovar ✅ / Cancelar ❌ (como o teclado do bot)
+  function caixaConfirma(destinoId, html, aoAprovar) {
+    var box = $(destinoId);
+    box.innerHTML = '<div class="res" role="group" aria-label="Confirmação">' + html +
+      '<div class="acoes-res"><button type="button" class="primary" data-ok>Aprovar ✅</button><button type="button" data-no>Cancelar ❌</button></div></div>';
+    box.querySelector("[data-ok]").addEventListener("click", function () { box.innerHTML = ""; aoAprovar(); });
+    box.querySelector("[data-no]").addEventListener("click", function () { box.innerHTML = ""; Painel.aviso("Operação cancelada."); });
+  }
+  function caixaInfo(destinoId, html) { $(destinoId).innerHTML = '<div class="res" role="status">' + html + "</div>"; }
+  function lista(arr, max, fmt) {
+    var h = arr.slice(0, max).map(fmt).join("");
+    if (arr.length > max) h += "<li><i>... e mais " + (arr.length - max) + " alvos.</i></li>";
+    return "<ul>" + h + "</ul>";
+  }
+
+  // ---------- Forçar Postagens ----------
+  $("b-forcar").addEventListener("click", function () {
+    limpar("e-forcar");
+    var n = est.ler().sim_fila || 0;
+    if (n === 0) { setTxt("e-forcar", "A fila de clonagem já está vazia no momento."); return; }
+    Painel.confirmar("🚀 Tem certeza que deseja forçar o processamento de " + n + " vídeos da fila do Espião imediatamente?", function () {
+      Painel.soServidor("Forçar Postagens");
+    });
+  });
+
+  // ---------- Definir Destino ----------
+  $("f-destino").addEventListener("submit", function (e) {
+    e.preventDefault(); limpar("e-destino"); $("r-destino").innerHTML = "";
+    var r = lerAlvo($("i-destino").value);
+    if (!r.ok) { setTxt("e-destino", "⚠️ Canal não encontrado ou formato inválido. Certifique-se de que o ID ou link está correto. Tente novamente:"); return; }
+    caixaConfirma("r-destino", "<p>Os vídeos clonados serão enviados automaticamente para o canal:</p><p><b><code>" + esc(r.id) + "</code></b></p><p>Confirma essa alteração?</p>" +
+      (r.pendente ? '<p class="hint">A confirmar: o nome e o ID numérico do @username só o servidor consegue ler no Telegram.</p>' : ""), function () {
+      est.alterar(function (d) { d.canal_destino = r.id; });
+      $("i-destino").value = ""; fechar("f-destino"); pintarTudo();
+      Painel.aviso("✅ Canal de destino configurado com sucesso!");
+    });
+  });
+
+  // ---------- Adicionar Grupo ----------
+  function extrair(texto, comWeb) {
+    var re = comWeb ? /(-100\d+(?::\d+)?|@\w+|https?:\/\/t\.me\/[^\s)]+|https?:\/\/web\.telegram\.org\/[^\s)]+)/g
+                    : /(-100\d+(?::\d+)?|@\w+|https?:\/\/t\.me\/[^\s)]+)/g;
+    var m = texto.match(re), brutas;
+    if (m && m.length) { var vistos = {}; brutas = m.filter(function (x) { if (vistos[x]) return false; vistos[x] = 1; return true; }); }
+    else brutas = texto.replace(/\n/g, ",").split(",");
+    return brutas.map(function (x) { return x.trim(); }).filter(Boolean);
+  }
+  $("f-add").addEventListener("submit", function (e) {
+    e.preventDefault(); limpar("e-add"); $("r-add").innerHTML = "";
+    var texto = $("i-add").value;
+    if (!texto.trim()) { setTxt("e-add", "Envie ao menos um @username, link ou ID."); return; }
+    var d = est.ler(), bl = d.blacklist.map(String), destino = String(d.canal_destino || "");
+    var novos = [], jaMon = [], rej = [], loop = [];
+    extrair(texto, false).forEach(function (ent) {
+      var r = lerAlvo(ent);
+      if (!r.ok) { rej.push(ent); return; }
+      var idBase = semCem(r.id);
+      if (bl.indexOf(r.id) >= 0 || bl.map(semCem).indexOf(idBase) >= 0) rej.push(ent + " (Blacklist ⛔)");
+      else if (destino && idBase === semCem(destino)) loop.push(ent);
+      else if (d.alvos.indexOf(r.id) >= 0) jaMon.push(ent);
+      else if (novos.indexOf(r.id) < 0) novos.push(r.id);
+      else jaMon.push(ent);
+    });
+    var h = "";
+    if (novos.length) h += "<p><b>✅ " + novos.length + " NOVO(S) alvo(s) válido(s):</b></p>" + lista(novos, 15, function (x) { return "<li>🔹 <code>" + esc(x) + "</code></li>"; });
+    if (loop.length) h += "<p><b>🛑 " + loop.length + " bloqueado(s) por Anti-Loop:</b></p>" + lista(loop, 10, function (x) { return "<li>🔻 <code>" + esc(x) + "</code></li>"; });
+    if (jaMon.length) h += "<p><b>ℹ️ " + jaMon.length + " ignorado(s) por já estar no radar:</b></p>" + lista(jaMon, 10, function (x) { return "<li>🔸 <code>" + esc(x) + "</code></li>"; });
+    if (rej.length) h += "<p><b>❌ " + rej.length + " falharam (Formato inválido/Blacklist):</b></p>" + lista(rej, 10, function (x) { return "<li>🔻 <code>" + esc(x) + "</code></li>"; });
+    if (!novos.length) { caixaInfo("r-add", h + "<p><b>⚠️ Nenhum alvo novo foi aprovado.</b></p>"); return; }
+    caixaConfirma("r-add", h + "<p>Confirma a adição dos novos alvos?</p>", function () {
+      var adicionados = 0;
+      est.alterar(function (x) { novos.forEach(function (id) { if (x.alvos.indexOf(id) < 0) { x.alvos.push(id); adicionados++; } }); });
+      $("i-add").value = ""; pintarTudo();
+      if (adicionados > 0) caixaInfo("r-add", "<p><b>✅ " + adicionados + " alvo(s) adicionado(s) ao radar com sucesso!</b><br>O Userbot verificará o acesso neste(s) canal(is) no próximo ciclo.</p>");
+      else caixaInfo("r-add", "<p>⚠️ Todos os alvos enviados já estavam sendo monitorados pelo Espião.</p>");
+    });
+  });
+  $("b-global").addEventListener("click", function () { Painel.soServidor("Importar Banco Global"); });
+
+  // ---------- Lista Negra ----------
+  $("b-lista-negra").addEventListener("click", function () {
+    pintarTudo(); $("f-bl-add").hidden = true; $("f-bl-rem").hidden = true; mostrar("f-bl");
+  });
+  $("b-bl-add").addEventListener("click", function () { $("f-bl-rem").hidden = true; $("f-bl-add").hidden = false; $("r-bl-add").innerHTML = ""; $("i-bl-add").focus({ preventScroll: true }); });
+  $("b-bl-rem").addEventListener("click", function () { $("f-bl-add").hidden = true; $("f-bl-rem").hidden = false; $("i-bl-rem").focus({ preventScroll: true }); });
+  $("f-bl-add").addEventListener("submit", function (e) {
+    e.preventDefault(); limpar("e-bl-add"); $("r-bl-add").innerHTML = "";
+    var texto = $("i-bl-add").value;
+    if (!texto.trim()) { setTxt("e-bl-add", "Envie ao menos um @username, link ou ID."); return; }
+    var d = est.ler(), novos = [], conflitos = [];
+    extrair(texto, true).forEach(function (ent) {
+      var r = lerAlvo(ent), alvo = r.ok ? r.id : ent;
+      if (novos.indexOf(alvo) < 0 && d.blacklist.indexOf(alvo) < 0) novos.push(alvo);
+      d.alvos.forEach(function (m) { if (alvo === String(m) && conflitos.indexOf(m) < 0) conflitos.push(m); });
+    });
+    if (!novos.length) { caixaInfo("r-bl-add", "<p>Nenhum canal novo válido detetado ou todos já estavam na Lista Negra.</p>"); return; }
+    function gravar(removerConflitos) {
+      est.alterar(function (x) {
+        if (removerConflitos) x.alvos = x.alvos.filter(function (a) { return conflitos.indexOf(a) < 0; });
+        novos.forEach(function (n) { if (x.blacklist.indexOf(n) < 0) x.blacklist.push(n); });
+      });
+      $("i-bl-add").value = ""; pintarTudo();
+      var l = est.ler().blacklist.map(function (b, i) { return "<li>" + (i + 1) + ". <code>" + esc(b) + "</code></li>"; }).join("");
+      if (removerConflitos) caixaInfo("r-bl-add", "<p><b>✅ Sucesso!</b><br>⛔ " + novos.length + " adicionado(s).<br>🗑️ " + conflitos.length + " removido(s) da escuta.</p><p><b>⛔ Lista Negra Atualizada:</b></p><ul>" + l + "</ul>");
+      else caixaInfo("r-bl-add", "<p><b>✅ " + novos.length + " canal(is) bloqueado(s) com sucesso!</b></p><p><b>⛔ Lista Negra do Espião</b></p><ul>" + l + "</ul>");
+    }
+    if (conflitos.length) {
+      caixaConfirma("r-bl-add", "<p><b>⚠️ Atenção: Conflito Detetado!</b></p><p>Você está tentando adicionar canais à Lista Negra que <b>já estão sendo monitorados</b> pelo Espião.</p><p>Canais que serão <b>AUTOMATICAMENTE REMOVIDOS</b> da escuta:</p><ul>" +
+        conflitos.map(function (c) { return "<li>🗑️ <code>" + esc(c) + "</code></li>"; }).join("") + "</ul><p>Deseja aprovar a adição à Lista Negra e a exclusão destes canais da escuta simultaneamente?</p>", function () { gravar(true); });
+    } else gravar(false);
+  });
+  $("f-bl-rem").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var remover = $("i-bl-rem").value.split(",").map(function (s) { return s.trim(); });
+    est.alterar(function (x) { x.blacklist = x.blacklist.filter(function (b) { return remover.indexOf(b) < 0; }); });
+    $("i-bl-rem").value = ""; pintarTudo();
+    Painel.aviso("✅ Blacklist atualizada com sucesso!");
+  });
+
+  // ---------- Remover Grupo ----------
+  $("f-rem").addEventListener("submit", function (e) {
+    e.preventDefault(); limpar("e-rem"); $("r-rem").innerHTML = "";
+    var alvos = est.ler().alvos;
+    if (!alvos.length) { setTxt("e-rem", "Não há concorrentes para remover."); return; }
+    var idx = [];
+    $("i-rem").value.replace(/ /g, "").split(",").forEach(function (t) {
+      if (isDig(t)) { var i = parseInt(t, 10) - 1; if (i >= 0 && i < alvos.length && idx.indexOf(i) < 0) idx.push(i); }
+    });
+    if (!idx.length) { setTxt("e-rem", "⚠️ Nenhum número válido detectado. Tente novamente:"); return; }
+    var escolhidos = idx.map(function (i) { return alvos[i]; });
+    caixaConfirma("r-rem", "<p>Tem certeza de que deseja parar de monitorar os <b>" + idx.length + " alvo(s)</b> abaixo?</p><ul>" +
+      idx.map(function (i) { return "<li>🗑️ <b>" + esc(alvos[i]) + "</b></li>"; }).join("") + "</ul>", function () {
+      est.alterar(function (x) { x.alvos = x.alvos.filter(function (a) { return escolhidos.indexOf(a) < 0; }); });
+      $("i-rem").value = ""; pintarTudo();
+      caixaInfo("r-rem", "<p><b>✅ " + escolhidos.length + " alvo(s) removido(s) do radar!</b></p>");
+    });
+  });
+
+  // ---------- Editar Janela ----------
+  function confirmarJanela(ini, fim) {
+    var exib = ini === 0 && fim === 24 ? "24 horas por dia" : "estritamente entre " + ini + "h e " + fim + "h";
+    caixaConfirma("r-janela", "<p>Deseja confirmar a nova janela para postar <b>" + exib + "</b>?</p>", function () {
+      est.alterar(function (d) { d.inicio = ini; d.fim = fim; });
+      $("i-janela").value = ""; pintarTudo();
+      var ex = ini === 0 && fim === 24 ? "24 horas por dia" : "estritamente entre as " + ini + "h e as " + fim + "h";
+      caixaInfo("r-janela", "<p><b>✅ Janela do Espião Salva!</b><br>O robô postará " + ex + ".</p>");
+    });
+  }
+  $("f-janela").addEventListener("submit", function (e) {
+    e.preventDefault(); limpar("e-janela"); $("r-janela").innerHTML = "";
+    var t = $("i-janela").value.trim();
+    if (t.toLowerCase() === "dia todo") { confirmarJanela(0, 24); return; }
+    var m = /^(\d{1,2})-(\d{1,2})$/.exec(t);
+    if (!m) { setTxt("e-janela", "Formato inválido! Use o formato exato como no exemplo: 10-22."); return; }
+    var ini = parseInt(m[1], 10), fim = parseInt(m[2], 10);
+    if (ini >= fim || ini < 0 || fim > 24) { setTxt("e-janela", "Valores inválidos! A hora de início deve ser menor que a do fim."); return; }
+    confirmarJanela(ini, fim);
+  });
+  $("b-dia-todo").addEventListener("click", function () { limpar("e-janela"); $("r-janela").innerHTML = ""; confirmarJanela(0, 24); });
+
+  // ---------- Editar Atraso ----------
+  function atrasoSel() { return parseInt(document.querySelector('input[name="atraso"]:checked').value, 10); }
+  function ajustarModo() {
+    var d0 = atrasoSel() === 0;
+    $("fs-modo").hidden = d0; $("h-modo0").hidden = !d0;
+  }
+  Painel.$$('input[name="atraso"]').forEach(function (r) { r.addEventListener("change", ajustarModo); });
+  $("f-atraso").addEventListener("submit", function (e) {
+    e.preventDefault(); $("r-atraso").innerHTML = "";
+    var dias = atrasoSel();
+    var modo = dias === 0 ? "ordem" : document.querySelector('input[name="modo"]:checked').value;
+    var rot = modo === "ordem" ? "Ordem de Chegada ⬇️" : "Aleatório 🔀";
+    var pergunta = dias === 0 ? "Deseja confirmar o atraso de D+0 (Mesmo Dia) com modo de Ordem de Chegada?" : "Deseja confirmar o atraso de D+" + dias + " com distribuição " + rot + "?";
+    caixaConfirma("r-atraso", "<p>" + pergunta + "</p>", function () {
+      var antigo = est.ler().intervalo_dias;
+      est.alterar(function (d) { d.intervalo_dias = dias; d.modo = modo; });
+      pintarTudo();
+      var h = "<p><b>✅ Atraso do Espião Salvo!</b><br>Atraso: D+" + dias + "<br>Distribuição: " + rot + "</p>";
+      if (antigo !== dias) h += "<p><b>⚠️ Gatilho de Recálculo Acionado!</b><br>Como você alterou a defasagem, todos os horários pendentes foram resetados.</p><p class='hint'>No protótipo não há fila de clonagem: o reset dos horários pendentes só acontece no servidor.</p>";
+      caixaInfo("r-atraso", h);
+    });
+  });
+
+  // ---------- Análise de canais ----------
+  $("b-listar").addEventListener("click", function () {
+    var d = est.ler();
+    if (!d.alvos.length) { caixaInfo("r-analise", "<p>Não há grupos sendo monitorados no momento.</p>"); return; }
+    // Igual ao bot: só "erro" aparece como ❌; o resto aparece como ✅.
+    caixaInfo("r-analise", "<p><b>📜 Lista Completa de Grupos Vigiados (Espião)</b></p><ul>" + d.alvos.map(function (a, i) {
+      var ic = (d.status_alvos[a] || {}).status === "erro" ? "❌" : "✅";
+      return "<li><b>" + (i + 1) + ".</b> " + ic + " <code>" + esc(a) + "</code></li>";
+    }).join("") + "</ul>");
+  });
+  function erros() { var d = est.ler(); return d.alvos.filter(function (a) { return (d.status_alvos[a] || {}).status === "erro"; }); }
+  $("b-erros").addEventListener("click", function () {
+    var d = est.ler();
+    if (!d.alvos.length) { caixaInfo("r-analise", "<p>Não há grupos sendo monitorados.</p>"); return; }
+    var er = erros();
+    if (!er.length) { caixaInfo("r-analise", "<p><b>✅ Tudo limpo!</b><br>Não há nenhum canal com erro de acesso no Espião.</p>"); return; }
+    caixaInfo("r-analise", "<p><b>❌ Canais com Erro de Acesso (Espião)</b></p><ul>" + d.alvos.map(function (a, i) {
+      return er.indexOf(a) >= 0 ? "<li><b>" + (i + 1) + ".</b> ❌ <code>" + esc(a) + "</code></li>" : "";
+    }).join("") + '</ul><button type="button" id="b-rm-erros">Remover Todos com Erro 🗑️</button>');
+    $("b-rm-erros").addEventListener("click", function () {
+      var er2 = erros();
+      if (!er2.length) { caixaInfo("r-analise", "<p>Nenhum canal com erro foi encontrado para remover.</p>"); return; }
+      est.alterar(function (x) { x.alvos = x.alvos.filter(function (a) { return er2.indexOf(a) < 0; }); });
+      pintarTudo();
+      caixaInfo("r-analise", "<p><b>✅ Limpeza Concluída!</b><br>" + er2.length + " canal(is) com erro foram removidos da escuta.</p>");
+    });
+  });
+  function analisar(d) {
+    return d.alvos.map(function (a, i) {
+      var s = String(a), info = d.status_alvos[s] || {};
+      var isNum = isDig(s.replace(/^-+/, "").split(":").join(""));
+      var p0 = s.split(":")[0];
+      return { index: i + 1, original: s, nome: s, isNum: isNum, status: info.status || "ok",
+        baseId: isNum ? p0.split("-100").join("").split("-").join("") : p0,
+        topic: s.indexOf(":") >= 0 ? s.split(":")[1] : "0" };
+    });
+  }
+  $("b-dups").addEventListener("click", function () {
+    var d = est.ler();
+    if (d.alvos.length < 2) { caixaInfo("r-analise", "<p>Não há grupos suficientes para procurar duplicados.</p>"); return; }
+    var L = analisar(d), dups = [];
+    for (var i = 0; i < L.length; i++) for (var j = i + 1; j < L.length; j++) {
+      var A = L[i], B = L[j];
+      if (A.original === B.original) continue;
+      if (A.baseId === B.baseId && A.topic === B.topic) dups.push([A, B, "Mesmo ID Base"]);
+      else if (A.nome === B.nome && A.isNum !== B.isNum) dups.push([A, B, "Mesmo nome (@Link vs ID)"]);
+    }
+    if (!dups.length) { caixaInfo("r-analise", "<p><b>✅ Tudo limpo!</b><br>O sistema não detectou nenhum canal duplicado na sua lista.</p>"); return; }
+    function ic(x) { return (d.status_alvos[x.original] || {}).status === "erro" ? "❌" : "✅"; }
+    caixaInfo("r-analise", "<p><b>⚠️ Aviso: Possíveis Duplicados Detectados</b></p>" + dups.map(function (p) {
+      return "<p>🔹 <b><code>" + esc(p[0].original) + "</code></b><br>├ <b>" + p[0].index + ".</b> " + ic(p[0]) + " <code>" + esc(p[0].original) + "</code><br>└ <b>" + p[1].index + ".</b> " + ic(p[1]) + " <code>" + esc(p[1].original) + "</code><br><i>(Motivo: " + p[2] + ")</i></p>";
+    }).join("") + '<button type="button" id="b-rm-dups">🤖 Auto-Remover Duplicados</button>');
+    $("b-rm-dups").addEventListener("click", function () {
+      var L2 = analisar(est.ler()), rem = [];
+      for (var i = 0; i < L2.length; i++) for (var j = i + 1; j < L2.length; j++) {
+        var A = L2[i], B = L2[j];
+        if (rem.indexOf(A.original) >= 0 || rem.indexOf(B.original) >= 0) continue;
+        var dup = (A.baseId === B.baseId && A.topic === B.topic) || (A.nome === B.nome && A.isNum !== B.isNum);
+        if (!dup) continue;
+        if (A.status === "ok" && B.status === "erro") rem.push(B.original);
+        else if (B.status === "ok" && A.status === "erro") rem.push(A.original);
+        else if (A.isNum && !B.isNum) rem.push(B.original);
+        else if (B.isNum && !A.isNum) rem.push(A.original);
+        else rem.push(B.original);
+      }
+      if (!rem.length) { caixaInfo("r-analise", "<p>Nenhum duplicado válido para remoção automática encontrado.</p>"); return; }
+      est.alterar(function (x) { x.alvos = x.alvos.filter(function (a) { return rem.indexOf(String(a)) < 0; }); });
+      pintarTudo();
+      caixaInfo("r-analise", "<p><b>✅ Duplicados Removidos Automaticamente!</b><br>Os seguintes canais foram descartados:</p><ul>" + rem.map(function (r) { return "<li>🗑️ <code>" + esc(r) + "</code></li>"; }).join("") + "</ul>");
+    });
+  });
+
+  // ---------- Rotinas do Espião ----------
+  $("b-ro-edit").addEventListener("click", function () { limpar("e-ro"); $("ro-disparos").hidden = true; $("f-ro").hidden = true; $("ro-editar").hidden = false; $("ro-editar").scrollIntoView({ block: "nearest", behavior: "smooth" }); });
+  $("b-ro-disp").addEventListener("click", function () { limpar("e-ro"); $("ro-editar").hidden = true; $("ro-disparos").hidden = false; $("ro-disparos").scrollIntoView({ block: "nearest", behavior: "smooth" }); });
+  var rotinaEmEdicao = null;
+  Painel.$$("[data-rotina]").forEach(function (b) { b.addEventListener("click", function () {
+    var chave = b.getAttribute("data-rotina"); rotinaEmEdicao = chave;
+    var c = est.ler().rotinas[chave];
+    $("ro-pedido").innerHTML = "Vamos configurar a janela de sorteio e a quantidade de envios para <b>" + esc(b.textContent) + "</b>.<br>Envie os dados no seguinte formato: <code>HoraInicio-HoraFim, Quantidade</code><br>Exemplo atualizado com a sua configuração: <code>" + c.inicio + "-" + c.fim + ", " + c.frequencia + "</code>";
+    limpar("e-ro-f"); $("i-ro").value = ""; $("f-ro").hidden = false; $("i-ro").focus({ preventScroll: true });
+  }); });
+  $("b-ro-cancel").addEventListener("click", function () { $("f-ro").hidden = true; rotinaEmEdicao = null; });
+  $("f-ro").addEventListener("submit", function (e) {
+    e.preventDefault(); limpar("e-ro-f");
+    var m = /^(\d{1,2})-(\d{1,2}),\s*(\d+)$/.exec($("i-ro").value.trim());
+    if (!m) { setTxt("e-ro-f", "Formato inválido! Use o formato exato como no exemplo: 10-20, 3"); return; }
+    var ini = parseInt(m[1], 10), fim = parseInt(m[2], 10), freq = parseInt(m[3], 10);
+    if (ini >= fim || ini < 0 || fim > 23 || freq < 1) { setTxt("e-ro-f", "Valores inválidos! A hora de início deve ser menor que a do fim (entre 0 e 23) e a quantidade mínima é 1."); return; }
+    est.alterar(function (d) { d.rotinas[rotinaEmEdicao] = { inicio: ini, fim: fim, frequencia: freq }; });
+    $("f-ro").hidden = true; pintarTudo();
+    Painel.aviso("✅ Configuração salva! Os novos horários do Canal Viral já foram sorteados e agendados para hoje.");
+  });
+  Painel.$$("[data-disp]").forEach(function (b) { b.addEventListener("click", function () {
+    limpar("e-ro");
+    if (est.ler().pausado_viral) { setTxt("e-ro", "⚠️ Ação Bloqueada: As rotinas do Canal Viral estão PAUSADAS."); return; }
+    Painel.soServidor(b.getAttribute("data-disp"));
+  }); });
+  $("b-ro-pausa").addEventListener("click", function () {
+    var pausar = !est.ler().pausado_viral;
+    var txt = pausar ? "⚠️ Tem certeza de que deseja PAUSAR as mensagens de rotina deste módulo?"
+      : "⚠️ Tem certeza de que deseja RETOMAR as mensagens de rotina? O sistema avaliará o histórico de hoje e distribuirá de forma inteligente apenas as mensagens que ainda estão faltando para o dia, garantindo uma postagem orgânica sem sobreposições.";
+    Painel.confirmar(txt, function () {
+      est.alterar(function (d) { d.pausado_viral = pausar; });
+      pintarTudo();
+      Painel.aviso(pausar ? "⏸️ Rotinas do Canal Viral PAUSADAS." : "▶️ Rotinas do Viral ATIVAS. (A grade do dia é recalculada só no servidor.)");
+    });
+  });
+
+  // ---------- SPAM do Espião ----------
+  Painel.$$("[data-spam]").forEach(function (b) { b.addEventListener("click", function () {
+    limpar("e-sp"); pintarTudo();
+    var id = b.getAttribute("data-spam");
+    if (id === "sp-del" && !est.ler().spam.alvos.length) { setTxt("e-sp", "Não há alvos cadastrados para excluir."); return; }
+    if (id === "sp-edit") { $("f-sp-sel").hidden = true; $("f-sp-val").hidden = true; }
+    mostrar(id);
+  }); });
+  $("sp-add").addEventListener("submit", function (e) {
+    e.preventDefault(); limpar("e-sp-add");
+    var entradas = $("i-sp-add").value.split(",").map(function (x) { return x.trim(); }).filter(Boolean);
+    if (!entradas.length) { setTxt("e-sp-add", "Nenhum alvo detectado. Tente novamente:"); return; }
+    var novos = [], recusados = [];
+    entradas.forEach(function (x) { var r = lerAlvo(x); if (r.ok) novos.push(r.id); else recusados.push(x); });
+    var msg = "";
+    if (recusados.length) msg = "⚠️ Não consegui validar: " + recusados.join(", ") + ". Use o ID numérico, o link t.me ou a URL do Telegram Web. Para grupos privados, a conta do userbot precisa estar dentro.";
+    if (!novos.length) { setTxt("e-sp-add", (msg ? msg + " " : "") + "Nenhum alvo válido. Tente novamente:"); return; }
+    est.alterar(function (d) { novos.forEach(function (n) { if (d.spam.alvos.indexOf(n) < 0) d.spam.alvos.push(n); }); });
+    $("i-sp-add").value = ""; fechar("sp-add"); pintarTudo();
+    setTxt("e-sp", msg); Painel.aviso("Alvos do Viral adicionados com sucesso!");
+  });
+  $("sp-del").addEventListener("submit", function (e) {
+    e.preventDefault(); limpar("e-sp-del");
+    var t = $("i-sp-del").value.trim();
+    if (!isDig(t)) { setTxt("e-sp-del", "Por favor, digite apenas o NÚMERO do alvo."); return; }
+    var i = parseInt(t, 10) - 1, alvos = est.ler().spam.alvos;
+    if (!(i >= 0 && i < alvos.length)) { setTxt("e-sp-del", "Número inválido. Tente novamente:"); return; }
+    var rem = alvos[i];
+    est.alterar(function (d) { d.spam.alvos.splice(i, 1); delete d.spam.config_alvos[rem]; });
+    $("i-sp-del").value = ""; fechar("sp-del"); pintarTudo();
+    Painel.aviso("Alvo Viral '" + rem + "' excluído com sucesso!");
+  });
+  var edGlobal = true, edAlvo = null;
+  function pedirValores() {
+    var s = est.ler().spam, c = edGlobal ? {} : (s.config_alvos[edAlvo] || {});
+    var f = edGlobal ? s.frequencia_por_hora : (c.frequencia != null ? c.frequencia : s.frequencia_por_hora);
+    var r = edGlobal ? s.repeticoes_internas : (c.repeticoes != null ? c.repeticoes : s.repeticoes_internas);
+    var p = edGlobal ? s.replicas_mensagem : (c.replicas != null ? c.replicas : s.replicas_mensagem);
+    $("sp-val-txt").innerHTML = (edGlobal ? "🌍 <b>Edição do Padrão Global (Viral)</b>" : "🎯 <b>Edição do Alvo (Viral):</b> " + esc(edAlvo)) +
+      "<br>Envie os três valores juntos separados por vírgula nesta exata ordem:<br><b>1️⃣ Frequência:</b> disparos por hora efetuados pelo bot.<br><b>2️⃣ Repetições:</b> blocos de texto contidos na mensagem longa.<br><b>3️⃣ Réplicas:</b> mensagens disparadas seguidas na mesma rajada.<br>Exemplo com a sua configuração atual: <code>" + f + ", " + r + ", " + p + "</code>";
+    limpar("e-sp-val"); $("i-sp-val").value = ""; $("f-sp-val").hidden = false; $("i-sp-val").focus({ preventScroll: true });
+  }
+  $("b-sp-global").addEventListener("click", function () { edGlobal = true; $("f-sp-sel").hidden = true; pedirValores(); });
+  $("b-sp-alvo").addEventListener("click", function () {
+    edGlobal = false; $("f-sp-val").hidden = true; limpar("e-sp-sel");
+    if (!est.ler().spam.alvos.length) { $("f-sp-sel").hidden = true; setTxt("e-sp-sel", ""); Painel.aviso("Não há alvos para editar. Adicione um primeiro."); return; }
+    $("f-sp-sel").hidden = false; $("i-sp-sel").focus({ preventScroll: true });
+  });
+  $("f-sp-sel").addEventListener("submit", function (e) {
+    e.preventDefault(); limpar("e-sp-sel");
+    var t = $("i-sp-sel").value.trim();
+    if (!isDig(t)) { setTxt("e-sp-sel", "Por favor, digite apenas o NÚMERO."); return; }
+    var i = parseInt(t, 10) - 1, alvos = est.ler().spam.alvos;
+    if (!(i >= 0 && i < alvos.length)) { setTxt("e-sp-sel", "Número inválido. Tente novamente:"); return; }
+    edAlvo = alvos[i]; pedirValores();
+  });
+  $("f-sp-val").addEventListener("submit", function (e) {
+    e.preventDefault(); limpar("e-sp-val");
+    var m = /^(\d+)\s*,\s*(\d+)\s*,\s*(\d+)$/.exec($("i-sp-val").value.trim());
+    if (!m) { setTxt("e-sp-val", "Formato inválido. Envie os três números isolados por vírgula (Exemplo: 3, 6, 5)."); return; }
+    var f = parseInt(m[1], 10), r = parseInt(m[2], 10), p = parseInt(m[3], 10);
+    est.alterar(function (d) {
+      if (edGlobal) { d.spam.frequencia_por_hora = f; d.spam.repeticoes_internas = r; d.spam.replicas_mensagem = p; }
+      else d.spam.config_alvos[edAlvo] = { frequencia: f, repeticoes: r, replicas: p };
+    });
+    fechar("sp-edit"); pintarTudo();
+    Painel.aviso(edGlobal ? "✅ Padrão Global (Viral) atualizado! Frequência: " + f + "x/h | Repetições: " + r + "x | Réplicas: " + p + "x"
+      : "✅ Alvo personalizado (Viral) atualizado! Frequência: " + f + "x/h | Repetições: " + r + "x | Réplicas: " + p + "x");
+  });
+  $("b-sp-forcar").addEventListener("click", function () {
+    limpar("e-sp");
+    if (est.ler().spam.pausado) { setTxt("e-sp", "⚠️ Ação Bloqueada: O SPAM Viral está PAUSADO. Retome-o antes de tentar disparos manuais."); return; }
+    Painel.soServidor("Forçar Disparo Viral");
+  });
+  $("b-sp-pausa").addEventListener("click", function () {
+    var pausar = !est.ler().spam.pausado;
+    Painel.confirmar("⚠️ Tem certeza de que deseja " + (pausar ? "PAUSAR" : "RETOMAR") + " o SPAM Viral?", function () {
+      est.alterar(function (d) { d.spam.pausado = pausar; });
+      pintarTudo();
+      Painel.aviso(pausar ? "⏸️ SPAM Viral PAUSADO. O Userbot não enviará convites para o Viral." : "▶️ SPAM Viral ATIVO. O Userbot voltará a operar normalmente para o Viral.");
+    });
+  });
+
+  // ---------- Simulação ----------
+  $("i-sim-fila").addEventListener("change", function () {
+    var n = parseInt(this.value, 10); if (!(n >= 0)) n = 0;
+    est.alterar(function (d) { d.sim_fila = n; }); pintarPrincipal();
+  });
+  $("sim-status").addEventListener("change", function (e) {
+    var s = e.target; if (!s.getAttribute("data-alvo")) return;
+    est.alterar(function (d) { if (s.value) d.status_alvos[s.getAttribute("data-alvo")] = { status: s.value }; else delete d.status_alvos[s.getAttribute("data-alvo")]; });
+    pintarVigiados();
+  });
+
+  ajustarModo();
+  var inicial = est.ler();
+  Painel.$$('input[name="atraso"]').forEach(function (r) { r.checked = parseInt(r.value, 10) === inicial.intervalo_dias; });
+  Painel.$$('input[name="modo"]').forEach(function (r) { r.checked = r.value === inicial.modo; });
+  ajustarModo();
+  pintarTudo();
+})();
+</script>
+</body>
+</html>
